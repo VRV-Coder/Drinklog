@@ -78,7 +78,7 @@ create policy "insert_own"  on audit_log for insert with check (auth.uid() = use
 -- *** Replace your@email.com with your actual email ***
 update profiles
 set is_admin = true
-where id = (select id from auth.users where email = 'your@email.com');
+where id = (select id from auth.users where email = 'venkammagari.vinod@gmail.com');
 
 -- Confirm it worked
 select display_name, is_admin from profiles;
