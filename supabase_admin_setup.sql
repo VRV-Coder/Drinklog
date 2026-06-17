@@ -1,23 +1,30 @@
 -- =====================================================
+-- DRINK TRACKER — Admin Setup (fixed version)
 -- Run this in Supabase → SQL Editor → Run
--- Adds admin role to the drink tracker
 -- =====================================================
 
--- 1. Add is_admin column to profiles
+-- Step 1: Add is_admin column to profiles
 alter table profiles add column if not exists is_admin boolean default false;
 
--- 2. Set YOUR account as admin
--- Replace 'your@email.com' with the email you used to sign up
-update profiles
-set is_admin = true
-where id = (
-  select id from auth.users where email = 'your@email.com'
-);
+-- Step 2: Drop ALL existing policies on all tables (clean slate)
+do $$
+declare
+  r record;
+begin
+  for r in
+    select policyname, tablename
+    from pg_policies
+    where tablename in ('people','drink_logs','payments','replacements','profiles','audit_log')
+  loop
+    execute format('drop policy if exists %I on %I', r.policyname, r.tablename);
+  end loop;
+end$$;
 
--- 3. Update RLS policies to allow admin to do everything
+-- Step 3: Recreate all policies with admin support
 
 -- DRINK LOGS
-drop policy if exists "delete_own" on drink_logs;
+create policy "select_auth"         on drink_logs for select using (auth.role() = 'authenticated');
+create policy "insert_own"          on drink_logs for insert with check (auth.uid() = user_id);
 create policy "delete_own_or_admin" on drink_logs for delete using (
   auth.uid() = user_id
   or exists (select 1 from profiles where id = auth.uid() and is_admin = true)
@@ -28,7 +35,8 @@ create policy "update_own_or_admin" on drink_logs for update using (
 );
 
 -- PAYMENTS
-drop policy if exists "delete_own" on payments;
+create policy "select_auth"         on payments for select using (auth.role() = 'authenticated');
+create policy "insert_own"          on payments for insert with check (auth.uid() = user_id);
 create policy "delete_own_or_admin" on payments for delete using (
   auth.uid() = user_id
   or exists (select 1 from profiles where id = auth.uid() and is_admin = true)
@@ -39,7 +47,8 @@ create policy "update_own_or_admin" on payments for update using (
 );
 
 -- REPLACEMENTS
-drop policy if exists "delete_own" on replacements;
+create policy "select_auth"         on replacements for select using (auth.role() = 'authenticated');
+create policy "insert_own"          on replacements for insert with check (auth.uid() = user_id);
 create policy "delete_own_or_admin" on replacements for delete using (
   auth.uid() = user_id
   or exists (select 1 from profiles where id = auth.uid() and is_admin = true)
@@ -49,17 +58,27 @@ create policy "update_own_or_admin" on replacements for update using (
   or exists (select 1 from profiles where id = auth.uid() and is_admin = true)
 );
 
--- PEOPLE / PROFILES
-drop policy if exists "delete_own" on profiles;
-create policy "delete_own_or_admin" on profiles for delete using (
-  auth.uid() = id
-  or exists (select 1 from profiles where id = auth.uid() and is_admin = true)
-);
+-- PROFILES
+create policy "select_auth"         on profiles for select using (auth.role() = 'authenticated');
+create policy "insert_own"          on profiles for insert with check (auth.uid() = id);
 create policy "update_own_or_admin" on profiles for update using (
   auth.uid() = id
   or exists (select 1 from profiles where id = auth.uid() and is_admin = true)
 );
+create policy "delete_own_or_admin" on profiles for delete using (
+  auth.uid() = id
+  or exists (select 1 from profiles where id = auth.uid() and is_admin = true)
+);
 
--- =====================================================
--- Done! Go back to the app — you'll see admin controls.
--- =====================================================
+-- AUDIT LOG
+create policy "select_auth" on audit_log for select using (auth.role() = 'authenticated');
+create policy "insert_own"  on audit_log for insert with check (auth.uid() = user_id);
+
+-- Step 4: Set YOU as admin
+-- *** Replace your@email.com with your actual email ***
+update profiles
+set is_admin = true
+where id = (select id from auth.users where email = 'your@email.com');
+
+-- Confirm it worked
+select display_name, is_admin from profiles;
