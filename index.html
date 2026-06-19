@@ -234,21 +234,67 @@ function authTab(tab, btn){
 async function signIn(){
   var email = document.getElementById('li-email').value.trim();
   var pass  = document.getElementById('li-pass').value;
-  var {error} = await SB.auth.signInWithPassword({email:email, password:pass});
-  if (error) { document.getElementById('auth-error').textContent = error.message; }
+  var errEl = document.getElementById('auth-error');
+  errEl.style.color = '#f88';
+  errEl.textContent = '';
+
+  if (!email || !pass) { errEl.textContent = 'Enter both email and password.'; return; }
+
+  try {
+    var {error} = await SB.auth.signInWithPassword({email:email, password:pass});
+    if (error) {
+      var msg = error.message || error.error_description || error.msg || JSON.stringify(error);
+      errEl.textContent = msg;
+    }
+  } catch(e) {
+    errEl.textContent = 'Unexpected error: ' + (e.message || e.toString());
+  }
 }
 
 async function signUp(){
   var name  = document.getElementById('su-name').value.trim();
   var email = document.getElementById('su-email').value.trim();
   var pass  = document.getElementById('su-pass').value;
-  if (!name){document.getElementById('auth-error').textContent='Enter your name.';return;}
-  var {error} = await SB.auth.signUp({
-    email:email, password:pass,
-    options:{ data:{ display_name: name } }
-  });
-  if (error) { document.getElementById('auth-error').textContent = error.message; }
-  else { document.getElementById('auth-error').style.color='#7ef88e'; document.getElementById('auth-error').textContent='Account created! Check your email to confirm, then sign in.'; }
+  var errEl = document.getElementById('auth-error');
+  errEl.style.color = '#f88';
+  errEl.textContent = '';
+
+  if (!name)  { errEl.textContent = 'Please enter your name.'; return; }
+  if (!email) { errEl.textContent = 'Please enter your email.'; return; }
+  if (!pass || pass.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; return; }
+
+  try {
+    var result = await SB.auth.signUp({
+      email: email,
+      password: pass,
+      options: { data: { display_name: name } }
+    });
+
+    var error = result.error;
+    var data  = result.data;
+
+    if (error) {
+      var msg = error.message || error.error_description || error.msg || JSON.stringify(error);
+      errEl.textContent = 'Sign up failed: ' + msg;
+      return;
+    }
+
+    // Check if Supabase returned a user with no identities = user already exists
+    if (data && data.user && data.user.identities && data.user.identities.length === 0) {
+      errEl.textContent = 'An account with this email already exists. Try signing in instead.';
+      return;
+    }
+
+    errEl.style.color = '#7ef88e';
+    if (data && data.session) {
+      // Email confirmation disabled — user is logged in immediately
+      errEl.textContent = 'Account created! Logging you in...';
+    } else {
+      errEl.textContent = 'Account created! Check your email to confirm, then sign in.';
+    }
+  } catch(e) {
+    errEl.textContent = 'Unexpected error: ' + (e.message || e.toString());
+  }
 }
 
 async function signOut(){
@@ -258,12 +304,32 @@ async function signOut(){
 
 // ── POST LOGIN ──────────────────────────────────────────────
 async function onLoggedIn(){
-  // Load profile
-  var {data:prof} = await SB.from('profiles').select('*').eq('id', CURRENT_USER.id).single();
-  CURRENT_PROFILE = prof || {display_name: CURRENT_USER.email, is_admin: false};
+  // Try loading existing profile
+  var {data:prof, error:profErr} = await SB.from('profiles').select('*').eq('id', CURRENT_USER.id).single();
+
+  // If profile missing, create it now
+  if(!prof){
+    var displayName = CURRENT_USER.user_metadata && CURRENT_USER.user_metadata.display_name
+      ? CURRENT_USER.user_metadata.display_name
+      : CURRENT_USER.email.split('@')[0];
+    var {data:newProf} = await SB.from('profiles').insert({
+      id: CURRENT_USER.id,
+      display_name: displayName,
+      is_admin: false
+    }).select().single();
+    prof = newProf;
+  }
+
+  CURRENT_PROFILE = prof || {display_name: CURRENT_USER.email.split('@')[0], is_admin: false};
   IS_ADMIN = CURRENT_PROFILE.is_admin === true;
-  document.getElementById('user-label').textContent = '👤 ' + CURRENT_PROFILE.display_name + (IS_ADMIN ? ' 👑' : '');
-  if(IS_ADMIN) { var ab=document.createElement('span'); ab.className='admin-badge'; ab.textContent='ADMIN'; document.getElementById('user-label').appendChild(ab); }
+
+  // Update header
+  var label = document.getElementById('user-label');
+  label.innerHTML = '👤 ' + esc(CURRENT_PROFILE.display_name);
+  if(IS_ADMIN){
+    label.innerHTML += ' <span class="admin-badge">👑 ADMIN</span>';
+  }
+
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   await loadAll();
@@ -279,13 +345,28 @@ async function loadAll(){
       SB.from('replacements').select('*').order('for_date',{ascending:false}),
       SB.from('audit_log').select('*').order('performed_at',{ascending:false}).limit(100)
     ]);
+    if(p.error)   notify('People error: '+p.error.message, true);
+    if(l.error)   notify('Logs error: '+l.error.message, true);
+    if(pay.error) notify('Payments error: '+pay.error.message, true);
+    if(rep.error) notify('Replace error: '+rep.error.message, true);
     STATE.people       = p.data   || [];
     STATE.logs         = l.data   || [];
     STATE.payments     = pay.data || [];
     STATE.replacements = rep.data || [];
     STATE.auditLog     = aud.data || [];
+
+    // Always refresh current user's admin status from latest profile data
+    var myProfile = STATE.people.find(function(p){ return p.id === CURRENT_USER.id; });
+    if(myProfile){
+      CURRENT_PROFILE = myProfile;
+      IS_ADMIN = myProfile.is_admin === true;
+      var label = document.getElementById('user-label');
+      if(label){
+        label.innerHTML = '👤 ' + esc(CURRENT_PROFILE.display_name) + (IS_ADMIN ? ' <span class="admin-badge">👑 ADMIN</span>' : '');
+      }
+    }
     renderTab(STATE.tab);
-  } catch(e){ notify('Load error: '+e.message,true); }
+  } catch(e){ notify('Load error: '+e.message, true); }
 }
 
 // ── AUDIT HELPER ────────────────────────────────────────────
