@@ -410,6 +410,16 @@ function isMine(row){
   return false;
 }
 
+// ── DELEGATED CLICK HANDLER (survives re-renders, avoids inline-onclick escaping issues) ──
+document.addEventListener('click', function(e){
+  var target = e.target.closest('[data-drink-select]');
+  if (target) {
+    var drink = target.getAttribute('data-drink-select');
+    STATE.logDrink = drink;
+    renderTab('log');
+  }
+});
+
 // ── TABS ────────────────────────────────────────────────────
 function switchTab(tab, btn){
   document.querySelectorAll('nav button').forEach(function(b){b.classList.remove('active');});
@@ -461,8 +471,8 @@ function renderLog(){
         fld('Date','<input type="date" value="'+STATE.logDate+'" onchange="STATE.logDate=this.value"/>')+
         fld('Person','<select onchange="STATE.logPerson=this.value">'+pOpts(STATE.logPerson)+'</select>')+
       '</div>'+
-      fld('Drink Type','<div class="chips">'+DRINK_TYPES.map(function(d){
-        return '<span class="chip'+(STATE.logDrink===d?' cp':'')+'" onclick="STATE.logDrink=\''+d+'\';renderTab(\'log\')">' +d+'</span>';
+      fld('Drink Type','<div class="chips" id="drink-chip-row">'+DRINK_TYPES.map(function(d){
+        return '<span class="chip'+(STATE.logDrink===d?' cp':'')+'" data-drink-select="'+esc(d)+'">' +d+'</span>';
       }).join('')+'</div>')+
       '<div class="grid2">'+
         fld('Drinks',stepper('logQty',STATE.logQty))+
