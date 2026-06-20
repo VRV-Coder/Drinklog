@@ -345,7 +345,20 @@ function enterApp(){
   label.innerHTML = '👤 ' + esc(CURRENT_NAME) + (IS_ADMIN ? ' <span class="admin-badge">👑 ADMIN</span>' : '');
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
+  registerSelfAsPerson();
   loadAll();
+}
+
+async function registerSelfAsPerson(){
+  // Make sure the logged-in user (guest or admin) actually exists
+  // as a real row in the people table, not just in local STATE.
+  if (!CURRENT_NAME || !SB) return;
+  try {
+    var {data} = await SB.from('people').select('id').eq('name', CURRENT_NAME).maybeSingle();
+    if (!data) {
+      await SB.from('people').insert({ name: CURRENT_NAME, created_by: CURRENT_NAME });
+    }
+  } catch(e) { /* non-fatal */ }
 }
 
 async function signOut(){
@@ -551,8 +564,11 @@ function updTotal(){
 async function addPersonToTable(name){
   name = (name||'').trim();
   if (!name) return false;
-  // Skip if already known
-  if (STATE.people.find(function(p){ return p.display_name.toLowerCase() === name.toLowerCase(); })) return true;
+  try {
+    var {data:existing} = await SB.from('people').select('id').ilike('name', name).maybeSingle();
+    if (existing) return true; // already in the real table, nothing to do
+  } catch(e) { /* fall through and try insert anyway */ }
+
   var {error} = await SB.from('people').insert({ name: name, created_by: CURRENT_NAME });
   if (error) {
     // Unique constraint violation just means it already exists — not a real error
