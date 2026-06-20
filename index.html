@@ -8,11 +8,10 @@
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     body{font-family:'Segoe UI',system-ui,sans-serif;background:#0f1117;color:#e8e8f0;min-height:100vh}
-    /* AUTH */
     #auth-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
     .auth-card{background:#13151f;border:1px solid #2a2d40;border-radius:16px;padding:32px 28px;width:100%;max-width:400px}
     .auth-card h1{font-size:22px;color:#fff;margin-bottom:4px}
-    .auth-card p{font-size:13px;color:#5a5c7a;margin-bottom:24px;line-height:1.6}
+    .auth-card p{font-size:13px;color:#5a5c7a;margin-bottom:22px;line-height:1.6}
     .auth-tabs{display:flex;gap:0;border-bottom:1px solid #2a2d40;margin-bottom:20px}
     .auth-tab{flex:1;padding:9px;background:none;border:none;cursor:pointer;font-size:13px;font-weight:600;color:#5a5c7a;border-bottom:2px solid transparent}
     .auth-tab.active{color:#a78bfa;border-bottom-color:#a78bfa}
@@ -21,15 +20,15 @@
     .field input{width:100%;background:#0f1117;border:1px solid #2a2d40;border-radius:8px;padding:10px 13px;color:#e8e8f0;font-size:14px;outline:none}
     .field input:focus{border-color:#a78bfa}
     .btn-auth{width:100%;background:linear-gradient(135deg,#7c3aed,#a78bfa);border:none;border-radius:10px;padding:12px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px}
-    .auth-error{color:#f88;font-size:12px;margin-top:8px;min-height:16px}
+    .auth-error{color:#f88;font-size:12px;margin-top:8px;min-height:16px;line-height:1.5}
     .auth-note{font-size:11px;color:#5a5c7a;margin-top:12px;text-align:center;line-height:1.5}
-    /* APP */
     #app{display:none}
     .header{border-bottom:1px solid #1e2030;padding:14px 16px 0;background:#0d0f18;position:sticky;top:0;z-index:100}
     .header-row{display:flex;align-items:center;gap:8px;margin-bottom:12px}
     .header-row h1{font-size:19px;font-weight:700;color:#fff}
     .user-badge{margin-left:auto;display:flex;align-items:center;gap:8px}
     .user-name{font-size:12px;color:#a78bfa;font-weight:600}
+    .admin-badge{display:inline-block;background:#b45309;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;color:#fff;margin-left:4px;letter-spacing:.5px}
     .btn-logout{background:#1a1c2a;border:1px solid #2a2d40;border-radius:6px;padding:4px 10px;color:#5a5c7a;font-size:11px;cursor:pointer}
     .btn-logout:hover{color:#f88;border-color:#f88}
     nav{display:flex;overflow-x:auto;scrollbar-width:none}
@@ -37,69 +36,57 @@
     nav button{background:none;border:none;cursor:pointer;padding:7px 12px;font-size:11px;font-weight:600;white-space:nowrap;color:#5a5c7a;border-bottom:2px solid transparent;flex-shrink:0}
     nav button.active{color:#a78bfa;border-bottom-color:#a78bfa}
     .content{max-width:680px;margin:0 auto;padding:14px}
-    /* CARDS */
     .card{background:#13151f;border:1px solid #1e2030;border-radius:14px;padding:16px;margin-bottom:12px}
     .card-title{font-size:11px;font-weight:700;color:#5a5c7a;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
-    /* FORM */
     .form-label{display:block;font-size:11px;font-weight:700;color:#5a5c7a;text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px}
-    input[type=text],input[type=number],input[type=date],select{width:100%;background:#0f1117;border:1px solid #2a2d40;border-radius:8px;padding:9px 12px;color:#e8e8f0;font-size:14px;outline:none;font-family:inherit}
+    input[type=text],input[type=number],input[type=date],input[type=email],input[type=password],select{width:100%;background:#0f1117;border:1px solid #2a2d40;border-radius:8px;padding:9px 12px;color:#e8e8f0;font-size:14px;outline:none;font-family:inherit}
     input:focus,select:focus{border-color:#a78bfa}
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .fld{margin-bottom:10px}
-    /* BUTTONS */
     .btn-primary{width:100%;background:linear-gradient(135deg,#7c3aed,#a78bfa);border:none;border-radius:10px;padding:11px;color:#fff;font-size:14px;font-weight:700;cursor:pointer}
     .btn-green{width:100%;background:linear-gradient(135deg,#2a7a3a,#4cd471);border:none;border-radius:10px;padding:11px;color:#0f1117;font-size:14px;font-weight:700;cursor:pointer}
     .btn-sm{background:none;border:none;cursor:pointer;font-size:15px;color:#3a3c55;padding:2px}
     .btn-icon{width:32px;height:32px;border-radius:7px;border:1px solid #2a2d40;background:#0f1117;color:#a78bfa;font-size:17px;font-weight:700;cursor:pointer}
-    /* CHIPS */
+    .btn-edit{background:#1a1a2e;border:1px solid #2a2d40;border-radius:6px;padding:3px 8px;color:#9a9cc0;font-size:11px;cursor:pointer;margin-right:4px}
+    .btn-edit:hover{border-color:#a78bfa;color:#a78bfa}
     .chips{display:flex;flex-wrap:wrap;gap:6px}
     .chip{padding:5px 11px;border:1px solid #2a2d40;border-radius:20px;cursor:pointer;font-size:12px;background:#1a1c2a;color:#7a7c95;user-select:none;transition:all .12s}
     .chip.cp{background:#2d1f6e;border-color:#a78bfa;color:#c4b0ff;font-weight:600}
     .chip.cg{background:#1a2d1a;border-color:#2a7a3a;color:#7ef88e;font-weight:600}
     .chip.cy{background:#2a2a1a;border-color:#7a6a2a;color:#f8d878;font-weight:600}
-    /* STATS */
     .sg{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:12px}
     .sb{background:#13151f;border:1px solid #1e2030;border-radius:11px;padding:13px 8px;text-align:center}
     .sv{font-size:20px;font-weight:800;color:#a78bfa;letter-spacing:-1px}
     .sv.g{color:#7ef88e}.sv.r{color:#f88}
     .sl{font-size:10px;font-weight:700;color:#5a5c7a;text-transform:uppercase;letter-spacing:.7px;margin-top:2px}
-    /* ENTRIES */
     .entry{display:flex;align-items:center;justify-content:space-between;background:#0f1117;border:1px solid #1e2030;border-radius:8px;padding:8px 11px;margin-bottom:6px}
-    .entry-l{display:flex;align-items:center;gap:9px}
-    .ej{font-size:18px}
+    .entry-l{display:flex;align-items:center;gap:9px;flex:1;min-width:0}
+    .ej{font-size:18px;flex-shrink:0}
     .en{font-size:13px;font-weight:600;color:#c4b0ff}
     .es{font-size:11px;color:#5a5c7a;margin-top:1px}
     .badge{display:inline-block;background:#2d1f6e;border-radius:20px;padding:1px 8px;font-size:11px;color:#a78bfa;font-weight:600}
     .badge.g{background:#1a2d1a;color:#7ef88e}
     .badge.r{background:#2d1212;color:#f88}
-    /* AVATAR */
     .avatar{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}
-    /* TOTAL */
     .total-row{display:flex;justify-content:space-between;align-items:center;background:#0f1117;border:1px solid #1e2030;border-radius:8px;padding:8px 12px;margin-bottom:10px}
     .total-row span:first-child{font-size:11px;color:#5a5c7a;font-weight:700;text-transform:uppercase;letter-spacing:.7px}
     .total-row span:last-child{font-size:15px;font-weight:800;color:#7ef88e}
-    /* STEPPER */
     .stepper{display:flex;align-items:center;gap:8px}
     .stepper input{width:58px;text-align:center;font-weight:700;font-size:15px}
-    /* BALANCE */
     .brow{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #1e2030}
     .brow:last-child{border-bottom:none}
-    /* PROGRESS */
     .prog{height:5px;background:#1e2030;border-radius:3px;overflow:hidden;margin-top:3px}
     .prog-fill{height:5px;border-radius:3px;background:linear-gradient(to right,#7c3aed,#a78bfa);transition:width .3s}
     .prog-fill.done{background:#2a7a3a}
-    /* BOTTLES */
     .bottles{display:flex;flex-wrap:wrap;gap:5px;margin:5px 0 7px}
     .bottle{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:16px}
     .bottle.done{background:#1a2d1a;border:1px solid #2a7a3a}
     .bottle.empty{background:#1a1c2a;border:1px solid #2a2d40;opacity:.4}
     .repl-ctrl{display:flex;align-items:center;gap:7px;margin-top:5px}
     .repl-ctrl span{font-size:11px;color:#5a5c7a;min-width:100px;text-align:center}
-    /* DAY HEADER */
     .dh{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#0d0f18;border-bottom:1px solid #1e2030}
     .dh h4{font-size:14px;font-weight:700;color:#c4b0ff}
     .dh p{font-size:11px;color:#5a5c7a;margin-top:1px}
-    /* AUDIT */
     .audit-entry{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid #1e2030}
     .audit-entry:last-child{border-bottom:none}
     .audit-dot{width:8px;height:8px;border-radius:50%;margin-top:4px;flex-shrink:0}
@@ -107,50 +94,48 @@
     .audit-who{font-size:13px;font-weight:600;color:#c4b0ff}
     .audit-what{font-size:12px;color:#9a9cc0;margin-top:1px}
     .audit-when{font-size:10px;color:#3a3c55;margin-top:2px}
-    /* NOTIF */
     #notif{position:fixed;top:14px;right:14px;z-index:9999;pointer-events:none}
     .np{background:#1a2d1a;border:1px solid #2a7a3a;color:#7ef88e;padding:8px 14px;border-radius:9px;font-size:12px;font-weight:600;margin-bottom:5px;box-shadow:0 4px 20px rgba(0,0,0,.4);animation:si .2s ease}
     .np.err{background:#2d1212;border-color:#c44;color:#f88}
     @keyframes si{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
-    .spinner{text-align:center;padding:30px;color:#5a5c7a;font-size:13px}
     .empty{text-align:center;padding:36px 16px;color:#3a3c55;font-size:13px}
     .empty .big{font-size:32px;margin-bottom:7px}
-    /* MINE badge */
     .mine-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#a78bfa;margin-right:3px;vertical-align:middle}
-    .admin-badge{display:inline-block;background:#b45309;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;color:#fff;margin-left:4px;letter-spacing:.5px}
-    .btn-edit{background:#1a1a2e;border:1px solid #2a2d40;border-radius:6px;padding:3px 8px;color:#9a9cc0;font-size:11px;cursor:pointer;margin-right:4px}
-    .btn-edit:hover{border-color:#a78bfa;color:#a78bfa}
+    /* CONSOLIDATED DAY SUMMARY (Log tab) */
+    .day-summary{background:#0f1117;border:1px solid #1e2030;border-radius:9px;padding:10px 12px;margin-bottom:8px}
+    .day-summary-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+    .day-summary-head h5{font-size:12px;font-weight:700;color:#7a7c95;text-transform:uppercase;letter-spacing:.6px}
+    .person-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0}
+    .person-row-l{display:flex;align-items:center;gap:8px}
+    .drink-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
+    .drink-tag{font-size:10px;background:#1a1c2a;border-radius:10px;padding:1px 7px;color:#9a9cc0}
     @media(max-width:480px){.grid2{grid-template-columns:1fr}.sg{grid-template-columns:repeat(2,1fr)}}
   </style>
 </head>
 <body>
 
-<!-- AUTH SCREEN -->
 <div id="auth-screen">
   <div class="auth-card">
     <h1>🍺 DrinkLog</h1>
-    <p>Sign in or create your account to access the shared drink tracker.</p>
+    <p>Enter your name to join, or sign in if you're the admin.</p>
     <div class="auth-tabs">
-      <button class="auth-tab active" onclick="authTab('login',this)">Sign In</button>
-      <button class="auth-tab" onclick="authTab('signup',this)">Create Account</button>
+      <button class="auth-tab active" onclick="authTab('guest',this)">I'm a Guest</button>
+      <button class="auth-tab" onclick="authTab('admin',this)">Admin Sign In</button>
     </div>
-    <div id="auth-form-login">
-      <div class="field"><label>Email</label><input id="li-email" type="email" placeholder="you@email.com"/></div>
+    <div id="auth-form-guest">
+      <div class="field"><label>Your Name</label><input id="guest-name" type="text" placeholder="e.g. John" onkeydown="if(event.key==='Enter')guestEnter()"/></div>
+      <button class="btn-auth" onclick="guestEnter()">Enter App</button>
+      <p class="auth-note">No password needed — just enter your name to start logging drinks.</p>
+    </div>
+    <div id="auth-form-admin" style="display:none">
+      <div class="field"><label>Admin Email</label><input id="li-email" type="email" placeholder="you@email.com"/></div>
       <div class="field"><label>Password</label><input id="li-pass" type="password" placeholder="••••••••"/></div>
       <button class="btn-auth" onclick="signIn()">Sign In</button>
-    </div>
-    <div id="auth-form-signup" style="display:none">
-      <div class="field"><label>Your Name (shown to group)</label><input id="su-name" type="text" placeholder="e.g. John"/></div>
-      <div class="field"><label>Email</label><input id="su-email" type="email" placeholder="you@email.com"/></div>
-      <div class="field"><label>Password (min 6 chars)</label><input id="su-pass" type="password" placeholder="••••••••"/></div>
-      <button class="btn-auth" onclick="signUp()">Create Account</button>
-      <p class="auth-note">After signing up, check your email to confirm your account, then sign in.</p>
     </div>
     <div id="auth-error" class="auth-error"></div>
   </div>
 </div>
 
-<!-- MAIN APP -->
 <div id="app">
   <div id="notif"></div>
   <div class="header">
@@ -159,7 +144,7 @@
       <h1>DrinkLog</h1>
       <div class="user-badge">
         <span class="user-name" id="user-label"></span>
-        <button class="btn-logout" onclick="signOut()">Sign Out</button>
+        <button class="btn-logout" onclick="signOut()">Exit</button>
       </div>
     </div>
     <nav id="main-nav">
@@ -184,11 +169,20 @@
 </div>
 
 <script>
-// ── CONFIG ── paste your Supabase URL and anon key here
+// ── CONFIG ──────────────────────────────────────────────────
 var SUPA_URL = localStorage.getItem('sb_url') || '';
 var SUPA_KEY = localStorage.getItem('sb_key') || '';
+var SB;
 
-var SB, CURRENT_USER, CURRENT_PROFILE, IS_ADMIN=false;
+// ── IDENTITY ────────────────────────────────────────────────
+// ADMIN: real Supabase Auth login (email+password)
+// GUEST: just a name + a random token stored in this browser's localStorage
+var IS_ADMIN = false;
+var IS_GUEST = false;
+var CURRENT_USER = null;     // Supabase auth user object (admin only)
+var CURRENT_NAME = '';       // display name for everyone
+var GUEST_TOKEN = localStorage.getItem('guest_token') || '';
+
 var DRINK_TYPES = ["🍺 Beer","🍷 Wine","🥃 Spirits","🍹 Cocktail","🧃 Juice","💧 Water","☕ Coffee","🧋 Other"];
 var AVATAR_COLORS = ["#7c3aed","#2a7a3a","#b45309","#be123c","#0369a1","#7c2d12","#4338ca","#065f46"];
 var STATE = {
@@ -201,28 +195,21 @@ var STATE = {
 // ── INIT ────────────────────────────────────────────────────
 window.addEventListener('load', function(){
   if (typeof supabase === 'undefined') {
-    showConfigError('Failed to load Supabase library. Check your internet connection and reload the page.');
+    showConfigError('Failed to load Supabase library. Check your internet connection and reload.');
     return;
   }
-
-  if (!SUPA_URL || !SUPA_KEY) {
-    showConfigScreen();
-    return;
-  }
-
+  if (!SUPA_URL || !SUPA_KEY) { showConfigScreen(); return; }
   initSupabase(SUPA_URL, SUPA_KEY);
 });
 
 function showConfigScreen(){
   document.getElementById('auth-screen').innerHTML =
-    '<div class="auth-card">' +
-      '<h1>🍺 DrinkLog</h1>' +
-      '<p>First time setup — enter the shared Supabase connection details (ask the app admin if you don\'t have these).</p>' +
-      '<div class="field"><label>Supabase URL</label><input id="cfg-url" type="text" placeholder="https://xxxx.supabase.co"/></div>' +
-      '<div class="field"><label>Supabase Anon Key</label><input id="cfg-key" type="text" placeholder="eyJhbGci..."/></div>' +
-      '<div id="cfg-error" class="auth-error"></div>' +
-      '<button class="btn-auth" onclick="submitConfig()">Connect</button>' +
-    '</div>';
+    '<div class="auth-card"><h1>🍺 DrinkLog</h1>' +
+    '<p>First time setup — enter the shared Supabase connection details.</p>' +
+    '<div class="field"><label>Supabase URL</label><input id="cfg-url" type="text" placeholder="https://xxxx.supabase.co"/></div>' +
+    '<div class="field"><label>Supabase Anon Key</label><input id="cfg-key" type="text" placeholder="eyJhbGci..."/></div>' +
+    '<div id="cfg-error" class="auth-error"></div>' +
+    '<button class="btn-auth" onclick="submitConfig()">Connect</button></div>';
   document.getElementById('auth-screen').style.display = 'flex';
 }
 
@@ -246,26 +233,28 @@ function submitConfig(){
 }
 
 function initSupabase(url, key){
-  try {
-    SB = supabase.createClient(url, key);
-  } catch(e) {
-    showConfigError('Could not connect: ' + e.message + '<br/><br/><button class="btn-auth" onclick="localStorage.removeItem(\'sb_url\');localStorage.removeItem(\'sb_key\');location.reload()">Reset Credentials</button>');
-    return;
-  }
+  try { SB = supabase.createClient(url, key); }
+  catch(e) { showConfigError('Could not connect: ' + e.message + resetBtn()); return; }
+  if (!SB || !SB.auth) { showConfigError('Client failed to initialize. Credentials may be invalid.' + resetBtn()); return; }
 
-  if (!SB || !SB.auth) {
-    showConfigError('Supabase client failed to initialize. Your credentials may be invalid.<br/><br/><button class="btn-auth" onclick="localStorage.removeItem(\'sb_url\');localStorage.removeItem(\'sb_key\');location.reload()">Reset Credentials</button>');
-    return;
-  }
-
-  // Restore the normal auth screen HTML if it was replaced by config screen
   restoreAuthScreenHtml();
 
+  // Check if a guest session is already active
+  if (GUEST_TOKEN && localStorage.getItem('guest_name')) {
+    IS_GUEST = true;
+    CURRENT_NAME = localStorage.getItem('guest_name');
+    enterApp();
+    return;
+  }
+
+  // Otherwise watch for admin auth state
   SB.auth.onAuthStateChange(function(event, session){
     if (session && session.user) {
       CURRENT_USER = session.user;
-      onLoggedIn();
-    } else {
+      IS_ADMIN = true;
+      IS_GUEST = false;
+      onAdminLoggedIn();
+    } else if (!IS_GUEST) {
       CURRENT_USER = null;
       document.getElementById('auth-screen').style.display = 'flex';
       document.getElementById('app').style.display = 'none';
@@ -273,190 +262,152 @@ function initSupabase(url, key){
   });
 }
 
-function restoreAuthScreenHtml(){
-  document.getElementById('auth-screen').innerHTML =
-    '<div class="auth-card">' +
-      '<h1>🍺 DrinkLog</h1>' +
-      '<p>Sign in or create your account to access the shared drink tracker.</p>' +
-      '<div class="auth-tabs">' +
-        '<button class="auth-tab active" onclick="authTab(\'login\',this)">Sign In</button>' +
-        '<button class="auth-tab" onclick="authTab(\'signup\',this)">Create Account</button>' +
-      '</div>' +
-      '<div id="auth-form-login">' +
-        '<div class="field"><label>Email</label><input id="li-email" type="email" placeholder="you@email.com"/></div>' +
-        '<div class="field"><label>Password</label><input id="li-pass" type="password" placeholder="••••••••"/></div>' +
-        '<button class="btn-auth" onclick="signIn()">Sign In</button>' +
-      '</div>' +
-      '<div id="auth-form-signup" style="display:none">' +
-        '<div class="field"><label>Your Name (shown to group)</label><input id="su-name" type="text" placeholder="e.g. John"/></div>' +
-        '<div class="field"><label>Email</label><input id="su-email" type="email" placeholder="you@email.com"/></div>' +
-        '<div class="field"><label>Password (min 6 chars)</label><input id="su-pass" type="password" placeholder="••••••••"/></div>' +
-        '<button class="btn-auth" onclick="signUp()">Create Account</button>' +
-        '<p class="auth-note">After signing up, check your email to confirm your account, then sign in.</p>' +
-      '</div>' +
-      '<div id="auth-error" class="auth-error"></div>' +
-    '</div>';
+function resetBtn(){
+  return '<br/><br/><button class="btn-auth" onclick="localStorage.removeItem(\'sb_url\');localStorage.removeItem(\'sb_key\');location.reload()">Reset Credentials</button>';
 }
 
-// ── AUTH TABS ───────────────────────────────────────────────
+function restoreAuthScreenHtml(){
+  document.getElementById('auth-screen').innerHTML =
+    '<div class="auth-card"><h1>🍺 DrinkLog</h1>' +
+    '<p>Enter your name to join, or sign in if you\'re the admin.</p>' +
+    '<div class="auth-tabs">' +
+      '<button class="auth-tab active" onclick="authTab(\'guest\',this)">I\'m a Guest</button>' +
+      '<button class="auth-tab" onclick="authTab(\'admin\',this)">Admin Sign In</button>' +
+    '</div>' +
+    '<div id="auth-form-guest">' +
+      '<div class="field"><label>Your Name</label><input id="guest-name" type="text" placeholder="e.g. John" onkeydown="if(event.key===\'Enter\')guestEnter()"/></div>' +
+      '<button class="btn-auth" onclick="guestEnter()">Enter App</button>' +
+      '<p class="auth-note">No password needed — just enter your name to start logging drinks.</p>' +
+    '</div>' +
+    '<div id="auth-form-admin" style="display:none">' +
+      '<div class="field"><label>Admin Email</label><input id="li-email" type="email" placeholder="you@email.com"/></div>' +
+      '<div class="field"><label>Password</label><input id="li-pass" type="password" placeholder="••••••••"/></div>' +
+      '<button class="btn-auth" onclick="signIn()">Sign In</button>' +
+    '</div>' +
+    '<div id="auth-error" class="auth-error"></div></div>';
+}
+
 function authTab(tab, btn){
   document.querySelectorAll('.auth-tab').forEach(function(b){b.classList.remove('active');});
   btn.classList.add('active');
-  document.getElementById('auth-form-login').style.display  = tab==='login'  ? '' : 'none';
-  document.getElementById('auth-form-signup').style.display = tab==='signup' ? '' : 'none';
+  document.getElementById('auth-form-guest').style.display = tab==='guest' ? '' : 'none';
+  document.getElementById('auth-form-admin').style.display = tab==='admin' ? '' : 'none';
   document.getElementById('auth-error').textContent = '';
 }
 
+// ── GUEST ENTRY ─────────────────────────────────────────────
+function guestEnter(){
+  var name = document.getElementById('guest-name').value.trim();
+  var errEl = document.getElementById('auth-error');
+  if (!name) { errEl.style.color='#f88'; errEl.textContent = 'Please enter your name.'; return; }
+
+  if (!GUEST_TOKEN) {
+    GUEST_TOKEN = 'g_' + Date.now() + '_' + Math.random().toString(36).slice(2,10);
+    localStorage.setItem('guest_token', GUEST_TOKEN);
+  }
+  localStorage.setItem('guest_name', name);
+  CURRENT_NAME = name;
+  IS_GUEST = true;
+  IS_ADMIN = false;
+  enterApp();
+}
+
+// ── ADMIN SIGN IN ───────────────────────────────────────────
 async function signIn(){
-  if (!SB || !SB.auth) { document.getElementById('auth-error').textContent = 'Not connected yet — please reload the page.'; return; }
+  if (!SB || !SB.auth) { document.getElementById('auth-error').textContent = 'Not connected — reload the page.'; return; }
   var email = document.getElementById('li-email').value.trim();
   var pass  = document.getElementById('li-pass').value;
   var errEl = document.getElementById('auth-error');
-  errEl.style.color = '#f88';
-  errEl.textContent = '';
-
+  errEl.style.color = '#f88'; errEl.textContent = '';
   if (!email || !pass) { errEl.textContent = 'Enter both email and password.'; return; }
-
   try {
     var {error} = await SB.auth.signInWithPassword({email:email, password:pass});
     if (error) {
-      var msg = error.message || error.error_description || error.msg || JSON.stringify(error);
+      var msg = error.message || error.error_description || error.msg || 'Sign in failed (status: '+(error.status||'?')+')';
       errEl.textContent = msg;
     }
-  } catch(e) {
-    errEl.textContent = 'Unexpected error: ' + (e.message || e.toString());
-  }
+  } catch(e) { errEl.textContent = 'Unexpected error: ' + (e.message || e.toString()); }
 }
 
-async function signUp(){
-  if (!SB || !SB.auth) { document.getElementById('auth-error').textContent = 'Not connected yet — please reload the page.'; return; }
-  var name  = document.getElementById('su-name').value.trim();
-  var email = document.getElementById('su-email').value.trim();
-  var pass  = document.getElementById('su-pass').value;
-  var errEl = document.getElementById('auth-error');
-  errEl.style.color = '#f88';
-  errEl.textContent = '';
-
-  if (!name)  { errEl.textContent = 'Please enter your name.'; return; }
-  if (!email) { errEl.textContent = 'Please enter your email.'; return; }
-  if (!pass || pass.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; return; }
-
+async function onAdminLoggedIn(){
+  // Try to read display_name from a profiles table if it exists; fallback to email prefix
+  var name = CURRENT_USER.email.split('@')[0];
   try {
-    var result = await SB.auth.signUp({
-      email: email,
-      password: pass,
-      options: { data: { display_name: name } }
-    });
+    var {data:prof} = await SB.from('profiles').select('*').eq('id', CURRENT_USER.id).single();
+    if (prof && prof.display_name) name = prof.display_name;
+  } catch(e) {}
+  CURRENT_NAME = name;
+  enterApp();
+}
 
-    var error = result.error;
-    var data  = result.data;
-
-    if (error) {
-      var msg = error.message || error.error_description || error.msg || JSON.stringify(error);
-      errEl.textContent = 'Sign up failed: ' + msg;
-      return;
-    }
-
-    // Check if Supabase returned a user with no identities = user already exists
-    if (data && data.user && data.user.identities && data.user.identities.length === 0) {
-      errEl.textContent = 'An account with this email already exists. Try signing in instead.';
-      return;
-    }
-
-    errEl.style.color = '#7ef88e';
-    if (data && data.session) {
-      // Email confirmation disabled — user is logged in immediately
-      errEl.textContent = 'Account created! Logging you in...';
-    } else {
-      errEl.textContent = 'Account created! Check your email to confirm, then sign in.';
-    }
-  } catch(e) {
-    errEl.textContent = 'Unexpected error: ' + (e.message || e.toString());
-  }
+function enterApp(){
+  var label = document.getElementById('user-label');
+  label.innerHTML = '👤 ' + esc(CURRENT_NAME) + (IS_ADMIN ? ' <span class="admin-badge">👑 ADMIN</span>' : '');
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  loadAll();
 }
 
 async function signOut(){
-  await SB.auth.signOut();
+  if (IS_ADMIN && SB && SB.auth) { await SB.auth.signOut(); }
+  if (IS_GUEST) {
+    localStorage.removeItem('guest_name');
+    IS_GUEST = false;
+    CURRENT_NAME = '';
+    document.getElementById('auth-screen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+  }
   notify('Signed out');
-}
-
-// ── POST LOGIN ──────────────────────────────────────────────
-async function onLoggedIn(){
-  // Try loading existing profile
-  var {data:prof, error:profErr} = await SB.from('profiles').select('*').eq('id', CURRENT_USER.id).single();
-
-  // If profile missing, create it now
-  if(!prof){
-    var displayName = CURRENT_USER.user_metadata && CURRENT_USER.user_metadata.display_name
-      ? CURRENT_USER.user_metadata.display_name
-      : CURRENT_USER.email.split('@')[0];
-    var {data:newProf} = await SB.from('profiles').insert({
-      id: CURRENT_USER.id,
-      display_name: displayName,
-      is_admin: false
-    }).select().single();
-    prof = newProf;
-  }
-
-  CURRENT_PROFILE = prof || {display_name: CURRENT_USER.email.split('@')[0], is_admin: false};
-  IS_ADMIN = CURRENT_PROFILE.is_admin === true;
-
-  // Update header
-  var label = document.getElementById('user-label');
-  label.innerHTML = '👤 ' + esc(CURRENT_PROFILE.display_name);
-  if(IS_ADMIN){
-    label.innerHTML += ' <span class="admin-badge">👑 ADMIN</span>';
-  }
-
-  document.getElementById('auth-screen').style.display = 'none';
-  document.getElementById('app').style.display = 'block';
-  await loadAll();
 }
 
 // ── LOAD DATA ───────────────────────────────────────────────
 async function loadAll(){
   try {
-    var [p, l, pay, rep, aud] = await Promise.all([
-      SB.from('profiles').select('*').order('created_at'),
+    var [l, pay, rep, aud] = await Promise.all([
       SB.from('drink_logs').select('*').order('date',{ascending:false}).order('logged_at',{ascending:false}),
       SB.from('payments').select('*').order('date',{ascending:false}),
       SB.from('replacements').select('*').order('for_date',{ascending:false}),
       SB.from('audit_log').select('*').order('performed_at',{ascending:false}).limit(100)
     ]);
-    if(p.error)   notify('People error: '+p.error.message, true);
     if(l.error)   notify('Logs error: '+l.error.message, true);
     if(pay.error) notify('Payments error: '+pay.error.message, true);
     if(rep.error) notify('Replace error: '+rep.error.message, true);
-    STATE.people       = p.data   || [];
+
     STATE.logs         = l.data   || [];
     STATE.payments     = pay.data || [];
     STATE.replacements = rep.data || [];
-    STATE.auditLog     = aud.data || [];
+    STATE.auditLog      = aud.data || [];
 
-    // Always refresh current user's admin status from latest profile data
-    var myProfile = STATE.people.find(function(p){ return p.id === CURRENT_USER.id; });
-    if(myProfile){
-      CURRENT_PROFILE = myProfile;
-      IS_ADMIN = myProfile.is_admin === true;
-      var label = document.getElementById('user-label');
-      if(label){
-        label.innerHTML = '👤 ' + esc(CURRENT_PROFILE.display_name) + (IS_ADMIN ? ' <span class="admin-badge">👑 ADMIN</span>' : '');
-      }
-    }
+    // Derive people list from everyone who has ever logged a drink or paid
+    var names = new Set();
+    STATE.logs.forEach(function(l){ if(l.person) names.add(l.person); });
+    STATE.payments.forEach(function(p){
+      (p.payers||'').split(',').forEach(function(n){ if(n.trim()) names.add(n.trim()); });
+      (p.non_drinkers||'').split(',').forEach(function(n){ if(n.trim()) names.add(n.trim()); });
+    });
+    if (CURRENT_NAME) names.add(CURRENT_NAME);
+    STATE.people = [...names].sort().map(function(n,i){ return {display_name:n, idx:i}; });
+
     renderTab(STATE.tab);
   } catch(e){ notify('Load error: '+e.message, true); }
 }
 
 // ── AUDIT HELPER ────────────────────────────────────────────
 async function audit(action, table, id, details){
-  await SB.from('audit_log').insert({
-    action: action,
-    performed_by: CURRENT_PROFILE.display_name,
-    user_id: CURRENT_USER.id,
-    target_table: table,
-    target_id: id || null,
-    details: details || null
-  });
+  try {
+    await SB.from('audit_log').insert({
+      action: action, performed_by: CURRENT_NAME,
+      user_id: IS_ADMIN ? CURRENT_USER.id : null,
+      target_table: table, target_id: id || null, details: details || null
+    });
+  } catch(e) {}
+}
+
+// ── OWNERSHIP CHECK ─────────────────────────────────────────
+function isMine(row){
+  if (IS_ADMIN) return true;
+  if (IS_GUEST) return row.guest_token === GUEST_TOKEN;
+  return false;
 }
 
 // ── TABS ────────────────────────────────────────────────────
@@ -480,22 +431,25 @@ function renderTab(t){
 }
 
 // ══════════════════════════════════════════════════════════════
-// LOG TAB
+// LOG TAB — with consolidated per-person-per-day summary
 // ══════════════════════════════════════════════════════════════
 function renderLog(){
   var el = document.getElementById('tab-log');
   var total = ((parseFloat(STATE.logPrice)||0)*STATE.logQty).toFixed(2);
+
   el.innerHTML =
-    card('People',
+    card('Who\'s Drinking',
       '<div class="chips" style="margin-bottom:10px">'+
-        STATE.people.map(function(p,i){
+        STATE.people.map(function(p){
           var on = STATE.logPerson===p.display_name;
-          return '<span class="chip'+(on?' cp':'')+'" onclick="STATE.logPerson=\''+esc(p.display_name)+'\';renderTab(\'log\')">'+(p.id===CURRENT_USER.id?'<span class="mine-dot"></span>':'')+esc(p.display_name)+'</span>';
+          return '<span class="chip'+(on?' cp':'')+'" onclick="STATE.logPerson=\''+esc(p.display_name)+'\';renderTab(\'log\')">'+(p.display_name===CURRENT_NAME?'<span class="mine-dot"></span>':'')+esc(p.display_name)+'</span>';
         }).join('')+
+        (STATE.people.find(function(p){return p.display_name===CURRENT_NAME;}) ? '' :
+          '<span class="chip cp" onclick="STATE.logPerson=\''+esc(CURRENT_NAME)+'\';renderTab(\'log\')">'+esc(CURRENT_NAME)+' (you)</span>')+
       '</div>'+
       '<div style="display:flex;gap:8px">'+
-      '<input id="np" type="text" placeholder="Add person…" style="flex:1" onkeydown="if(event.key===\'Enter\')addPerson()"/>'+
-      '<button class="btn-primary" style="width:auto;padding:9px 16px" onclick="addPerson()">Add</button></div>')+
+      '<input id="np" type="text" placeholder="Or type a new name…" style="flex:1" onkeydown="if(event.key===\'Enter\'){STATE.logPerson=this.value.trim();this.value=\'\';renderTab(\'log\')}"/>'+
+      '</div>')+
 
     card('Log a Drink',
       '<div class="grid2">'+
@@ -513,15 +467,54 @@ function renderLog(){
       fld('Note','<input type="text" value="'+esc(STATE.logNote)+'" oninput="STATE.logNote=this.value" placeholder="optional note…"/>') +
       '<button class="btn-primary" onclick="saveLog()">+ Log Drink</button>')+
 
-    (STATE.logs.length ? card('Recent Entries',
-      STATE.logs.slice(0,8).map(function(l){
-        var canDel = IS_ADMIN || l.user_id === CURRENT_USER.id;
-        return '<div class="entry"><div class="entry-l"><span class="ej">'+emoji(l.drink)+'</span><div>'+
-          '<div class="en">'+esc(l.person)+(l.quantity>1?' <span class="badge">×'+l.quantity+'</span>':'')+'</div>'+
-          '<div class="es">'+esc(l.drink.replace(/^.+? /,''))+(l.total_price>0?' · €'+parseFloat(l.total_price).toFixed(2):'')+' · '+fmtDate(l.date)+'</div>'+
-          '<div class="es" style="color:#3a3c55">Added by '+esc(l.added_by||'unknown')+'</div>'+
-          '</div></div>'+delEditBtns('drink_logs',l.id,esc(l.drink)+' for '+esc(l.person),canDel,l)+'</div>';
-      }).join('')):'');
+    renderConsolidatedToday();
+}
+
+// Consolidate all of today's (and recent days') drinks per person
+function renderConsolidatedToday(){
+  if (!STATE.logs.length) return '';
+
+  // Group by date, then by person
+  var byDate = {};
+  STATE.logs.forEach(function(l){
+    if (!byDate[l.date]) byDate[l.date] = {};
+    if (!byDate[l.date][l.person]) byDate[l.date][l.person] = { rows: [], totalQty: 0, totalPrice: 0 };
+    byDate[l.date][l.person].rows.push(l);
+    byDate[l.date][l.person].totalQty += (l.quantity||0);
+    byDate[l.date][l.person].totalPrice += (parseFloat(l.total_price)||0);
+  });
+
+  var dates = Object.keys(byDate).sort().reverse().slice(0,5); // last 5 days with activity
+
+  var html = card('Recent Days — Consolidated',
+    dates.map(function(d){
+      var people = byDate[d];
+      var dayTotal = Object.values(people).reduce(function(s,p){return s+p.totalQty;},0);
+      var dayCost  = Object.values(people).reduce(function(s,p){return s+p.totalPrice;},0);
+      return '<div class="day-summary">'+
+        '<div class="day-summary-head"><h5>'+fmtDate(d)+'</h5>'+
+        '<span style="font-size:11px;color:#5a5c7a">'+dayTotal+' drinks · €'+dayCost.toFixed(2)+'</span></div>'+
+        Object.keys(people).sort().map(function(person){
+          var pdata = people[person];
+          // Consolidate drink types for this person/day
+          var drinkCounts = {};
+          pdata.rows.forEach(function(r){ drinkCounts[r.drink] = (drinkCounts[r.drink]||0) + r.quantity; });
+          var tags = Object.entries(drinkCounts).map(function(e){
+            return '<span class="drink-tag">'+emoji(e[0])+' ×'+e[1]+'</span>';
+          }).join('');
+          return '<div class="person-row">'+
+            '<div class="person-row-l">'+
+              '<div class="avatar" style="background:'+colorFor(person)+';width:22px;height:22px;font-size:10px">'+person[0].toUpperCase()+'</div>'+
+              '<div><div style="font-size:12px;font-weight:600;color:#c4b0ff">'+esc(person)+
+                ' <span class="badge">'+pdata.totalQty+' drink'+(pdata.totalQty!==1?'s':'')+'</span>'+
+                (pdata.totalPrice>0?' <span style="font-size:11px;color:#7ef88e;font-weight:600">€'+pdata.totalPrice.toFixed(2)+'</span>':'')+
+                '</div><div class="drink-tags">'+tags+'</div></div>'+
+            '</div>'+
+          '</div>';
+        }).join('')+
+      '</div>';
+    }).join(''));
+  return html;
 }
 
 function updTotal(){
@@ -531,28 +524,22 @@ function updTotal(){
 }
 
 async function saveLog(){
-  if(!STATE.logPerson){notify('Select a person',true);return;}
+  if(!STATE.logPerson){notify('Select or type a person',true);return;}
   var unit=parseFloat(STATE.logPrice)||0, total=unit*STATE.logQty;
-  var {data, error} = await SB.from('drink_logs').insert({
+  var insertObj = {
     date:STATE.logDate, person:STATE.logPerson, drink:STATE.logDrink,
     quantity:STATE.logQty, unit_price:unit, total_price:total,
-    note:STATE.logNote, user_id:CURRENT_USER.id, added_by:CURRENT_PROFILE.display_name
-  }).select().single();
+    note:STATE.logNote, added_by:CURRENT_NAME
+  };
+  if (IS_ADMIN) insertObj.user_id = CURRENT_USER.id;
+  if (IS_GUEST) insertObj.guest_token = GUEST_TOKEN;
+
+  var {data, error} = await SB.from('drink_logs').insert(insertObj).select().single();
   if(error){notify('Error: '+error.message,true);return;}
   await audit('LOG_DRINK','drink_logs',data.id,{person:STATE.logPerson,drink:STATE.logDrink,qty:STATE.logQty,total:total});
   STATE.logQty=1;STATE.logPrice='';STATE.logNote='';
   notify('Drink logged ✓');
   await loadAll();
-}
-
-async function addPerson(){
-  var name=(document.getElementById('np').value||'').trim();
-  if(!name)return;
-  // Add as a profile note — just insert into drink_logs context; profiles are created on signup
-  // Instead we use a simple people table approach: insert into profiles won't work for non-auth users
-  // So we store extra people in a separate simple table... for now notify and suggest signup
-  notify('Ask '+name+' to create an account so they can log in!',true);
-  document.getElementById('np').value='';
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -570,7 +557,7 @@ function renderStats(){
     {v:STATE.people.length,l:'People'},
     {v:uniqueDays,l:'Days Logged'}
   ]);
-  STATE.people.forEach(function(p,pi){
+  STATE.people.forEach(function(p){
     var pl=STATE.logs.filter(function(l){return l.person===p.display_name;});
     if(!pl.length)return;
     var pt=pl.reduce(function(s,l){return s+(l.quantity||0);},0);
@@ -583,11 +570,11 @@ function renderStats(){
         '<div style="font-size:9px;color:#3a3c55">'+e[0].slice(5)+'</div>'+
         '<div style="font-size:10px;color:#7a7c95;font-weight:700">'+e[1]+'</div></div>';
     }).join('');
-    var isMe = p.id===CURRENT_USER.id;
+    var isMe = p.display_name===CURRENT_NAME;
     html+=card('',
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
         '<div style="display:flex;align-items:center;gap:9px">'+
-          '<div class="avatar" style="background:'+AVATAR_COLORS[pi%8]+'">'+p.display_name[0].toUpperCase()+'</div>'+
+          '<div class="avatar" style="background:'+colorFor(p.display_name)+'">'+p.display_name[0].toUpperCase()+'</div>'+
           '<span style="font-weight:700;font-size:15px;color:#e8e8f0">'+esc(p.display_name)+(isMe?' <span style="font-size:10px;color:#a78bfa">(you)</span>':'')+'</span>'+
         '</div>'+
         '<div style="text-align:right"><div style="font-size:20px;font-weight:800;color:#a78bfa">'+pt+'</div>'+
@@ -641,7 +628,7 @@ function renderPayments(){
   }).join(''));
 
   if(STATE.payments.length) html+=card('Payment Records',STATE.payments.map(function(p){
-    var canDel=IS_ADMIN||p.user_id===CURRENT_USER.id;
+    var canDel=isMine(p);
     return '<div class="entry"><div class="entry-l"><div>'+
       '<div class="en" style="color:#7ef88e">'+esc(p.payers)+(p.amount>0?' <span style="color:#5a5c7a;font-weight:400">· €'+parseFloat(p.amount).toFixed(2)+'</span>':'')+'</div>'+
       (p.non_drinkers?'<div class="es" style="color:#f8d878">Didn\'t drink: '+esc(p.non_drinkers)+'</div>':'')+
@@ -654,12 +641,15 @@ function renderPayments(){
 
 async function savePayment(){
   if(!STATE.payPayers.length){notify('Select who paid',true);return;}
-  var {data,error}=await SB.from('payments').insert({
+  var insertObj = {
     date:STATE.payDate, payers:STATE.payPayers.join(', '),
     non_drinkers:STATE.payNonDrinkers.join(', '),
-    amount:parseFloat(STATE.payAmount)||0, note:STATE.payNote,
-    user_id:CURRENT_USER.id, added_by:CURRENT_PROFILE.display_name
-  }).select().single();
+    amount:parseFloat(STATE.payAmount)||0, note:STATE.payNote, added_by:CURRENT_NAME
+  };
+  if (IS_ADMIN) insertObj.user_id = CURRENT_USER.id;
+  if (IS_GUEST) insertObj.guest_token = GUEST_TOKEN;
+
+  var {data,error}=await SB.from('payments').insert(insertObj).select().single();
   if(error){notify('Error: '+error.message,true);return;}
   await audit('RECORD_PAYMENT','payments',data.id,{payers:STATE.payPayers.join(', '),amount:STATE.payAmount});
   STATE.payPayers=[];STATE.payNonDrinkers=[];STATE.payAmount='';STATE.payNote='';
@@ -683,11 +673,11 @@ function renderHistory(){
       '<div class="dh"><div><h4>'+fmtDate(d)+'</h4></div><div style="display:flex;gap:5px;flex-wrap:wrap">'+badges+'</div></div>'+
       '<div style="padding:9px 13px">'+
       entries.map(function(l){
-        var canDel=IS_ADMIN||l.user_id===CURRENT_USER.id;
+        var canDel=isMine(l);
         return '<div class="entry"><div class="entry-l"><span class="ej">'+emoji(l.drink)+'</span><div>'+
           '<div class="en">'+esc(l.person)+(l.quantity>1?' <span class="badge">×'+l.quantity+'</span>':'')+'</div>'+
           '<div class="es">'+esc(l.drink.replace(/^.+? /,''))+(l.total_price>0?' · €'+parseFloat(l.unit_price).toFixed(2)+' ea · €'+parseFloat(l.total_price).toFixed(2):'')+(l.note?' · '+esc(l.note):'')+'</div>'+
-          '<div class="es" style="color:#3a3c55">'+emoji_action('add')+' Added by '+esc(l.added_by||'?')+'</div>'+
+          '<div class="es" style="color:#3a3c55">Added by '+esc(l.added_by||'?')+'</div>'+
           '</div></div>'+delEditBtns('drink_logs',l.id,esc(l.drink)+' for '+esc(l.person),canDel,l)+'</div>';
       }).join('')+'</div></div>';
   }).join('');
@@ -779,7 +769,7 @@ function renderReplace(){
   });
 
   if(STATE.replacements.length) html+=card('Replacement Log',STATE.replacements.map(function(r){
-    var canDel=IS_ADMIN||r.user_id===CURRENT_USER.id;
+    var canDel=isMine(r);
     return '<div class="entry"><div class="entry-l"><span class="ej">'+emoji(r.drink)+'</span><div>'+
       '<div class="en">'+r.quantity+'× '+esc(r.drink.replace(/^.+? /,''))+'</div>'+
       '<div class="es">For '+fmtDate(r.for_date)+(r.replaced_by?' · by '+esc(r.replaced_by):'')+(r.note?' · '+esc(r.note):'')+'</div>'+
@@ -798,10 +788,10 @@ async function replBottle(date,drink,delta){
     if(existing){
       await SB.from('replacements').update({quantity:existing.quantity+1}).eq('id',existing.id);
     } else {
-      var {data}=await SB.from('replacements').insert({
-        for_date:date,drink:drink,quantity:1,replaced_by:CURRENT_PROFILE.display_name,
-        note:'',user_id:CURRENT_USER.id,added_by:CURRENT_PROFILE.display_name
-      }).select().single();
+      var insertObj = {for_date:date,drink:drink,quantity:1,replaced_by:CURRENT_NAME,note:'',added_by:CURRENT_NAME};
+      if (IS_ADMIN) insertObj.user_id = CURRENT_USER.id;
+      if (IS_GUEST) insertObj.guest_token = GUEST_TOKEN;
+      var {data}=await SB.from('replacements').insert(insertObj).select().single();
       await audit('MARK_REPLACEMENT','replacements',data&&data.id,{date:date,drink:drink,qty:1});
     }
     notify('1× '+drink+' marked replaced ✓');
@@ -819,7 +809,7 @@ async function undoReplace(){
   var prev=STATE.undoStack.pop();
   await SB.from('replacements').delete().neq('id','00000000-0000-0000-0000-000000000000');
   if(prev.length){
-    var ins=prev.map(function(r){return {for_date:r.for_date,drink:r.drink,quantity:r.quantity,replaced_by:r.replaced_by||'',note:r.note||'',user_id:r.user_id,added_by:r.added_by||''};});
+    var ins=prev.map(function(r){return {for_date:r.for_date,drink:r.drink,quantity:r.quantity,replaced_by:r.replaced_by||'',note:r.note||'',added_by:r.added_by||'',user_id:r.user_id||null,guest_token:r.guest_token||''};});
     await SB.from('replacements').insert(ins);
   }
   await audit('UNDO_REPLACE','replacements',null,{restored:prev.length+' entries'});
@@ -834,22 +824,22 @@ function renderAudit(){
   var el=document.getElementById('tab-audit');
   if(!STATE.auditLog.length){el.innerHTML=empty('📜','No activity yet','Actions will appear here as they happen.');return;}
   var actionColors={
-    'LOG_DRINK':'#a78bfa','DELETE_DRINK_LOG':'#f88',
+    'LOG_DRINK':'#a78bfa','DELETE_DRINK_LOGS':'#f88',
     'RECORD_PAYMENT':'#7ef88e','DELETE_PAYMENTS':'#f88',
     'MARK_REPLACEMENT':'#f8d878','DELETE_REPLACEMENTS':'#f88',
-    'UNDO_REPLACE':'#5a5c7a','ADD_PERSON':'#4cd471','DELETE_PERSON':'#f88'
+    'UNDO_REPLACE':'#5a5c7a','ADMIN_EDIT_DRINK':'#f8d878','DELETE_PERSON':'#f88'
   };
   var actionLabels={
-    'LOG_DRINK':'logged a drink','DELETE_DRINK_LOG':'deleted a drink entry',
+    'LOG_DRINK':'logged a drink','DELETE_DRINK_LOGS':'deleted a drink entry',
     'RECORD_PAYMENT':'recorded a payment','DELETE_PAYMENTS':'deleted a payment',
     'MARK_REPLACEMENT':'marked a replacement','DELETE_REPLACEMENTS':'deleted a replacement',
-    'UNDO_REPLACE':'undid replacement changes','ADD_PERSON':'added a person','DELETE_PERSON':'removed a person'
+    'UNDO_REPLACE':'undid replacement changes','ADMIN_EDIT_DRINK':'edited an entry (admin)','DELETE_PERSON':'removed a person'
   };
-  html=card('Activity Log — last 100 actions',
+  var html=card('Activity Log — last 100 actions',
     STATE.auditLog.map(function(a){
       var col=actionColors[a.action]||'#5a5c7a';
       var label=actionLabels[a.action]||a.action.toLowerCase().replace(/_/g,' ');
-      var isMe=a.user_id===CURRENT_USER.id;
+      var isMe=a.performed_by===CURRENT_NAME;
       var det='';
       if(a.details){
         if(a.details.person) det+=' · '+esc(a.details.person);
@@ -876,31 +866,18 @@ function renderAudit(){
 function renderPeople(){
   var el=document.getElementById('tab-people');
   var html=card('Group Members',
-    '<p style="font-size:12px;color:#5a5c7a;margin-bottom:12px;line-height:1.6">Each person needs to <strong style="color:#9a9cc0">create their own account</strong> using the Sign Up screen. Once they sign in, they appear here automatically.</p>'+
-    (STATE.people.length?STATE.people.map(function(p,i){
-      var pl=STATE.logs.filter(function(l){return l.person===p.display_name;});
-      var total=pl.reduce(function(s,l){return s+(l.quantity||0);},0);
-      var spend=pl.reduce(function(s,l){return s+(parseFloat(l.total_price)||0);},0);
-      var isMe=p.id===CURRENT_USER.id;
+    '<p style="font-size:12px;color:#5a5c7a;margin-bottom:12px;line-height:1.6">People appear here automatically once they log a drink or a payment.</p>'+
+    (STATE.people.length?STATE.people.map(function(p){
+      var pl = STATE.logs.filter(function(l){return l.person===p.display_name;});
+      var total = pl.reduce(function(s,l){return s+(l.quantity||0);},0);
+      var spend = pl.reduce(function(s,l){return s+(parseFloat(l.total_price)||0);},0);
+      var isMe=p.display_name===CURRENT_NAME;
       return '<div class="entry"><div class="entry-l">'+
-        '<div class="avatar" style="background:'+AVATAR_COLORS[i%8]+'">'+p.display_name[0].toUpperCase()+'</div>'+
+        '<div class="avatar" style="background:'+colorFor(p.display_name)+'">'+p.display_name[0].toUpperCase()+'</div>'+
         '<div><div class="en">'+esc(p.display_name)+(isMe?' <span style="font-size:10px;color:#a78bfa">(you)</span>':'')+'</div>'+
         '<div class="es">'+total+' drink'+(total!==1?'s':'')+' · €'+spend.toFixed(2)+'</div>'+
-        '<div class="es" style="color:#3a3c55">Joined '+fmtDate(p.created_at)+'</div>'+
         '</div></div></div>';
     }).join(''):'<div style="color:#3a3c55;font-size:13px">No members yet.</div>'));
-  if(IS_ADMIN){
-    html+=card('Admin — Manage Members',
-      '<p style="font-size:12px;color:#f8d878;margin-bottom:10px">👑 You have admin access. You can remove members below.</p>'+
-      STATE.people.map(function(p,i){
-        var isMe=p.id===CURRENT_USER.id;
-        return '<div class="entry"><div class="entry-l">'+
-          '<div class="avatar" style="background:'+AVATAR_COLORS[i%8]+'">'+p.display_name[0].toUpperCase()+'</div>'+
-          '<div><div class="en">'+esc(p.display_name)+(isMe?' (you)':'')+'</div></div></div>'+
-          (!isMe?'<button class="btn-sm" onclick="adminRemovePerson(\''+p.id+'\',\''+esc(p.display_name)+'\')" title="Remove member">🗑</button>':'<span style="font-size:11px;color:#3a3c55">—</span>')+
-        '</div>';
-      }).join(''));
-  }
   el.innerHTML=html;
 }
 
@@ -908,21 +885,13 @@ function renderPeople(){
 async function delEntry(table,id,label){
   if(!confirm('Delete: '+label+'?\n\nThis cannot be undone.'))return;
   var {error}=await SB.from(table).delete().eq('id',id);
-  if(error){
-    if(error.code==='42501'||error.message.includes('policy')){
-      notify('You can only delete your own entries 🔒',true);
-    } else {
-      notify('Error: '+error.message,true);
-    }
-    return;
-  }
-  var actionMap={'drink_logs':'DELETE_DRINK_LOG','payments':'DELETE_PAYMENTS','replacements':'DELETE_REPLACEMENTS'};
+  if(error){notify('Error: '+error.message,true);return;}
+  var actionMap={'drink_logs':'DELETE_DRINK_LOGS','payments':'DELETE_PAYMENTS','replacements':'DELETE_REPLACEMENTS'};
   await audit(actionMap[table]||'DELETE',table,id,{label:label});
   notify('Deleted ✓');
   await loadAll();
 }
 
-// ── ADMIN FUNCTIONS ─────────────────────────────────────────
 function delEditBtns(table, id, label, canDel, row){
   var del = canDel ? '<button class="btn-sm" onclick="delEntry(\''+table+'\',\''+id+'\',\''+label+'\')">🗑</button>' : '<span style="font-size:11px;color:#3a3c55">🔒</span>';
   var edit = (IS_ADMIN && table==='drink_logs') ? '<button class="btn-edit" onclick="adminEditDrink(\''+id+'\')">✏️ Edit</button>' : '';
@@ -938,31 +907,11 @@ async function adminEditDrink(id){
   if(newPrice===null) return;
   var newNote  = prompt('Edit note (current: '+(entry.note||'')+'):', entry.note||'');
   if(newNote===null) return;
-  var qty   = parseInt(newQty)||1;
-  var price = parseFloat(newPrice)||0;
-  var total = qty*price;
-  var {error} = await SB.from('drink_logs').update({
-    quantity:qty, unit_price:price, total_price:total, note:newNote
-  }).eq('id',id);
+  var qty=parseInt(newQty)||1, price=parseFloat(newPrice)||0, total=qty*price;
+  var {error} = await SB.from('drink_logs').update({quantity:qty,unit_price:price,total_price:total,note:newNote}).eq('id',id);
   if(error){notify('Error: '+error.message,true);return;}
   await audit('ADMIN_EDIT_DRINK','drink_logs',id,{qty:qty,price:price,total:total,note:newNote,original_person:entry.person});
   notify('Entry updated ✓');
-  await loadAll();
-}
-
-async function adminRemovePerson(profileId, name){
-  if(!confirm('Remove '+name+' from the group?\n\nThey will need to sign up again to rejoin. Their drink logs will remain.')) return;
-  var {error} = await SB.from('profiles').delete().eq('id', profileId);
-  if(error){notify('Error: '+error.message,true);return;}
-  await audit('DELETE_PERSON','profiles',profileId,{name:name});
-  notify(name+' removed from group');
-  await loadAll();
-}
-
-async function adminSetAdmin(profileId, name){
-  var {error} = await SB.from('profiles').update({is_admin:true}).eq('id',profileId);
-  if(error){notify('Error: '+error.message,true);return;}
-  notify(name+' is now an admin');
   await loadAll();
 }
 
@@ -979,7 +928,7 @@ function td(){return new Date().toISOString().split('T')[0];}
 function fmtDate(d){if(!d)return '';var dt=new Date(String(d).includes('T')?d:d+'T00:00:00');return dt.toLocaleDateString('en-GB',{weekday:'short',month:'short',day:'numeric'});}
 function fmtDateTime(d){if(!d)return '';var dt=new Date(d);return dt.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' '+dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});}
 function emoji(drink){return (String(drink||'')).split(' ')[0]||'🍹';}
-function emoji_action(a){return a==='add'?'➕':'🗑';}
+function colorFor(name){var sum=0;for(var i=0;i<name.length;i++)sum+=name.charCodeAt(i);return AVATAR_COLORS[sum%AVATAR_COLORS.length];}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 </script>
 </body>
