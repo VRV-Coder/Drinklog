@@ -200,16 +200,67 @@ var STATE = {
 
 // ── INIT ────────────────────────────────────────────────────
 window.addEventListener('load', function(){
-  if (!SUPA_URL || !SUPA_KEY) {
-    // First time: show a small config prompt
-    var url = prompt('Enter your Supabase Project URL:');
-    var key = prompt('Enter your Supabase Anon Key:');
-    if (!url || !key) { document.getElementById('auth-error').textContent = 'Credentials required.'; return; }
-    localStorage.setItem('sb_url', url);
-    localStorage.setItem('sb_key', key);
-    SUPA_URL = url; SUPA_KEY = key;
+  if (typeof supabase === 'undefined') {
+    showConfigError('Failed to load Supabase library. Check your internet connection and reload the page.');
+    return;
   }
-  SB = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+  if (!SUPA_URL || !SUPA_KEY) {
+    showConfigScreen();
+    return;
+  }
+
+  initSupabase(SUPA_URL, SUPA_KEY);
+});
+
+function showConfigScreen(){
+  document.getElementById('auth-screen').innerHTML =
+    '<div class="auth-card">' +
+      '<h1>🍺 DrinkLog</h1>' +
+      '<p>First time setup — enter the shared Supabase connection details (ask the app admin if you don\'t have these).</p>' +
+      '<div class="field"><label>Supabase URL</label><input id="cfg-url" type="text" placeholder="https://xxxx.supabase.co"/></div>' +
+      '<div class="field"><label>Supabase Anon Key</label><input id="cfg-key" type="text" placeholder="eyJhbGci..."/></div>' +
+      '<div id="cfg-error" class="auth-error"></div>' +
+      '<button class="btn-auth" onclick="submitConfig()">Connect</button>' +
+    '</div>';
+  document.getElementById('auth-screen').style.display = 'flex';
+}
+
+function showConfigError(msg){
+  document.getElementById('auth-screen').innerHTML =
+    '<div class="auth-card"><h1>🍺 DrinkLog</h1><div class="auth-error" style="margin-top:10px">' + msg + '</div>' +
+    '<button class="btn-auth" onclick="location.reload()">Reload Page</button></div>';
+  document.getElementById('auth-screen').style.display = 'flex';
+}
+
+function submitConfig(){
+  var url = document.getElementById('cfg-url').value.trim();
+  var key = document.getElementById('cfg-key').value.trim();
+  var errEl = document.getElementById('cfg-error');
+  if (!url || !key) { errEl.textContent = 'Both fields are required.'; return; }
+  if (!url.startsWith('http')) { errEl.textContent = 'URL should start with https://'; return; }
+  localStorage.setItem('sb_url', url);
+  localStorage.setItem('sb_key', key);
+  SUPA_URL = url; SUPA_KEY = key;
+  initSupabase(url, key);
+}
+
+function initSupabase(url, key){
+  try {
+    SB = supabase.createClient(url, key);
+  } catch(e) {
+    showConfigError('Could not connect: ' + e.message + '<br/><br/><button class="btn-auth" onclick="localStorage.removeItem(\'sb_url\');localStorage.removeItem(\'sb_key\');location.reload()">Reset Credentials</button>');
+    return;
+  }
+
+  if (!SB || !SB.auth) {
+    showConfigError('Supabase client failed to initialize. Your credentials may be invalid.<br/><br/><button class="btn-auth" onclick="localStorage.removeItem(\'sb_url\');localStorage.removeItem(\'sb_key\');location.reload()">Reset Credentials</button>');
+    return;
+  }
+
+  // Restore the normal auth screen HTML if it was replaced by config screen
+  restoreAuthScreenHtml();
+
   SB.auth.onAuthStateChange(function(event, session){
     if (session && session.user) {
       CURRENT_USER = session.user;
@@ -220,7 +271,32 @@ window.addEventListener('load', function(){
       document.getElementById('app').style.display = 'none';
     }
   });
-});
+}
+
+function restoreAuthScreenHtml(){
+  document.getElementById('auth-screen').innerHTML =
+    '<div class="auth-card">' +
+      '<h1>🍺 DrinkLog</h1>' +
+      '<p>Sign in or create your account to access the shared drink tracker.</p>' +
+      '<div class="auth-tabs">' +
+        '<button class="auth-tab active" onclick="authTab(\'login\',this)">Sign In</button>' +
+        '<button class="auth-tab" onclick="authTab(\'signup\',this)">Create Account</button>' +
+      '</div>' +
+      '<div id="auth-form-login">' +
+        '<div class="field"><label>Email</label><input id="li-email" type="email" placeholder="you@email.com"/></div>' +
+        '<div class="field"><label>Password</label><input id="li-pass" type="password" placeholder="••••••••"/></div>' +
+        '<button class="btn-auth" onclick="signIn()">Sign In</button>' +
+      '</div>' +
+      '<div id="auth-form-signup" style="display:none">' +
+        '<div class="field"><label>Your Name (shown to group)</label><input id="su-name" type="text" placeholder="e.g. John"/></div>' +
+        '<div class="field"><label>Email</label><input id="su-email" type="email" placeholder="you@email.com"/></div>' +
+        '<div class="field"><label>Password (min 6 chars)</label><input id="su-pass" type="password" placeholder="••••••••"/></div>' +
+        '<button class="btn-auth" onclick="signUp()">Create Account</button>' +
+        '<p class="auth-note">After signing up, check your email to confirm your account, then sign in.</p>' +
+      '</div>' +
+      '<div id="auth-error" class="auth-error"></div>' +
+    '</div>';
+}
 
 // ── AUTH TABS ───────────────────────────────────────────────
 function authTab(tab, btn){
@@ -232,6 +308,7 @@ function authTab(tab, btn){
 }
 
 async function signIn(){
+  if (!SB || !SB.auth) { document.getElementById('auth-error').textContent = 'Not connected yet — please reload the page.'; return; }
   var email = document.getElementById('li-email').value.trim();
   var pass  = document.getElementById('li-pass').value;
   var errEl = document.getElementById('auth-error');
@@ -252,6 +329,7 @@ async function signIn(){
 }
 
 async function signUp(){
+  if (!SB || !SB.auth) { document.getElementById('auth-error').textContent = 'Not connected yet — please reload the page.'; return; }
   var name  = document.getElementById('su-name').value.trim();
   var email = document.getElementById('su-email').value.trim();
   var pass  = document.getElementById('su-pass').value;
