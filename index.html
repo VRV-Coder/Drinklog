@@ -421,13 +421,18 @@ function switchTab(tab, btn){
   renderTab(tab);
 }
 function renderTab(t){
-  if(t==='log')      renderLog();
-  if(t==='stats')    renderStats();
-  if(t==='payments') renderPayments();
-  if(t==='history')  renderHistory();
-  if(t==='replace')  renderReplace();
-  if(t==='audit')    renderAudit();
-  if(t==='people')   renderPeople();
+  try {
+    if(t==='log')      renderLog();
+    if(t==='stats')    renderStats();
+    if(t==='payments') renderPayments();
+    if(t==='history')  renderHistory();
+    if(t==='replace')  renderReplace();
+    if(t==='audit')    renderAudit();
+    if(t==='people')   renderPeople();
+  } catch(e) {
+    console.error('Render error on tab', t, e);
+    notify('Display error: ' + e.message, true);
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -457,7 +462,7 @@ function renderLog(){
         fld('Person','<select onchange="STATE.logPerson=this.value">'+pOpts(STATE.logPerson)+'</select>')+
       '</div>'+
       fld('Drink Type','<div class="chips">'+DRINK_TYPES.map(function(d){
-        return '<span class="chip'+(STATE.logDrink===d?' cp':'')+'" onclick="STATE.logDrink=\''+d+'\'">' +d+'</span>';
+        return '<span class="chip'+(STATE.logDrink===d?' cp':'')+'" onclick="STATE.logDrink=\''+d+'\';renderTab(\'log\')">' +d+'</span>';
       }).join('')+'</div>')+
       '<div class="grid2">'+
         fld('Drinks',stepper('logQty',STATE.logQty))+
@@ -504,7 +509,7 @@ function renderConsolidatedToday(){
           }).join('');
           return '<div class="person-row">'+
             '<div class="person-row-l">'+
-              '<div class="avatar" style="background:'+colorFor(person)+';width:22px;height:22px;font-size:10px">'+person[0].toUpperCase()+'</div>'+
+              '<div class="avatar" style="background:'+colorFor(person)+';width:22px;height:22px;font-size:10px">'+(person[0]||'?').toUpperCase()+'</div>'+
               '<div><div style="font-size:12px;font-weight:600;color:#c4b0ff">'+esc(person)+
                 ' <span class="badge">'+pdata.totalQty+' drink'+(pdata.totalQty!==1?'s':'')+'</span>'+
                 (pdata.totalPrice>0?' <span style="font-size:11px;color:#7ef88e;font-weight:600">€'+pdata.totalPrice.toFixed(2)+'</span>':'')+
@@ -574,7 +579,7 @@ function renderStats(){
     html+=card('',
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
         '<div style="display:flex;align-items:center;gap:9px">'+
-          '<div class="avatar" style="background:'+colorFor(p.display_name)+'">'+p.display_name[0].toUpperCase()+'</div>'+
+          '<div class="avatar" style="background:'+colorFor(p.display_name)+'">'+(p.display_name[0]||'?').toUpperCase()+'</div>'+
           '<span style="font-weight:700;font-size:15px;color:#e8e8f0">'+esc(p.display_name)+(isMe?' <span style="font-size:10px;color:#a78bfa">(you)</span>':'')+'</span>'+
         '</div>'+
         '<div style="text-align:right"><div style="font-size:20px;font-weight:800;color:#a78bfa">'+pt+'</div>'+
@@ -873,7 +878,7 @@ function renderPeople(){
       var spend = pl.reduce(function(s,l){return s+(parseFloat(l.total_price)||0);},0);
       var isMe=p.display_name===CURRENT_NAME;
       return '<div class="entry"><div class="entry-l">'+
-        '<div class="avatar" style="background:'+colorFor(p.display_name)+'">'+p.display_name[0].toUpperCase()+'</div>'+
+        '<div class="avatar" style="background:'+colorFor(p.display_name)+'">'+(p.display_name[0]||'?').toUpperCase()+'</div>'+
         '<div><div class="en">'+esc(p.display_name)+(isMe?' <span style="font-size:10px;color:#a78bfa">(you)</span>':'')+'</div>'+
         '<div class="es">'+total+' drink'+(total!==1?'s':'')+' · €'+spend.toFixed(2)+'</div>'+
         '</div></div></div>';
@@ -928,7 +933,7 @@ function td(){return new Date().toISOString().split('T')[0];}
 function fmtDate(d){if(!d)return '';var dt=new Date(String(d).includes('T')?d:d+'T00:00:00');return dt.toLocaleDateString('en-GB',{weekday:'short',month:'short',day:'numeric'});}
 function fmtDateTime(d){if(!d)return '';var dt=new Date(d);return dt.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' '+dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});}
 function emoji(drink){return (String(drink||'')).split(' ')[0]||'🍹';}
-function colorFor(name){var sum=0;for(var i=0;i<name.length;i++)sum+=name.charCodeAt(i);return AVATAR_COLORS[sum%AVATAR_COLORS.length];}
+function colorFor(name){name=String(name||'?');var sum=0;for(var i=0;i<name.length;i++)sum+=name.charCodeAt(i);return AVATAR_COLORS[sum%AVATAR_COLORS.length];}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 </script>
 </body>
