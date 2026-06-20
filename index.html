@@ -363,12 +363,14 @@ async function signOut(){
 // ── LOAD DATA ───────────────────────────────────────────────
 async function loadAll(){
   try {
-    var [l, pay, rep, aud] = await Promise.all([
+    var [ppl, l, pay, rep, aud] = await Promise.all([
+      SB.from('people').select('*').order('name'),
       SB.from('drink_logs').select('*').order('date',{ascending:false}).order('logged_at',{ascending:false}),
       SB.from('payments').select('*').order('date',{ascending:false}),
       SB.from('replacements').select('*').order('for_date',{ascending:false}),
       SB.from('audit_log').select('*').order('performed_at',{ascending:false}).limit(100)
     ]);
+    if(ppl.error) notify('People error: '+ppl.error.message, true);
     if(l.error)   notify('Logs error: '+l.error.message, true);
     if(pay.error) notify('Payments error: '+pay.error.message, true);
     if(rep.error) notify('Replace error: '+rep.error.message, true);
@@ -378,15 +380,23 @@ async function loadAll(){
     STATE.replacements = rep.data || [];
     STATE.auditLog      = aud.data || [];
 
-    // Derive people list from everyone who has ever logged a drink or paid
-    var names = new Set();
+    // People come from the real people table now
+    var peopleRows = ppl.data || [];
+    var names = new Set(peopleRows.map(function(p){ return p.name; }));
+
+    // Safety net: also include anyone found in logs/payments that
+    // somehow isn't in the people table yet (e.g. before backfill ran)
     STATE.logs.forEach(function(l){ if(l.person) names.add(l.person); });
     STATE.payments.forEach(function(p){
       (p.payers||'').split(',').forEach(function(n){ if(n.trim()) names.add(n.trim()); });
       (p.non_drinkers||'').split(',').forEach(function(n){ if(n.trim()) names.add(n.trim()); });
     });
     if (CURRENT_NAME) names.add(CURRENT_NAME);
-    STATE.people = [...names].sort().map(function(n,i){ return {display_name:n, idx:i}; });
+
+    STATE.people = [...names].sort().map(function(n){
+      var match = peopleRows.find(function(p){ return p.name === n; });
+      return { display_name: n, created_by: match ? match.created_by : '' };
+    });
 
     renderTab(STATE.tab);
   } catch(e){ notify('Load error: '+e.message, true); }
@@ -463,7 +473,7 @@ function renderLog(){
           '<span class="chip cp" onclick="STATE.logPerson=\''+esc(CURRENT_NAME)+'\';renderTab(\'log\')">'+esc(CURRENT_NAME)+' (you)</span>')+
       '</div>'+
       '<div style="display:flex;gap:8px">'+
-      '<input id="np" type="text" placeholder="Or type a new name…" style="flex:1" onkeydown="if(event.key===\'Enter\'){STATE.logPerson=this.value.trim();this.value=\'\';renderTab(\'log\')}"/>'+
+      '<input id="np" type="text" placeholder="Or type a new name…" style="flex:1" onkeydown="if(event.key===\'Enter\'){addNewPersonFromInput(this)}"/>'+
       '</div>')+
 
     card('Log a Drink',
@@ -538,13 +548,45 @@ function updTotal(){
   if(el) el.querySelector('span:last-child').textContent='€'+t;
 }
 
+async function addPersonToTable(name){
+  name = (name||'').trim();
+  if (!name) return false;
+  // Skip if already known
+  if (STATE.people.find(function(p){ return p.display_name.toLowerCase() === name.toLowerCase(); })) return true;
+  var {error} = await SB.from('people').insert({ name: name, created_by: CURRENT_NAME });
+  if (error) {
+    // Unique constraint violation just means it already exists — not a real error
+    if (!String(error.message||'').includes('duplicate')) {
+      notify('Could not add person: '+error.message, true);
+      return false;
+    }
+  } else {
+    await audit('ADD_PERSON','people',null,{name:name});
+  }
+  return true;
+}
+
+async function addNewPersonFromInput(inputEl){
+  var name = inputEl.value.trim();
+  if (!name) return;
+  inputEl.value = '';
+  var ok = await addPersonToTable(name);
+  if (ok) {
+    STATE.logPerson = name;
+    notify(name+' added ✓');
+    await loadAll();
+  }
+}
+
 async function saveLog(){
   if(!STATE.logPerson){notify('Select or type a person',true);return;}
+  await addPersonToTable(STATE.logPerson); // ensure they're in the people table
+
   var unit=parseFloat(STATE.logPrice)||0, total=unit*STATE.logQty;
   var insertObj = {
     date:STATE.logDate, person:STATE.logPerson, drink:STATE.logDrink,
     quantity:STATE.logQty, unit_price:unit, total_price:total,
-    note:STATE.logNote, added_by:CURRENT_NAME
+    note:STATE.logNote, added_by:CURRENT_NAME, logged_by:CURRENT_NAME
   };
   if (IS_ADMIN) insertObj.user_id = CURRENT_USER.id;
   if (IS_GUEST) insertObj.guest_token = GUEST_TOKEN;
@@ -553,7 +595,7 @@ async function saveLog(){
   if(error){notify('Error: '+error.message,true);return;}
   await audit('LOG_DRINK','drink_logs',data.id,{person:STATE.logPerson,drink:STATE.logDrink,qty:STATE.logQty,total:total});
   STATE.logQty=1;STATE.logPrice='';STATE.logNote='';
-  notify('Drink logged ✓');
+  notify('Drink logged for '+STATE.logPerson+' ✓');
   await loadAll();
 }
 
@@ -578,7 +620,11 @@ function renderStats(){
     var pt=pl.reduce(function(s,l){return s+(l.quantity||0);},0);
     var ps=pl.reduce(function(s,l){return s+(parseFloat(l.total_price)||0);},0);
     var dc={};pl.forEach(function(l){dc[l.drink]=(dc[l.drink]||0)+(l.quantity||0);});
-    var fav=Object.keys(dc).sort(function(a,b){return dc[b]-dc[a];})[0]||'—';
+    var sortedDrinks=Object.entries(dc).sort(function(a,b){return b[1]-a[1];});
+    var fav=sortedDrinks[0]?sortedDrinks[0][0]:'—';
+    var allDrinkTags=sortedDrinks.map(function(e){
+      return '<span class="drink-tag">'+emoji(e[0])+' '+esc(e[0].replace(/^.+? /,''))+' ×'+e[1]+'</span>';
+    }).join('');
     var bd={};pl.forEach(function(l){bd[l.date]=(bd[l.date]||0)+(l.quantity||0);});
     var bars=Object.entries(bd).sort(function(a,b){return b[0].localeCompare(a[0]);}).slice(0,10).map(function(e){
       return '<div style="text-align:center"><div style="width:24px;height:'+Math.max(5,e[1]*7)+'px;background:linear-gradient(to top,#7c3aed,#a78bfa);border-radius:3px;margin-bottom:2px"></div>'+
@@ -595,8 +641,9 @@ function renderStats(){
         '<div style="text-align:right"><div style="font-size:20px;font-weight:800;color:#a78bfa">'+pt+'</div>'+
         (ps>0?'<div style="font-size:12px;color:#7ef88e;font-weight:700">€'+ps.toFixed(2)+'</div>':'')+
         '</div></div>'+
-        '<div style="font-size:12px;color:#5a5c7a;margin-bottom:9px">Fav: <span style="color:#9a9cc0">'+esc(fav)+'</span></div>'+
-        (bars?'<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:flex-end">'+bars+'</div>':''));
+        '<div style="font-size:11px;color:#3a3c55;margin-bottom:5px;text-transform:uppercase;letter-spacing:.6px">Drinks Breakdown</div>'+
+        '<div class="drink-tags" style="margin-bottom:10px">'+allDrinkTags+'</div>'+
+        (bars?'<div style="font-size:11px;color:#3a3c55;margin-bottom:5px;text-transform:uppercase;letter-spacing:.6px">Daily</div><div style="display:flex;flex-wrap:wrap;gap:4px;align-items:flex-end">'+bars+'</div>':''));
   });
   el.innerHTML=html;
 }
@@ -689,10 +736,14 @@ function renderHistory(){
       '<div style="padding:9px 13px">'+
       entries.map(function(l){
         var canDel=isMine(l);
+        var loggedBy = l.logged_by || l.added_by || '?';
+        var loggedByLine = (loggedBy && loggedBy !== l.person)
+          ? 'Logged by <strong style="color:#9a9cc0">'+esc(loggedBy)+'</strong> for '+esc(l.person)
+          : 'Logged by '+esc(loggedBy);
         return '<div class="entry"><div class="entry-l"><span class="ej">'+emoji(l.drink)+'</span><div>'+
           '<div class="en">'+esc(l.person)+(l.quantity>1?' <span class="badge">×'+l.quantity+'</span>':'')+'</div>'+
           '<div class="es">'+esc(l.drink.replace(/^.+? /,''))+(l.total_price>0?' · €'+parseFloat(l.unit_price).toFixed(2)+' ea · €'+parseFloat(l.total_price).toFixed(2):'')+(l.note?' · '+esc(l.note):'')+'</div>'+
-          '<div class="es" style="color:#3a3c55">Added by '+esc(l.added_by||'?')+'</div>'+
+          '<div class="es" style="color:#3a3c55">'+loggedByLine+'</div>'+
           '</div></div>'+delEditBtns('drink_logs',l.id,esc(l.drink)+' for '+esc(l.person),canDel,l)+'</div>';
       }).join('')+'</div></div>';
   }).join('');
@@ -880,8 +931,14 @@ function renderAudit(){
 // ══════════════════════════════════════════════════════════════
 function renderPeople(){
   var el=document.getElementById('tab-people');
-  var html=card('Group Members',
-    '<p style="font-size:12px;color:#5a5c7a;margin-bottom:12px;line-height:1.6">People appear here automatically once they log a drink or a payment.</p>'+
+  var html=card('Add a New Person',
+    '<div style="display:flex;gap:8px">'+
+      '<input id="people-tab-new-name" type="text" placeholder="Name…" style="flex:1" onkeydown="if(event.key===\'Enter\')addPersonFromPeopleTab()"/>'+
+      '<button class="btn-primary" style="width:auto;padding:9px 16px" onclick="addPersonFromPeopleTab()">Add</button>'+
+    '</div>'+
+    '<p style="font-size:11px;color:#3a3c55;margin-top:8px">Anyone can add a new person — guests included. We\'ll remember who added them.</p>');
+
+  html+=card('Group Members',
     (STATE.people.length?STATE.people.map(function(p){
       var pl = STATE.logs.filter(function(l){return l.person===p.display_name;});
       var total = pl.reduce(function(s,l){return s+(l.quantity||0);},0);
@@ -891,9 +948,22 @@ function renderPeople(){
         '<div class="avatar" style="background:'+colorFor(p.display_name)+'">'+(p.display_name[0]||'?').toUpperCase()+'</div>'+
         '<div><div class="en">'+esc(p.display_name)+(isMe?' <span style="font-size:10px;color:#a78bfa">(you)</span>':'')+'</div>'+
         '<div class="es">'+total+' drink'+(total!==1?'s':'')+' · €'+spend.toFixed(2)+'</div>'+
+        (p.created_by?'<div class="es" style="color:#3a3c55">Added by '+esc(p.created_by)+'</div>':'')+
         '</div></div></div>';
     }).join(''):'<div style="color:#3a3c55;font-size:13px">No members yet.</div>'));
   el.innerHTML=html;
+}
+
+async function addPersonFromPeopleTab(){
+  var input = document.getElementById('people-tab-new-name');
+  var name = input.value.trim();
+  if (!name) { notify('Enter a name first', true); return; }
+  var ok = await addPersonToTable(name);
+  if (ok) {
+    input.value = '';
+    notify(name+' added to the group ✓');
+    await loadAll();
+  }
 }
 
 // ── GENERIC DELETE ──────────────────────────────────────────
