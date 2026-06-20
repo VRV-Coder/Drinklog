@@ -649,47 +649,110 @@ function renderLog(){
 function renderConsolidatedToday(){
   if (!STATE.logs.length) return '';
 
-  // Group by date, then by person
-  var byDate = {};
-  STATE.logs.forEach(function(l){
-    if (!byDate[l.date]) byDate[l.date] = {};
-    if (!byDate[l.date][l.person]) byDate[l.date][l.person] = { rows: [], totalQty: 0, totalPrice: 0 };
-    byDate[l.date][l.person].rows.push(l);
-    byDate[l.date][l.person].totalQty += (l.quantity||0);
-    byDate[l.date][l.person].totalPrice += (parseFloat(l.total_price)||0);
+  // Build per-person running tab: every drink they've ever logged stays
+  // consolidated together until their balance is fully settled —
+  // both money (priced drinks vs payments) AND bottles (free drinks vs replacements).
+  var personNames = [...new Set(STATE.logs.map(function(l){ return l.person; }))].sort();
+
+  var blocks = personNames.map(function(person){
+    var pLogs = STATE.logs.filter(function(l){ return l.person === person; });
+
+    // Money owed: priced drinks minus payments where this person is listed as a payer
+    var moneyOwed = pLogs.reduce(function(s,l){
+      var unitPrice = parseFloat(l.unit_price)||0;
+      return unitPrice > 0 ? s + (parseFloat(l.total_price)||0) : s;
+    }, 0);
+    var moneyPaid = STATE.payments.reduce(function(s,p){
+      var payers = (p.payers||'').split(',').map(function(x){return x.trim();});
+      return payers.indexOf(person) !== -1 ? s + (parseFloat(p.amount)||0) : s;
+    }, 0);
+    var moneyPending = moneyOwed - moneyPaid;
+    var moneySettled = moneyPending <= 0.005;
+
+    // Bottles owed: free (€0) drinks minus replacements credited to this person
+    var bottlesOwedByDrink = {};
+    pLogs.forEach(function(l){
+      var unitPrice = parseFloat(l.unit_price)||0;
+      if (unitPrice > 0) return;
+      bottlesOwedByDrink[l.drink] = (bottlesOwedByDrink[l.drink]||0) + (l.quantity||0);
+    });
+    var bottlesReplacedByDrink = {};
+    STATE.replacements.forEach(function(r){
+      if (r.replaced_by === person || r.logged_by === person) {
+        bottlesReplacedByDrink[r.drink] = (bottlesReplacedByDrink[r.drink]||0) + (r.quantity||0);
+      }
+    });
+    var totalBottlesOwed = Object.values(bottlesOwedByDrink).reduce(function(s,v){return s+v;},0);
+    var totalBottlesReplaced = Object.keys(bottlesOwedByDrink).reduce(function(s,drink){
+      return s + Math.min(bottlesReplacedByDrink[drink]||0, bottlesOwedByDrink[drink]);
+    }, 0);
+    var bottlesRemaining = totalBottlesOwed - totalBottlesReplaced;
+    var bottlesSettled = bottlesRemaining === 0;
+
+    var isSettled = moneySettled && bottlesSettled;
+
+    var totalQty = pLogs.reduce(function(s,l){ return s+(l.quantity||0); }, 0);
+    var totalSpend = pLogs.reduce(function(s,l){ return s+(parseFloat(l.total_price)||0); }, 0);
+
+    // Consolidate ALL drink types this person has ever logged (still unsettled or not)
+    var drinkCounts = {};
+    pLogs.forEach(function(l){ drinkCounts[l.drink] = (drinkCounts[l.drink]||0) + (l.quantity||0); });
+    var tags = Object.entries(drinkCounts).map(function(e){
+      return '<span class="drink-tag">'+emoji(e[0])+' ×'+e[1]+'</span>';
+    }).join('');
+
+    var earliestDate = pLogs.reduce(function(min,l){ return l.date < min ? l.date : min; }, pLogs[0].date);
+    var latestDate = pLogs.reduce(function(max,l){ return l.date > max ? l.date : max; }, pLogs[0].date);
+
+    return {
+      person: person, isSettled: isSettled, moneyPending: moneyPending, moneySettled: moneySettled,
+      bottlesRemaining: bottlesRemaining, bottlesSettled: bottlesSettled,
+      totalQty: totalQty, totalSpend: totalSpend, tags: tags,
+      earliestDate: earliestDate, latestDate: latestDate
+    };
   });
 
-  var dates = Object.keys(byDate).sort().reverse().slice(0,5); // last 5 days with activity
+  // Sort: unsettled people first (most owed first), then settled people
+  blocks.sort(function(a,b){
+    if (a.isSettled !== b.isSettled) return a.isSettled ? 1 : -1;
+    return (b.moneyPending + b.bottlesRemaining) - (a.moneyPending + a.bottlesRemaining);
+  });
 
-  var html = card('Recent Days — Consolidated',
-    dates.map(function(d){
-      var people = byDate[d];
-      var dayTotal = Object.values(people).reduce(function(s,p){return s+p.totalQty;},0);
-      var dayCost  = Object.values(people).reduce(function(s,p){return s+p.totalPrice;},0);
-      return '<div class="day-summary">'+
-        '<div class="day-summary-head"><h5>'+fmtDate(d)+'</h5>'+
-        '<span style="font-size:11px;color:#8a7568">'+dayTotal+' drinks · €'+dayCost.toFixed(2)+'</span></div>'+
-        Object.keys(people).sort().map(function(person){
-          var pdata = people[person];
-          // Consolidate drink types for this person/day
-          var drinkCounts = {};
-          pdata.rows.forEach(function(r){ drinkCounts[r.drink] = (drinkCounts[r.drink]||0) + r.quantity; });
-          var tags = Object.entries(drinkCounts).map(function(e){
-            return '<span class="drink-tag">'+emoji(e[0])+' ×'+e[1]+'</span>';
-          }).join('');
-          return '<div class="person-row" style="cursor:pointer" onclick="showPersonDayDetail(\''+esc(person)+'\',\''+d+'\')">'+
-            '<div class="person-row-l">'+
-              '<div class="avatar" style="background:'+colorFor(person)+';width:22px;height:22px;font-size:10px">'+(person[0]||'?').toUpperCase()+'</div>'+
-              '<div><div style="font-size:12px;font-weight:600;color:#b5481f">'+esc(person)+
-                ' <span class="badge">'+pdata.totalQty+' drink'+(pdata.totalQty!==1?'s':'')+'</span>'+
-                (pdata.totalPrice>0?' <span style="font-size:11px;color:#b5481f;font-weight:600">€'+pdata.totalPrice.toFixed(2)+'</span>':'')+
-                '</div><div class="drink-tags">'+tags+'</div></div>'+
-            '</div>'+
-            '<span style="font-size:11px;color:#a8978a">👁 details</span>'+
-          '</div>';
-        }).join('')+
-      '</div>';
-    }).join(''));
+  var unsettled = blocks.filter(function(b){ return !b.isSettled; });
+  var settled = blocks.filter(function(b){ return b.isSettled; });
+
+  var rowHtml = function(b){
+    var statusBits = [];
+    if (!b.moneySettled) statusBits.push('<span style="font-size:10px;color:#c4392b;font-weight:700">€'+b.moneyPending.toFixed(2)+' owed</span>');
+    if (!b.bottlesSettled) statusBits.push('<span style="font-size:10px;color:#d4a017;font-weight:700">'+b.bottlesRemaining+' to replace</span>');
+    if (b.isSettled) statusBits.push('<span style="font-size:10px;color:#1f8a4f;font-weight:700">✓ settled</span>');
+    var dateRange = b.earliestDate === b.latestDate ? fmtDate(b.earliestDate) : fmtDate(b.earliestDate)+' → '+fmtDate(b.latestDate);
+
+    return '<div class="person-row" style="cursor:pointer" onclick="showPersonRunningTab(\''+esc(b.person)+'\')">'+
+      '<div class="person-row-l">'+
+        '<div class="avatar" style="background:'+colorFor(b.person)+';width:22px;height:22px;font-size:10px">'+(b.person[0]||'?').toUpperCase()+'</div>'+
+        '<div><div style="font-size:12px;font-weight:600;color:#b5481f">'+esc(b.person)+
+          ' <span class="badge">'+b.totalQty+' drink'+(b.totalQty!==1?'s':'')+'</span>'+
+          (b.totalSpend>0?' <span style="font-size:11px;color:#b5481f;font-weight:600">€'+b.totalSpend.toFixed(2)+'</span>':'')+
+          '</div>'+
+          '<div style="font-size:10px;color:#a8978a;margin-top:1px">'+dateRange+'</div>'+
+          '<div class="drink-tags">'+b.tags+'</div>'+
+          '<div style="display:flex;gap:6px;margin-top:3px">'+statusBits.join('')+'</div>'+
+        '</div>'+
+      '</div>'+
+      '<span style="font-size:11px;color:#a8978a">👁 details</span>'+
+    '</div>';
+  };
+
+  var html = '';
+
+  if (unsettled.length) {
+    html += card('🧾 Running Tabs — Not Yet Settled', unsettled.map(rowHtml).join(''));
+  }
+  if (settled.length) {
+    html += card('✅ Settled Up', settled.map(rowHtml).join(''));
+  }
+
   return html;
 }
 
@@ -783,6 +846,69 @@ function showDrinkCountPopup(person, drink){
 }
 
 // ── PERSON + DAY DETAILED LOG (timestamped) ─────────────────
+// ── PERSON'S RUNNING TAB (all entries since last settlement, grouped by day) ──
+function showPersonRunningTab(person){
+  var entries = STATE.logs
+    .filter(function(l){ return l.person===person; })
+    .slice()
+    .sort(function(a,b){
+      var ta = a.logged_at ? new Date(a.logged_at).getTime() : 0;
+      var tb = b.logged_at ? new Date(b.logged_at).getTime() : 0;
+      return tb - ta;
+    });
+
+  var totalQty = entries.reduce(function(s,l){ return s+(l.quantity||0); }, 0);
+  var totalCost = entries.reduce(function(s,l){ return s+(parseFloat(l.total_price)||0); }, 0);
+
+  // Group by date for readability
+  var byDate = {};
+  entries.forEach(function(l){ (byDate[l.date] = byDate[l.date]||[]).push(l); });
+  var dates = Object.keys(byDate).sort().reverse();
+
+  var sections = dates.map(function(d){
+    var dayEntries = byDate[d];
+    var rows = dayEntries.map(function(l){
+      var timeStr = l.logged_at
+        ? new Date(l.logged_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})
+        : '—';
+      var loggedBy = l.logged_by || l.added_by || '?';
+      var byLine = (loggedBy && loggedBy !== person) ? ' · logged by '+esc(loggedBy) : '';
+      var canEdit = isMine(l);
+      var qtyControl = canEdit
+        ? '<div class="stepper" style="margin-top:4px">'+
+            '<button class="btn-icon" style="width:26px;height:26px;font-size:14px" onclick="editDrinkQty(\''+l.id+'\',-1,\''+esc(person)+'\',\'\')">−</button>'+
+            '<span style="font-size:13px;font-weight:700;min-width:22px;text-align:center">'+l.quantity+'</span>'+
+            '<button class="btn-icon" style="width:26px;height:26px;font-size:14px" onclick="editDrinkQty(\''+l.id+'\',1,\''+esc(person)+'\',\'\')">+</button>'+
+          '</div>'
+        : '';
+      return '<div class="entry">'+
+        '<div class="entry-l">'+
+          '<span class="ej">'+emoji(l.drink)+'</span>'+
+          '<div>'+
+            '<div class="en">'+esc(l.drink.replace(/^.+? /,''))+(!canEdit&&l.quantity>1?' ×'+l.quantity:'')+'</div>'+
+            '<div class="es">🕐 '+timeStr+(l.total_price>0?' · €'+parseFloat(l.total_price).toFixed(2):' · free')+byLine+'</div>'+
+            (l.note?'<div class="es" style="font-style:italic">"'+esc(l.note)+'"</div>':'')+
+            qtyControl+
+          '</div>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+    return '<div style="margin-bottom:14px">'+
+      '<div style="font-size:11px;font-weight:700;color:#9c4a22;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">'+fmtDate(d)+'</div>'+
+      rows+
+    '</div>';
+  }).join('');
+
+  showModal(
+    '<h3>🧾 '+esc(person)+'\'s Running Tab</h3>'+
+    '<div style="text-align:center;margin-bottom:14px">'+
+      '<span style="font-size:12px;color:#8a7568">'+totalQty+' drink'+(totalQty!==1?'s':'')+(totalCost>0?' · €'+totalCost.toFixed(2):'')+' since last settlement</span>'+
+    '</div>'+
+    '<div style="max-height:380px;overflow-y:auto;margin-bottom:10px">'+(sections||'<div class="empty">No entries found.</div>')+'</div>'+
+    '<button class="modal-close" onclick="closeModal()">Close</button>'
+  );
+}
+
 function showPersonDayDetail(person, date){
   var entries = STATE.logs
     .filter(function(l){ return l.person===person && l.date===date; })
@@ -859,8 +985,12 @@ async function editDrinkQty(logId, delta, person, date){
   }
 
   await loadAll();
-  // Re-open the same detail popup so the user sees the change immediately
-  showPersonDayDetail(person, date);
+  // Re-open the appropriate popup so the user sees the change immediately
+  if (date) {
+    showPersonDayDetail(person, date);
+  } else {
+    showPersonRunningTab(person);
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -960,7 +1090,7 @@ function renderPayments(){
       (p.non_drinkers?'<div class="es" style="color:#a87a00">Didn\'t drink: '+esc(p.non_drinkers)+'</div>':'')+
       '<div class="es">'+fmtDate(p.date)+(p.note?' · '+esc(p.note):'')+'</div>'+
       '<div class="es" style="color:#a8978a">Recorded by '+esc(p.added_by||'unknown')+'</div>'+
-      '</div></div>'+(canDel?'<button class="btn-sm" onclick="delEntry(\'payments\',\''+p.id+'\',\'Payment by '+esc(p.payers)+'\')">🗑</button>':'<span style="font-size:11px;color:#a8978a">🔒</span>')+'</div>';
+      '</div></div>'+delEditBtns('payments',p.id,'Payment by '+esc(p.payers),canDel,p)+'</div>';
   }).join(''));
   el.innerHTML=html;
 }
@@ -1171,7 +1301,7 @@ function renderReplace(){
       '<div class="en">'+r.quantity+'× '+esc(r.drink.replace(/^.+? /,''))+'</div>'+
       '<div class="es">For '+fmtDate(r.for_date)+(r.replaced_by?' · by '+esc(r.replaced_by):'')+(r.note?' · '+esc(r.note):'')+'</div>'+
       '<div class="es" style="color:#a8978a">Logged by '+esc(r.added_by||'unknown')+'</div>'+
-      '</div></div>'+(canDel?'<button class="btn-sm" onclick="delEntry(\'replacements\',\''+r.id+'\',\'Replacement for '+fmtDate(r.for_date)+'\')">🗑</button>':'<span style="font-size:11px;color:#a8978a">🔒</span>')+'</div>';
+      '</div></div>'+delEditBtns('replacements',r.id,'Replacement for '+fmtDate(r.for_date),canDel,r)+'</div>';
   }).join(''));
 
   el.innerHTML=html;
@@ -1225,14 +1355,14 @@ function renderAudit(){
     'RECORD_PAYMENT':'#1f8a4f','DELETE_PAYMENTS':'#c4392b',
     'MARK_REPLACEMENT':'#d4a017','DELETE_REPLACEMENTS':'#c4392b',
     'UNDO_REPLACE':'#8a7568','ADMIN_EDIT_DRINK':'#d4a017','DELETE_PERSON':'#c4392b',
-    'EDIT_DRINK_QTY':'#d4a017'
+    'EDIT_DRINK_QTY':'#d4a017','ADMIN_EDIT_PAYMENT':'#d4a017','ADMIN_EDIT_REPLACEMENT':'#d4a017'
   };
   var actionLabels={
     'LOG_DRINK':'logged a drink','DELETE_DRINK_LOGS':'deleted a drink entry',
     'RECORD_PAYMENT':'recorded a payment','DELETE_PAYMENTS':'deleted a payment',
     'MARK_REPLACEMENT':'marked a replacement','DELETE_REPLACEMENTS':'deleted a replacement',
     'UNDO_REPLACE':'undid replacement changes','ADMIN_EDIT_DRINK':'edited an entry (admin)','DELETE_PERSON':'removed a person',
-    'EDIT_DRINK_QTY':'edited a drink quantity'
+    'EDIT_DRINK_QTY':'edited a drink quantity','ADMIN_EDIT_PAYMENT':'edited a payment (admin)','ADMIN_EDIT_REPLACEMENT':'edited a replacement (admin)'
   };
   var html=card('Activity Log — last 100 actions',
     STATE.auditLog.map(function(a){
@@ -1312,24 +1442,71 @@ async function delEntry(table,id,label){
 
 function delEditBtns(table, id, label, canDel, row){
   var del = canDel ? '<button class="btn-sm" onclick="delEntry(\''+table+'\',\''+id+'\',\''+label+'\')">🗑</button>' : '<span style="font-size:11px;color:#a8978a">🔒</span>';
-  var edit = (IS_ADMIN && table==='drink_logs') ? '<button class="btn-edit" onclick="adminEditDrink(\''+id+'\')">✏️ Edit</button>' : '';
+  var edit = '';
+  if (IS_ADMIN) {
+    if (table === 'drink_logs') edit = '<button class="btn-edit" onclick="adminEditDrink(\''+id+'\')">✏️ Edit</button>';
+    if (table === 'payments') edit = '<button class="btn-edit" onclick="adminEditPayment(\''+id+'\')">✏️ Edit</button>';
+    if (table === 'replacements') edit = '<button class="btn-edit" onclick="adminEditReplacement(\''+id+'\')">✏️ Edit</button>';
+  }
   return edit+del;
 }
 
 async function adminEditDrink(id){
   var entry = STATE.logs.find(function(l){return l.id===id;});
   if(!entry) return;
+  var newPerson = prompt('Edit person (current: '+entry.person+'):', entry.person);
+  if(newPerson===null) return;
   var newQty   = prompt('Edit quantity (current: '+entry.quantity+'):', entry.quantity);
   if(newQty===null) return;
   var newPrice = prompt('Edit price per drink in € (current: '+parseFloat(entry.unit_price||0).toFixed(2)+'):', parseFloat(entry.unit_price||0).toFixed(2));
   if(newPrice===null) return;
   var newNote  = prompt('Edit note (current: '+(entry.note||'')+'):', entry.note||'');
   if(newNote===null) return;
+  var person = newPerson.trim() || entry.person;
   var qty=parseInt(newQty)||1, price=parseFloat(newPrice)||0, total=qty*price;
-  var {error} = await SB.from('drink_logs').update({quantity:qty,unit_price:price,total_price:total,note:newNote}).eq('id',id);
+  await addPersonToTable(person);
+  var {error} = await SB.from('drink_logs').update({person:person,quantity:qty,unit_price:price,total_price:total,note:newNote}).eq('id',id);
   if(error){notify('Error: '+error.message,true);return;}
-  await audit('ADMIN_EDIT_DRINK','drink_logs',id,{qty:qty,price:price,total:total,note:newNote,original_person:entry.person});
+  await audit('ADMIN_EDIT_DRINK','drink_logs',id,{qty:qty,price:price,total:total,note:newNote,person:person,original_person:entry.person});
   notify('Entry updated ✓');
+  await loadAll();
+}
+
+async function adminEditPayment(id){
+  var entry = STATE.payments.find(function(p){return p.id===id;});
+  if(!entry) return;
+  var newPayers = prompt('Edit payers, comma-separated (current: '+entry.payers+'):', entry.payers);
+  if(newPayers===null) return;
+  var newAmount = prompt('Edit amount in € (current: '+parseFloat(entry.amount||0).toFixed(2)+'):', parseFloat(entry.amount||0).toFixed(2));
+  if(newAmount===null) return;
+  var newDate = prompt('Edit date (YYYY-MM-DD, current: '+entry.date+'):', entry.date);
+  if(newDate===null) return;
+  var newNote = prompt('Edit note (current: '+(entry.note||'')+'):', entry.note||'');
+  if(newNote===null) return;
+  var {error} = await SB.from('payments').update({
+    payers: newPayers.trim(), amount: parseFloat(newAmount)||0, date: newDate.trim(), note: newNote
+  }).eq('id', id);
+  if(error){notify('Error: '+error.message,true);return;}
+  await audit('ADMIN_EDIT_PAYMENT','payments',id,{payers:newPayers,amount:newAmount,date:newDate});
+  notify('Payment updated ✓');
+  await loadAll();
+}
+
+async function adminEditReplacement(id){
+  var entry = STATE.replacements.find(function(r){return r.id===id;});
+  if(!entry) return;
+  var newQty = prompt('Edit quantity replaced (current: '+entry.quantity+'):', entry.quantity);
+  if(newQty===null) return;
+  var newDrink = prompt('Edit drink type (current: '+entry.drink+'):', entry.drink);
+  if(newDrink===null) return;
+  var newDate = prompt('Edit date (YYYY-MM-DD, current: '+entry.for_date+'):', entry.for_date);
+  if(newDate===null) return;
+  var {error} = await SB.from('replacements').update({
+    quantity: parseInt(newQty)||1, drink: newDrink.trim() || entry.drink, for_date: newDate.trim()
+  }).eq('id', id);
+  if(error){notify('Error: '+error.message,true);return;}
+  await audit('ADMIN_EDIT_REPLACEMENT','replacements',id,{qty:newQty,drink:newDrink,date:newDate});
+  notify('Replacement updated ✓');
   await loadAll();
 }
 
