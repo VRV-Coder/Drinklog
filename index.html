@@ -109,6 +109,20 @@
     .person-row-l{display:flex;align-items:center;gap:8px}
     .drink-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
     .drink-tag{font-size:10px;background:#1a1c2a;border-radius:10px;padding:1px 7px;color:#9a9cc0}
+    /* MODAL */
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(2px)}
+    .modal-box{background:#13151f;border:1px solid #2a2d40;border-radius:16px;padding:24px 22px;width:100%;max-width:380px;box-shadow:0 10px 50px rgba(0,0,0,.5)}
+    .modal-box h3{font-size:18px;color:#fff;margin-bottom:14px;text-align:center}
+    .modal-stat{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #1e2030}
+    .modal-stat:last-child{border-bottom:none}
+    .modal-stat-label{font-size:13px;color:#9a9cc0}
+    .modal-stat-val{font-size:17px;font-weight:800}
+    .modal-close{width:100%;margin-top:16px;background:#1a1c2a;border:1px solid #2a2d40;border-radius:10px;padding:10px;color:#9a9cc0;font-size:13px;font-weight:600;cursor:pointer}
+    .modal-question{font-size:16px;color:#fff;text-align:center;margin-bottom:18px;line-height:1.5}
+    .modal-btn-row{display:flex;gap:10px}
+    .modal-btn{flex:1;border:none;border-radius:10px;padding:13px 8px;font-size:14px;font-weight:700;cursor:pointer}
+    .modal-btn-pay{background:linear-gradient(135deg,#2a7a3a,#4cd471);color:#0f1117}
+    .modal-btn-replace{background:linear-gradient(135deg,#7c3aed,#a78bfa);color:#fff}
     @media(max-width:480px){.grid2{grid-template-columns:1fr}.sg{grid-template-columns:repeat(2,1fr)}}
   </style>
 </head>
@@ -138,6 +152,7 @@
 
 <div id="app">
   <div id="notif"></div>
+  <div id="modal-root"></div>
   <div class="header">
     <div class="header-row">
       <span style="font-size:22px">🍺</span>
@@ -153,7 +168,7 @@
       <button onclick="switchTab('payments',this)">💶 Payments</button>
       <button onclick="switchTab('history',this)">📅 History</button>
       <button onclick="switchTab('replace',this)">🔄 Replace</button>
-      <button onclick="switchTab('audit',this)">📜 Audit</button>
+      <button onclick="switchTab('audit',this)" id="nav-audit-btn" style="display:none">📜 Audit</button>
       <button onclick="switchTab('people',this)">👥 People</button>
     </nav>
   </div>
@@ -343,6 +358,8 @@ async function onAdminLoggedIn(){
 function enterApp(){
   var label = document.getElementById('user-label');
   label.innerHTML = '👤 ' + esc(CURRENT_NAME) + (IS_ADMIN ? ' <span class="admin-badge">👑 ADMIN</span>' : '');
+  var auditBtn = document.getElementById('nav-audit-btn');
+  if (auditBtn) auditBtn.style.display = IS_ADMIN ? '' : 'none';
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   registerSelfAsPerson();
@@ -445,6 +462,10 @@ document.addEventListener('click', function(e){
 
 // ── TABS ────────────────────────────────────────────────────
 function switchTab(tab, btn){
+  if (tab === 'audit' && !IS_ADMIN) {
+    notify('Audit log is admin-only 🔒', true);
+    return;
+  }
   document.querySelectorAll('nav button').forEach(function(b){b.classList.remove('active');});
   btn.classList.add('active');
   ['log','stats','payments','history','replace','audit','people'].forEach(function(t){
@@ -476,6 +497,8 @@ function renderLog(){
   var total = ((parseFloat(STATE.logPrice)||0)*STATE.logQty).toFixed(2);
 
   el.innerHTML =
+    '<button class="btn-primary" style="background:linear-gradient(135deg,#b45309,#f8d878);color:#1a0f00;margin-bottom:12px" onclick="showMyBalance()">💰 My Balance — what do I owe?</button>'+
+
     card('Who\'s Drinking',
       '<div class="chips" style="margin-bottom:10px">'+
         STATE.people.map(function(p){
@@ -694,7 +717,7 @@ function renderPayments(){
       return '<span class="chip'+(on?' cy':'')+'" onclick="tog(\'payNonDrinkers\',\''+esc(p.display_name)+'\')">'+esc(p.display_name)+'</span>';
     }).join('')+'</div>')+
     fld('Note','<input type="text" value="'+esc(STATE.payNote)+'" oninput="STATE.payNote=this.value" placeholder="optional…"/>') +
-    '<button class="btn-green" onclick="savePayment()">+ Record Payment</button>');
+    '<button class="btn-green" onclick="confirmPaymentChoice()">+ Record Payment</button>');
 
   var allDates=[...new Set([...Object.keys(cbd),...Object.keys(pbd)])].sort().reverse();
   if(allDates.length) html+=card('Balance by Day',allDates.map(function(d){
@@ -717,8 +740,30 @@ function renderPayments(){
   el.innerHTML=html;
 }
 
-async function savePayment(){
+function confirmPaymentChoice(){
   if(!STATE.payPayers.length){notify('Select who paid',true);return;}
+  var amt = parseFloat(STATE.payAmount)||0;
+  showModal(
+    '<div class="modal-question">😉 Do you really want to <strong>pay</strong>,<br/>or do you wanna <strong>replace</strong>? 😉😉</div>'+
+    '<div class="modal-btn-row">'+
+      '<button class="modal-btn modal-btn-pay" onclick="confirmPay()">💸 Pay</button>'+
+      '<button class="modal-btn modal-btn-replace" onclick="confirmReplaceInstead()">🤐 Replace</button>'+
+    '</div>'+
+    '<button class="modal-close" onclick="closeModal()">Cancel</button>'
+  );
+}
+
+async function confirmPay(){
+  closeModal();
+  await savePayment();
+}
+
+async function confirmReplaceInstead(){
+  closeModal();
+  await convertToReplace();
+}
+
+async function savePayment(){
   var insertObj = {
     date:STATE.payDate, payers:STATE.payPayers.join(', '),
     non_drinkers:STATE.payNonDrinkers.join(', '),
@@ -733,6 +778,46 @@ async function savePayment(){
   STATE.payPayers=[];STATE.payNonDrinkers=[];STATE.payAmount='';STATE.payNote='';
   notify('Payment recorded ✓');
   await loadAll();
+}
+
+// "Replace" path: zero out the priced drinks for the selected payers/date
+// so they stop counting as money owed and instead show up as bottles owed.
+async function convertToReplace(){
+  var date = STATE.payDate;
+  var payers = STATE.payPayers;
+  if (!payers.length) { notify('Select who this is for', true); return; }
+
+  // Find this date's priced (unpaid) drink entries for these people
+  var targets = STATE.logs.filter(function(l){
+    return l.date === date
+      && payers.indexOf(l.person) !== -1
+      && (parseFloat(l.unit_price)||0) > 0;
+  });
+
+  if (!targets.length) {
+    notify('No priced drinks found for '+payers.join(', ')+' on '+fmtDate(date)+' to convert', true);
+    return;
+  }
+
+  var movedCount = 0;
+  for (var i=0; i<targets.length; i++) {
+    var l = targets[i];
+    var {error} = await SB.from('drink_logs').update({ unit_price: 0, total_price: 0 }).eq('id', l.id);
+    if (!error) movedCount += (l.quantity||0);
+  }
+
+  await audit('CONVERT_TO_REPLACE','drink_logs',null,{date:date,payers:payers.join(', '),drinks_moved:movedCount});
+  STATE.payPayers=[];STATE.payNonDrinkers=[];STATE.payAmount='';STATE.payNote='';
+  notify(movedCount+' drink'+(movedCount!==1?'s':'')+' moved to Replace tab 🤐');
+  await loadAll();
+  switchTabByName('replace');
+}
+
+function switchTabByName(tab){
+  var btn = [...document.querySelectorAll('nav button')].find(function(b){
+    return b.getAttribute('onclick') && b.getAttribute('onclick').indexOf("'"+tab+"'") !== -1;
+  });
+  if (btn) switchTab(tab, btn);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -774,7 +859,11 @@ function renderReplace(){
   STATE.logs.forEach(function(l){cbd[l.date]=(cbd[l.date]||0)+(parseFloat(l.total_price)||0);});
   STATE.payments.forEach(function(p){pbd[p.date]=(pbd[p.date]||0)+(parseFloat(p.amount)||0);});
   var cdd={},rdd={};
+  // Only drinks logged at €0 unit price count toward bottle replacement.
+  // Priced drinks are settled via the Payments tab instead.
   STATE.logs.forEach(function(l){
+    var unitPrice = parseFloat(l.unit_price)||0;
+    if (unitPrice > 0) return; // skip — this is a paid drink, not a replace-owed one
     if(!cdd[l.date])cdd[l.date]={};
     cdd[l.date][l.drink]=(cdd[l.date][l.drink]||0)+(l.quantity||0);
   });
@@ -793,7 +882,7 @@ function renderReplace(){
     var trem=breakdown.reduce(function(s,b){return s+b.remaining;},0);
     var pm=(cbd[d]||0)-(pbd[d]||0);
     return {date:d,breakdown:breakdown,to:to,tr:tr,trem:trem,pm:pm,ms:pm<=0.005,bs:trem===0};
-  }).filter(function(d){return !d.bs||!d.ms;});
+  }).filter(function(d){return d.to>0;}); // only show days that actually have zero-price (replace-owed) drinks
 
   var ob={};
   days.forEach(function(d){d.breakdown.forEach(function(b){
@@ -1031,6 +1120,63 @@ function fmtDateTime(d){if(!d)return '';var dt=new Date(d);return dt.toLocaleDat
 function emoji(drink){return (String(drink||'')).split(' ')[0]||'🍹';}
 function colorFor(name){name=String(name||'?');var sum=0;for(var i=0;i<name.length;i++)sum+=name.charCodeAt(i);return AVATAR_COLORS[sum%AVATAR_COLORS.length];}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+
+// ── MODAL HELPERS ───────────────────────────────────────────
+function showModal(html){
+  document.getElementById('modal-root').innerHTML =
+    '<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal-box">'+html+'</div></div>';
+}
+function closeModal(){
+  document.getElementById('modal-root').innerHTML = '';
+}
+
+// ── MY BALANCE (Log tab button) ─────────────────────────────
+function showMyBalance(){
+  var me = CURRENT_NAME;
+  var myLogs = STATE.logs.filter(function(l){ return l.person === me; });
+
+  // Money owed: sum of priced drinks minus payments made by me
+  var myCost = myLogs.reduce(function(s,l){
+    var unitPrice = parseFloat(l.unit_price)||0;
+    return unitPrice > 0 ? s + (parseFloat(l.total_price)||0) : s;
+  }, 0);
+  var myPaid = STATE.payments.reduce(function(s,p){
+    var payers = (p.payers||'').split(',').map(function(x){return x.trim();});
+    return payers.indexOf(me) !== -1 ? s + (parseFloat(p.amount)||0) : s;
+  }, 0);
+  var myPending = myCost - myPaid;
+
+  // Bottles owed: zero-price drinks minus what's been replaced
+  var owedByDrink = {}, replacedByDrink = {};
+  myLogs.forEach(function(l){
+    var unitPrice = parseFloat(l.unit_price)||0;
+    if (unitPrice > 0) return;
+    owedByDrink[l.drink] = (owedByDrink[l.drink]||0) + (l.quantity||0);
+  });
+  STATE.replacements.forEach(function(r){
+    if (r.replaced_by === me || r.logged_by === me) {
+      replacedByDrink[r.drink] = (replacedByDrink[r.drink]||0) + (r.quantity||0);
+    }
+  });
+  var totalOwedBottles = Object.values(owedByDrink).reduce(function(s,v){return s+v;},0);
+  var totalReplacedBottles = Object.keys(owedByDrink).reduce(function(s,drink){
+    return s + Math.min(replacedByDrink[drink]||0, owedByDrink[drink]);
+  }, 0);
+  var stillOwedBottles = totalOwedBottles - totalReplacedBottles;
+
+  var moneyColor = myPending > 0.005 ? '#f88' : '#7ef88e';
+  var bottleColor = stillOwedBottles > 0 ? '#f8d878' : '#7ef88e';
+
+  showModal(
+    '<h3>💰 Your Balance</h3>'+
+    '<div class="modal-stat"><span class="modal-stat-label">You owe (money)</span><span class="modal-stat-val" style="color:'+moneyColor+'">'+(myPending>0.005?'€'+myPending.toFixed(2):'€0.00 ✓')+'</span></div>'+
+    '<div class="modal-stat"><span class="modal-stat-label">Bottles to replace</span><span class="modal-stat-val" style="color:'+bottleColor+'">'+(stillOwedBottles>0?stillOwedBottles+' left':'All done ✓')+'</span></div>'+
+    '<div class="modal-stat"><span class="modal-stat-label">Total spent (priced drinks)</span><span class="modal-stat-val" style="color:#9a9cc0;font-size:14px">€'+myCost.toFixed(2)+'</span></div>'+
+    '<div class="modal-stat"><span class="modal-stat-label">Total paid</span><span class="modal-stat-val" style="color:#9a9cc0;font-size:14px">€'+myPaid.toFixed(2)+'</span></div>'+
+    '<div class="modal-stat"><span class="modal-stat-label">Free drinks logged</span><span class="modal-stat-val" style="color:#9a9cc0;font-size:14px">'+totalOwedBottles+'</span></div>'+
+    '<button class="modal-close" onclick="closeModal()">Close</button>'
+  );
+}
 </script>
 </body>
 </html>
