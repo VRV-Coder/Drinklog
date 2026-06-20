@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
-  <title>🍺 DrinkLog</title>
+  <title>🍺 Beer'O'Clock</title>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -116,7 +116,7 @@
 
 <div id="auth-screen">
   <div class="auth-card">
-    <h1>🍺 DrinkLog</h1>
+    <h1>🍺 Beer'O'Clock</h1>
     <p>Enter your name to join, or sign in if you're the admin.</p>
     <div class="auth-tabs">
       <button class="auth-tab active" onclick="authTab('guest',this)">I'm a Guest</button>
@@ -141,7 +141,7 @@
   <div class="header">
     <div class="header-row">
       <span style="font-size:22px">🍺</span>
-      <h1>DrinkLog</h1>
+      <h1>Beer'O'Clock</h1>
       <div class="user-badge">
         <span class="user-name" id="user-label"></span>
         <button class="btn-logout" onclick="signOut()">Exit</button>
@@ -204,7 +204,7 @@ window.addEventListener('load', function(){
 
 function showConfigScreen(){
   document.getElementById('auth-screen').innerHTML =
-    '<div class="auth-card"><h1>🍺 DrinkLog</h1>' +
+    '<div class="auth-card"><h1>🍺 Beer\'O\'Clock</h1>' +
     '<p>First time setup — enter the shared Supabase connection details.</p>' +
     '<div class="field"><label>Supabase URL</label><input id="cfg-url" type="text" placeholder="https://xxxx.supabase.co"/></div>' +
     '<div class="field"><label>Supabase Anon Key</label><input id="cfg-key" type="text" placeholder="eyJhbGci..."/></div>' +
@@ -215,7 +215,7 @@ function showConfigScreen(){
 
 function showConfigError(msg){
   document.getElementById('auth-screen').innerHTML =
-    '<div class="auth-card"><h1>🍺 DrinkLog</h1><div class="auth-error" style="margin-top:10px">' + msg + '</div>' +
+    '<div class="auth-card"><h1>🍺 Beer\'O\'Clock</h1><div class="auth-error" style="margin-top:10px">' + msg + '</div>' +
     '<button class="btn-auth" onclick="location.reload()">Reload Page</button></div>';
   document.getElementById('auth-screen').style.display = 'flex';
 }
@@ -268,7 +268,7 @@ function resetBtn(){
 
 function restoreAuthScreenHtml(){
   document.getElementById('auth-screen').innerHTML =
-    '<div class="auth-card"><h1>🍺 DrinkLog</h1>' +
+    '<div class="auth-card"><h1>🍺 Beer\'O\'Clock</h1>' +
     '<p>Enter your name to join, or sign in if you\'re the admin.</p>' +
     '<div class="auth-tabs">' +
       '<button class="auth-tab active" onclick="authTab(\'guest\',this)">I\'m a Guest</button>' +
