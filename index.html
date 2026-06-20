@@ -182,7 +182,7 @@
       <button class="active" onclick="switchTab('log',this)">📋 Log</button>
       <button onclick="switchTab('stats',this)">📊 Stats</button>
       <button onclick="switchTab('payments',this)">💶 Payments</button>
-      <button onclick="switchTab('history',this)">📅 History</button>
+      <button onclick="switchTab('history',this)" id="nav-history-btn" style="display:none">📅 History</button>
       <button onclick="switchTab('replace',this)">🔄 Replace</button>
       <button onclick="switchTab('audit',this)" id="nav-audit-btn" style="display:none">📜 Audit</button>
       <button onclick="switchTab('people',this)">👥 People</button>
@@ -376,10 +376,17 @@ function enterApp(){
   label.innerHTML = '👤 ' + esc(CURRENT_NAME) + (IS_ADMIN ? ' <span class="admin-badge">👑 ADMIN</span>' : '');
   var auditBtn = document.getElementById('nav-audit-btn');
   if (auditBtn) auditBtn.style.display = IS_ADMIN ? '' : 'none';
+  var historyBtn = document.getElementById('nav-history-btn');
+  if (historyBtn) historyBtn.style.display = IS_ADMIN ? '' : 'none';
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   registerSelfAsPerson();
   loadAll().then(function(){
+    console.log('[BeerOClock] loadAll complete, showing login joke popup');
+    showLoginJokePopup();
+  }).catch(function(e){
+    console.error('[BeerOClock] loadAll rejected unexpectedly:', e);
+    // Still show the joke even if data loading had issues
     showLoginJokePopup();
   });
 }
@@ -428,30 +435,45 @@ var FUN_STAT_TEMPLATES = [
 ];
 
 function showLoginJokePopup(){
-  // Pick either a joke or a fun stat, randomly, favouring jokes slightly
-  var useJoke = Math.random() < 0.6;
-  var content = null;
+  try {
+    // Pick either a joke or a fun stat, randomly, favouring jokes slightly
+    var useJoke = Math.random() < 0.6;
+    var content = null;
 
-  if (useJoke) {
-    content = TENNIS_JOKES[Math.floor(Math.random()*TENNIS_JOKES.length)];
-  } else {
-    // Try fun stats in random order, use first one that returns something
-    var templates = FUN_STAT_TEMPLATES.slice().sort(function(){return Math.random()-0.5;});
-    for (var i=0; i<templates.length; i++) {
-      var result = templates[i]();
-      if (result) { content = result; break; }
+    if (useJoke) {
+      content = TENNIS_JOKES[Math.floor(Math.random()*TENNIS_JOKES.length)];
+    } else {
+      // Try fun stats in random order, use first one that returns something
+      var templates = FUN_STAT_TEMPLATES.slice().sort(function(){return Math.random()-0.5;});
+      for (var i=0; i<templates.length; i++) {
+        var result = templates[i]();
+        if (result) { content = result; break; }
+      }
+      if (!content) content = TENNIS_JOKES[Math.floor(Math.random()*TENNIS_JOKES.length)];
     }
-    if (!content) content = TENNIS_JOKES[Math.floor(Math.random()*TENNIS_JOKES.length)];
-  }
 
-  showModal(
-    '<div style="text-align:center">'+
-      '<div style="font-size:42px;margin-bottom:10px">🎾</div>'+
-      '<h3 style="margin-bottom:14px">Welcome back, '+esc(CURRENT_NAME)+'!</h3>'+
-      '<div style="font-size:14px;color:#2e1c14;line-height:1.6;margin-bottom:20px">'+content+'</div>'+
-      '<button class="modal-btn modal-btn-pay" style="width:100%" onclick="closeModal()">Let\'s go 🎾</button>'+
-    '</div>'
-  );
+    showModal(
+      '<div style="text-align:center">'+
+        '<div style="font-size:42px;margin-bottom:10px">🎾</div>'+
+        '<h3 style="margin-bottom:14px">Welcome back, '+esc(CURRENT_NAME)+'!</h3>'+
+        '<div style="font-size:14px;color:#2e1c14;line-height:1.6;margin-bottom:20px">'+content+'</div>'+
+        '<button class="modal-btn modal-btn-pay" style="width:100%" onclick="closeModal()">Let\'s go 🎾</button>'+
+      '</div>'
+    );
+  } catch(e) {
+    console.error('[BeerOClock] showLoginJokePopup failed:', e);
+    // Fallback: show a simple joke with no stats logic involved
+    try {
+      showModal(
+        '<div style="text-align:center">'+
+          '<div style="font-size:42px;margin-bottom:10px">🎾</div>'+
+          '<h3 style="margin-bottom:14px">Welcome back!</h3>'+
+          '<div style="font-size:14px;color:#2e1c14;line-height:1.6;margin-bottom:20px">'+TENNIS_JOKES[0]+'</div>'+
+          '<button class="modal-btn modal-btn-pay" style="width:100%" onclick="closeModal()">Let\'s go 🎾</button>'+
+        '</div>'
+      );
+    } catch(e2) { console.error('[BeerOClock] fallback joke modal also failed:', e2); }
+  }
 }
 
 async function registerSelfAsPerson(){
@@ -552,6 +574,10 @@ document.addEventListener('click', function(e){
 function switchTab(tab, btn){
   if (tab === 'audit' && !IS_ADMIN) {
     notify('Audit log is admin-only 🔒', true);
+    return;
+  }
+  if (tab === 'history' && !IS_ADMIN) {
+    notify('History is admin-only 🔒', true);
     return;
   }
   document.querySelectorAll('nav button').forEach(function(b){b.classList.remove('active');});
@@ -779,13 +805,22 @@ function showPersonDayDetail(person, date){
     var byLine = (loggedBy && loggedBy !== person)
       ? ' · logged by '+esc(loggedBy)
       : '';
+    var canEdit = isMine(l);
+    var qtyControl = canEdit
+      ? '<div class="stepper" style="margin-top:4px">'+
+          '<button class="btn-icon" style="width:26px;height:26px;font-size:14px" onclick="editDrinkQty(\''+l.id+'\',-1,\''+esc(person)+'\',\''+date+'\')">−</button>'+
+          '<span style="font-size:13px;font-weight:700;min-width:22px;text-align:center">'+l.quantity+'</span>'+
+          '<button class="btn-icon" style="width:26px;height:26px;font-size:14px" onclick="editDrinkQty(\''+l.id+'\',1,\''+esc(person)+'\',\''+date+'\')">+</button>'+
+        '</div>'
+      : '';
     return '<div class="entry">'+
       '<div class="entry-l">'+
         '<span class="ej">'+emoji(l.drink)+'</span>'+
         '<div>'+
-          '<div class="en">'+esc(l.drink.replace(/^.+? /,''))+(l.quantity>1?' ×'+l.quantity:'')+'</div>'+
+          '<div class="en">'+esc(l.drink.replace(/^.+? /,''))+(!canEdit&&l.quantity>1?' ×'+l.quantity:'')+'</div>'+
           '<div class="es">🕐 '+timeStr+(l.total_price>0?' · €'+parseFloat(l.total_price).toFixed(2):' · free')+byLine+'</div>'+
           (l.note?'<div class="es" style="font-style:italic">"'+esc(l.note)+'"</div>':'')+
+          qtyControl+
         '</div>'+
       '</div>'+
     '</div>';
@@ -799,6 +834,33 @@ function showPersonDayDetail(person, date){
     '<div style="max-height:340px;overflow-y:auto;margin-bottom:10px">'+(rows||'<div class="empty">No entries found.</div>')+'</div>'+
     '<button class="modal-close" onclick="closeModal()">Close</button>'
   );
+}
+
+// ── EDIT DRINK QUANTITY (inline, from the person/day detail popup) ──
+async function editDrinkQty(logId, delta, person, date){
+  var entry = STATE.logs.find(function(l){ return l.id === logId; });
+  if (!entry) return;
+  if (!isMine(entry)) { notify('You can only edit your own entries 🔒', true); return; }
+
+  var newQty = (entry.quantity||1) + delta;
+  if (newQty <= 0) {
+    if (!confirm('This will remove the entry entirely. Continue?')) return;
+    var {error} = await SB.from('drink_logs').delete().eq('id', logId);
+    if (error) { notify('Error: '+error.message, true); return; }
+    await audit('DELETE_DRINK_LOGS','drink_logs',logId,{person:person,drink:entry.drink,reason:'qty reduced to 0'});
+    notify('Entry removed');
+  } else {
+    var unitPrice = parseFloat(entry.unit_price)||0;
+    var newTotal = unitPrice * newQty;
+    var {error} = await SB.from('drink_logs').update({ quantity: newQty, total_price: newTotal }).eq('id', logId);
+    if (error) { notify('Error: '+error.message, true); return; }
+    await audit('EDIT_DRINK_QTY','drink_logs',logId,{person:person,drink:entry.drink,old_qty:entry.quantity,new_qty:newQty});
+    notify('Updated to ×'+newQty+' ✓');
+  }
+
+  await loadAll();
+  // Re-open the same detail popup so the user sees the change immediately
+  showPersonDayDetail(person, date);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -988,6 +1050,7 @@ function switchTabByName(tab){
 // ══════════════════════════════════════════════════════════════
 function renderHistory(){
   var el=document.getElementById('tab-history');
+  if (!IS_ADMIN) { el.innerHTML = empty('🔒','Admin Only','History is restricted to the club admin.'); return; }
   if(!STATE.logs.length){el.innerHTML=empty('📅','No history','Log some drinks first!');return;}
   var bd={};
   STATE.logs.forEach(function(l){(bd[l.date]=bd[l.date]||[]).push(l);});
@@ -1161,13 +1224,15 @@ function renderAudit(){
     'LOG_DRINK':'#b5481f','DELETE_DRINK_LOGS':'#c4392b',
     'RECORD_PAYMENT':'#1f8a4f','DELETE_PAYMENTS':'#c4392b',
     'MARK_REPLACEMENT':'#d4a017','DELETE_REPLACEMENTS':'#c4392b',
-    'UNDO_REPLACE':'#8a7568','ADMIN_EDIT_DRINK':'#d4a017','DELETE_PERSON':'#c4392b'
+    'UNDO_REPLACE':'#8a7568','ADMIN_EDIT_DRINK':'#d4a017','DELETE_PERSON':'#c4392b',
+    'EDIT_DRINK_QTY':'#d4a017'
   };
   var actionLabels={
     'LOG_DRINK':'logged a drink','DELETE_DRINK_LOGS':'deleted a drink entry',
     'RECORD_PAYMENT':'recorded a payment','DELETE_PAYMENTS':'deleted a payment',
     'MARK_REPLACEMENT':'marked a replacement','DELETE_REPLACEMENTS':'deleted a replacement',
-    'UNDO_REPLACE':'undid replacement changes','ADMIN_EDIT_DRINK':'edited an entry (admin)','DELETE_PERSON':'removed a person'
+    'UNDO_REPLACE':'undid replacement changes','ADMIN_EDIT_DRINK':'edited an entry (admin)','DELETE_PERSON':'removed a person',
+    'EDIT_DRINK_QTY':'edited a drink quantity'
   };
   var html=card('Activity Log — last 100 actions',
     STATE.auditLog.map(function(a){
