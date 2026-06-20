@@ -379,7 +379,79 @@ function enterApp(){
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   registerSelfAsPerson();
-  loadAll();
+  loadAll().then(function(){
+    showLoginJokePopup();
+  });
+}
+
+// ── TENNIS JOKES / FUN STATS ON LOGIN ───────────────────────
+var TENNIS_JOKES = [
+  "Why did the tennis player bring string to the bar? In case they needed to serve another round! 🎾🍺",
+  "What's a tennis player's favourite drink? Anything on the rocks — they love a good rally with ice! 🧊",
+  "Why don't tennis players ever get thirsty? They're always chasing the ball... straight to the bar! 🏃‍♂️🍺",
+  "Love means nothing in tennis — but it means everything when the round's on someone else! 🎾😉",
+  "Why was the tennis racket bad at ordering drinks? It kept double-faulting at the bar! 🎾",
+  "What do you call a tennis player who never buys a round? A net loss for everyone. 🥲",
+  "Deuce, advantage, replace — the only three words you need to know at this bar. 🎾🍻",
+  "Tennis elbow is real. So is beer elbow. Stay hydrated, champs. 💪🍺",
+  "Why did the player ace the bar tab? Years of practice serving without double faults! 🎾",
+  "A clay court stains your shoes. A bar tab stains your wallet. Choose wisely. 🧱🍺",
+  "What's the difference between a tennis match and a night here? One has a tiebreak — the other just breaks you. 😅",
+  "Why do tennis players make great drinking buddies? They always know how to keep score! 🎾🍻",
+  "Remember: love-love means nothing happened yet. Don't let that be your drink count either. 🎾",
+  "The only 'fault' tonight should be on the court, not on your tab. 🎾💸",
+  "Backhand, forehand, and one more round — the holy trinity of club night. 🎾🍺"
+];
+
+var FUN_STAT_TEMPLATES = [
+  function(){
+    var total = STATE.logs.reduce(function(s,l){return s+(l.quantity||0);},0);
+    return total > 0 ? "🎾 Fun stat: this club has logged <strong>"+total+"</strong> drinks total. That's a lot of changeovers!" : null;
+  },
+  function(){
+    if (!STATE.people.length) return null;
+    var counts = {};
+    STATE.logs.forEach(function(l){ counts[l.person] = (counts[l.person]||0)+(l.quantity||0); });
+    var top = Object.entries(counts).sort(function(a,b){return b[1]-a[1];})[0];
+    return top ? "🏆 Current club leader: <strong>"+esc(top[0])+"</strong> with "+top[1]+" drinks logged. Reigning champion!" : null;
+  },
+  function(){
+    var drinkCounts = {};
+    STATE.logs.forEach(function(l){ drinkCounts[l.drink]=(drinkCounts[l.drink]||0)+(l.quantity||0); });
+    var top = Object.entries(drinkCounts).sort(function(a,b){return b[1]-a[1];})[0];
+    return top ? "📊 Most popular order at the club: <strong>"+esc(top[0])+"</strong> — "+top[1]+" served so far!" : null;
+  },
+  function(){
+    var uniqueDays = new Set(STATE.logs.map(function(l){return l.date;})).size;
+    return uniqueDays > 0 ? "📅 The club has logged drinks on <strong>"+uniqueDays+"</strong> different day"+(uniqueDays!==1?'s':'')+". Dedication!" : null;
+  }
+];
+
+function showLoginJokePopup(){
+  // Pick either a joke or a fun stat, randomly, favouring jokes slightly
+  var useJoke = Math.random() < 0.6;
+  var content = null;
+
+  if (useJoke) {
+    content = TENNIS_JOKES[Math.floor(Math.random()*TENNIS_JOKES.length)];
+  } else {
+    // Try fun stats in random order, use first one that returns something
+    var templates = FUN_STAT_TEMPLATES.slice().sort(function(){return Math.random()-0.5;});
+    for (var i=0; i<templates.length; i++) {
+      var result = templates[i]();
+      if (result) { content = result; break; }
+    }
+    if (!content) content = TENNIS_JOKES[Math.floor(Math.random()*TENNIS_JOKES.length)];
+  }
+
+  showModal(
+    '<div style="text-align:center">'+
+      '<div style="font-size:42px;margin-bottom:10px">🎾</div>'+
+      '<h3 style="margin-bottom:14px">Welcome back, '+esc(CURRENT_NAME)+'!</h3>'+
+      '<div style="font-size:14px;color:#2e1c14;line-height:1.6;margin-bottom:20px">'+content+'</div>'+
+      '<button class="modal-btn modal-btn-pay" style="width:100%" onclick="closeModal()">Let\'s go 🎾</button>'+
+    '</div>'
+  );
 }
 
 async function registerSelfAsPerson(){
