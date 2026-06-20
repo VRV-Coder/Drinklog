@@ -127,7 +127,7 @@
     /* MODAL */
     .modal-overlay{position:fixed;inset:0;background:rgba(6,30,18,.7);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px);animation:fadeIn .2s ease}
     @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-    .modal-box{background:#fff;border:1px solid rgba(255,255,255,.5);border-radius:20px;padding:26px 24px;width:100%;max-width:380px;box-shadow:0 24px 70px rgba(0,20,10,.5);color:#2e1c14}
+    .modal-box{background:#fff;border:1px solid rgba(255,255,255,.5);border-radius:20px;padding:26px 24px;width:100%;max-width:380px;max-height:90vh;overflow-y:auto;box-shadow:0 24px 70px rgba(0,20,10,.5);color:#2e1c14}
     .modal-box h3{font-size:19px;color:#7a2e1a;margin-bottom:14px;text-align:center;font-weight:800}
     .modal-stat{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid #f0e6d8}
     .modal-stat:last-child{border-bottom:none}
@@ -579,7 +579,7 @@ function renderConsolidatedToday(){
           var tags = Object.entries(drinkCounts).map(function(e){
             return '<span class="drink-tag">'+emoji(e[0])+' ×'+e[1]+'</span>';
           }).join('');
-          return '<div class="person-row">'+
+          return '<div class="person-row" style="cursor:pointer" onclick="showPersonDayDetail(\''+esc(person)+'\',\''+d+'\')">'+
             '<div class="person-row-l">'+
               '<div class="avatar" style="background:'+colorFor(person)+';width:22px;height:22px;font-size:10px">'+(person[0]||'?').toUpperCase()+'</div>'+
               '<div><div style="font-size:12px;font-weight:600;color:#b5481f">'+esc(person)+
@@ -587,6 +587,7 @@ function renderConsolidatedToday(){
                 (pdata.totalPrice>0?' <span style="font-size:11px;color:#b5481f;font-weight:600">€'+pdata.totalPrice.toFixed(2)+'</span>':'')+
                 '</div><div class="drink-tags">'+tags+'</div></div>'+
             '</div>'+
+            '<span style="font-size:11px;color:#a8978a">👁 details</span>'+
           '</div>';
         }).join('')+
       '</div>';
@@ -638,8 +639,10 @@ async function saveLog(){
   await addPersonToTable(STATE.logPerson); // ensure they're in the people table
 
   var unit=parseFloat(STATE.logPrice)||0, total=unit*STATE.logQty;
+  var loggedPerson = STATE.logPerson;
+  var loggedDrink = STATE.logDrink;
   var insertObj = {
-    date:STATE.logDate, person:STATE.logPerson, drink:STATE.logDrink,
+    date:STATE.logDate, person:loggedPerson, drink:loggedDrink,
     quantity:STATE.logQty, unit_price:unit, total_price:total,
     note:STATE.logNote, added_by:CURRENT_NAME, logged_by:CURRENT_NAME
   };
@@ -648,10 +651,82 @@ async function saveLog(){
 
   var {data, error} = await SB.from('drink_logs').insert(insertObj).select().single();
   if(error){notify('Error: '+error.message,true);return;}
-  await audit('LOG_DRINK','drink_logs',data.id,{person:STATE.logPerson,drink:STATE.logDrink,qty:STATE.logQty,total:total});
+  await audit('LOG_DRINK','drink_logs',data.id,{person:loggedPerson,drink:loggedDrink,qty:STATE.logQty,total:total});
   STATE.logQty=1;STATE.logPrice='';STATE.logNote='';
-  notify('Drink logged for '+STATE.logPerson+' ✓');
+  notify('Drink logged for '+loggedPerson+' ✓');
   await loadAll();
+  showDrinkCountPopup(loggedPerson, loggedDrink);
+}
+
+// ── DRINK COUNT CELEBRATION POPUP ───────────────────────────
+function showDrinkCountPopup(person, drink){
+  // Running total of this exact drink type for this person (all-time)
+  var drinkCount = STATE.logs
+    .filter(function(l){ return l.person===person && l.drink===drink; })
+    .reduce(function(s,l){ return s + (l.quantity||0); }, 0);
+
+  // Running total of ALL drinks for this person (all-time)
+  var totalCount = STATE.logs
+    .filter(function(l){ return l.person===person; })
+    .reduce(function(s,l){ return s + (l.quantity||0); }, 0);
+
+  var drinkName = drink.replace(/^.+? /, '');
+  var icon = emoji(drink);
+
+  showModal(
+    '<div style="text-align:center">'+
+      '<div style="font-size:48px;margin-bottom:10px">🥴</div>'+
+      '<h3 style="margin-bottom:6px">'+esc(person)+' is down</h3>'+
+      '<div style="font-size:34px;font-weight:800;color:#b5481f;margin-bottom:4px">'+drinkCount+' '+icon+'</div>'+
+      '<div style="font-size:13px;color:#8a7568;margin-bottom:18px">'+esc(drinkName)+(drinkCount!==1?'s':'')+' total — '+totalCount+' drinks overall 🥴</div>'+
+      '<button class="modal-btn modal-btn-pay" style="width:100%" onclick="closeModal()">OK 👍</button>'+
+    '</div>'
+  );
+}
+
+// ── PERSON + DAY DETAILED LOG (timestamped) ─────────────────
+function showPersonDayDetail(person, date){
+  var entries = STATE.logs
+    .filter(function(l){ return l.person===person && l.date===date; })
+    .slice()
+    .sort(function(a,b){
+      // Sort by logged_at time if available, otherwise by time string, newest first
+      var ta = a.logged_at ? new Date(a.logged_at).getTime() : 0;
+      var tb = b.logged_at ? new Date(b.logged_at).getTime() : 0;
+      return tb - ta;
+    });
+
+  var totalQty = entries.reduce(function(s,l){ return s+(l.quantity||0); }, 0);
+  var totalCost = entries.reduce(function(s,l){ return s+(parseFloat(l.total_price)||0); }, 0);
+
+  var rows = entries.map(function(l){
+    var timeStr = l.logged_at
+      ? new Date(l.logged_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})
+      : '—';
+    var loggedBy = l.logged_by || l.added_by || '?';
+    var byLine = (loggedBy && loggedBy !== person)
+      ? ' · logged by '+esc(loggedBy)
+      : '';
+    return '<div class="entry">'+
+      '<div class="entry-l">'+
+        '<span class="ej">'+emoji(l.drink)+'</span>'+
+        '<div>'+
+          '<div class="en">'+esc(l.drink.replace(/^.+? /,''))+(l.quantity>1?' ×'+l.quantity:'')+'</div>'+
+          '<div class="es">🕐 '+timeStr+(l.total_price>0?' · €'+parseFloat(l.total_price).toFixed(2):' · free')+byLine+'</div>'+
+          (l.note?'<div class="es" style="font-style:italic">"'+esc(l.note)+'"</div>':'')+
+        '</div>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+
+  showModal(
+    '<h3>🕐 '+esc(person)+'\'s Log</h3>'+
+    '<div style="text-align:center;margin-bottom:14px">'+
+      '<span style="font-size:12px;color:#8a7568">'+fmtDate(date)+' · '+totalQty+' drink'+(totalQty!==1?'s':'')+(totalCost>0?' · €'+totalCost.toFixed(2):'')+'</span>'+
+    '</div>'+
+    '<div style="max-height:340px;overflow-y:auto;margin-bottom:10px">'+(rows||'<div class="empty">No entries found.</div>')+'</div>'+
+    '<button class="modal-close" onclick="closeModal()">Close</button>'
+  );
 }
 
 // ══════════════════════════════════════════════════════════════
