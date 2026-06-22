@@ -211,6 +211,7 @@
       <div class="user-badge">
         <button onclick="setLang(LANG==='en'?'de':'en')" class="btn-logout" id="lang-toggle-btn" title="Switch language" style="margin-right:2px">🌐 EN</button>
         <span class="user-name" id="user-label"></span>
+        <button class="btn-logout" onclick="loadAll().then(function(){notify('Data refreshed ✓')})" title="Refresh data" style="font-size:16px;padding:5px 10px">🔄</button>
         <button class="btn-logout" id="signout-btn" onclick="signOut()">Exit</button>
       </div>
     </div>
