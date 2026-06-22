@@ -9,7 +9,7 @@
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     html{scroll-behavior:smooth}
-    body{font-family:'Segoe UI',system-ui,sans-serif;background:linear-gradient(160deg,#7a2e1a 0%,#8f3a20 35%,#6e2814 100%);background-attachment:fixed;color:#fdf3ea;min-height:100vh;position:relative}
+    body{font-family:'Segoe UI',system-ui,sans-serif;font-size:16px;background:linear-gradient(160deg,#7a2e1a 0%,#8f3a20 35%,#6e2814 100%);background-attachment:fixed;color:#fdf3ea;min-height:100vh;position:relative}
     body::before{
       content:'';position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.05;
       background-image:
@@ -24,62 +24,62 @@
     .card{transition:box-shadow .2s ease}
     .chip:hover{transform:translateY(-1px)}
     #auth-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
-    .auth-card{background:rgba(255,255,255,0.97);border:1px solid rgba(255,255,255,0.4);border-radius:20px;padding:34px 28px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,20,10,.45),0 2px 8px rgba(0,0,0,.15);backdrop-filter:blur(10px)}
+    .auth-card{background:rgba(255,255,255,0.97);border:1px solid rgba(255,255,255,0.4);border-radius:20px;padding:34px 30px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,20,10,.45),0 2px 8px rgba(0,0,0,.15);backdrop-filter:blur(10px)}
     .auth-card h1{font-size:24px;color:#7a2e1a;margin-bottom:4px;font-weight:800;letter-spacing:-.3px}
-    .auth-card p{font-size:13px;color:#6b5a4d;margin-bottom:22px;line-height:1.6}
+    .auth-card p{font-size:15px;color:#3a2a1d;margin-bottom:22px;line-height:1.6}
     .auth-tabs{display:flex;gap:0;border-bottom:2px solid #e8ede8;margin-bottom:20px}
-    .auth-tab{flex:1;padding:10px;background:none;border:none;cursor:pointer;font-size:13px;font-weight:700;color:#9a8a7c;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .15s}
+    .auth-tab{flex:1;padding:11px;background:none;border:none;cursor:pointer;font-size:15px;font-weight:700;color:#6a4a38;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .15s}
     .auth-tab.active{color:#7a2e1a;border-bottom-color:#c5e000}
     .field{margin-bottom:12px}
-    .field label{display:block;font-size:11px;font-weight:700;color:#7a6759;text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px}
-    .field input{width:100%;background:#f4f7f4;border:1.5px solid #e8dccc;border-radius:10px;padding:11px 14px;color:#2e1c14;font-size:14px;outline:none;transition:border-color .15s,box-shadow .15s}
+    .field label{display:block;font-size:13px;font-weight:700;color:#4a3a2e;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
+    .field input{width:100%;background:#f4f7f4;border:1.5px solid #e8dccc;border-radius:10px;padding:12px 14px;color:#1a0e08;font-size:15px;outline:none;transition:border-color .15s,box-shadow .15s}
     .field input:focus{border-color:#d4a017;box-shadow:0 0 0 3px rgba(143,201,58,.15)}
     .btn-auth{width:100%;background:linear-gradient(135deg,#7a2e1a,#a8431d);border:none;border-radius:12px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px;box-shadow:0 4px 14px rgba(11,61,36,.35);transition:transform .12s,box-shadow .12s}
-    .auth-error{color:#d64545;font-size:12px;margin-top:8px;min-height:16px;line-height:1.5}
-    .auth-note{font-size:11px;color:#9a8a7c;margin-top:12px;text-align:center;line-height:1.5}
+    .auth-error{color:#d64545;font-size:14px;margin-top:8px;min-height:16px;line-height:1.5}
+    .auth-note{font-size:13px;color:#6a5a4c;margin-top:12px;text-align:center;line-height:1.6}
     #app{display:none}
     .header{border-bottom:1px solid rgba(255,255,255,.08);padding:14px 16px 0;background:linear-gradient(180deg,#6e2814,#7a2e1a);position:sticky;top:0;z-index:100;box-shadow:0 2px 16px rgba(0,0,0,.25)}
     .header-row{display:flex;align-items:center;gap:8px;margin-bottom:12px}
     .header-row h1{font-size:19px;font-weight:800;color:#fff;letter-spacing:-.3px}
     .user-badge{margin-left:auto;display:flex;align-items:center;gap:8px}
-    .user-name{font-size:12px;color:#d4f521;font-weight:700}
+    .user-name{font-size:14px;color:#f0e8a0;font-weight:700}
     .admin-badge{display:inline-block;background:linear-gradient(135deg,#d4a017,#f0c63a);border-radius:5px;padding:2px 7px;font-size:10px;font-weight:800;color:#3d2e00;margin-left:4px;letter-spacing:.5px}
-    .btn-logout{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:7px;padding:5px 11px;color:#e0c4a8;font-size:11px;cursor:pointer;transition:all .15s}
+    .btn-logout{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:7px;padding:6px 13px;color:#f0e0c0;font-size:13px;cursor:pointer;transition:all .15s}
     .btn-logout:hover{color:#ff8a8a;border-color:#ff8a8a;background:rgba(255,100,100,.1)}
     nav{display:flex;overflow-x:auto;scrollbar-width:none}
     nav::-webkit-scrollbar{display:none}
-    nav button{background:none;border:none;cursor:pointer;padding:9px 13px;font-size:11px;font-weight:700;white-space:nowrap;color:#7da888;border-bottom:3px solid transparent;flex-shrink:0;transition:color .15s,border-color .15s}
+    nav button{background:none;border:none;cursor:pointer;padding:10px 14px;font-size:13px;font-weight:700;white-space:nowrap;color:#7da888;border-bottom:3px solid transparent;flex-shrink:0;transition:color .15s,border-color .15s}
     nav button.active{color:#d4f521;border-bottom-color:#d4f521}
     .content{max-width:680px;margin:0 auto;padding:14px}
-    .card{background:rgba(255,255,255,.97);border:1px solid rgba(255,255,255,.5);border-radius:16px;padding:18px;margin-bottom:13px;box-shadow:0 4px 18px rgba(0,20,10,.18),0 1px 3px rgba(0,0,0,.08);color:#2e1c14}
-    .card-title{font-size:11px;font-weight:800;color:#9c4a22;text-transform:uppercase;letter-spacing:1px;margin-bottom:13px}
-    .form-label{display:block;font-size:11px;font-weight:700;color:#7a6759;text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px}
+    .card{background:rgba(255,255,255,.97);border:1px solid rgba(255,255,255,.5);border-radius:16px;padding:20px;margin-bottom:14px;box-shadow:0 4px 20px rgba(20,10,0,.2),0 1px 4px rgba(0,0,0,.1);color:#1a0e08}
+    .card-title{font-size:13px;font-weight:800;color:#9c4a22;text-transform:uppercase;letter-spacing:1px;margin-bottom:13px}
+    .form-label{display:block;font-size:13px;font-weight:700;color:#4a3020;text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px}
     input[type=text],input[type=number],input[type=date],input[type=email],input[type=password],select{width:100%;background:#f4f7f4;border:1.5px solid #e8dccc;border-radius:9px;padding:9px 12px;color:#2e1c14;font-size:14px;outline:none;font-family:inherit;transition:border-color .15s,box-shadow .15s}
     input:focus,select:focus{border-color:#d4a017;box-shadow:0 0 0 3px rgba(143,201,58,.15)}
     .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .fld{margin-bottom:10px}
     .btn-primary{width:100%;background:linear-gradient(135deg,#7a2e1a,#b5481f);border:none;border-radius:11px;padding:12px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 3px 12px rgba(11,61,36,.3);transition:transform .12s,box-shadow .12s}
     .btn-green{width:100%;background:linear-gradient(135deg,#c5e000,#d4f521);border:none;border-radius:11px;padding:12px;color:#1f3a0a;font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 3px 12px rgba(197,224,0,.35);transition:transform .12s,box-shadow .12s}
-    .btn-sm{background:none;border:none;cursor:pointer;font-size:15px;color:#a8978a;padding:2px;transition:color .15s}
+    .btn-sm{background:none;border:none;cursor:pointer;font-size:15px;color:#6a3020;padding:2px;transition:color .15s}
     .btn-icon{width:33px;height:33px;border-radius:9px;border:1.5px solid #e8dccc;background:#f4f7f4;color:#b5481f;font-size:17px;font-weight:700;cursor:pointer;transition:all .15s}
     .btn-edit{background:#f5ede4;border:1px solid #e8dccc;border-radius:7px;padding:3px 9px;color:#a85428;font-size:11px;cursor:pointer;margin-right:4px;font-weight:600;transition:all .15s}
     .btn-edit:hover{border-color:#d4a017;color:#b5481f;background:#faf2e8}
     .chips{display:flex;flex-wrap:wrap;gap:6px}
-    .chip{padding:6px 13px;border:1.5px solid #e8dccc;border-radius:20px;cursor:pointer;font-size:12px;background:#f4f7f4;color:#7a6759;user-select:none;transition:all .15s;font-weight:500}
+    .chip{padding:8px 14px;border:1.5px solid #e8dccc;border-radius:20px;cursor:pointer;font-size:14px;background:#f4f7f4;color:#4a3020;user-select:none;transition:all .15s;font-weight:500}
     .chip.cp{background:linear-gradient(135deg,#7a2e1a,#b5481f);border-color:#b5481f;color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(11,61,36,.3)}
     .chip.cg{background:linear-gradient(135deg,#c5e000,#d4f521);border-color:#c5e000;color:#1f3a0a;font-weight:800;box-shadow:0 2px 8px rgba(197,224,0,.3)}
     .chip.cy{background:linear-gradient(135deg,#f0c63a,#f8d878);border-color:#e8b820;color:#4a3500;font-weight:800;box-shadow:0 2px 8px rgba(240,198,58,.3)}
     .sg{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:12px}
     .sb{background:rgba(255,255,255,.97);border:1px solid rgba(255,255,255,.5);border-radius:13px;padding:14px 8px;text-align:center;box-shadow:0 3px 12px rgba(0,20,10,.15)}
-    .sv{font-size:21px;font-weight:800;color:#b5481f;letter-spacing:-1px}
+    .sv{font-size:24px;font-weight:800;color:#b5481f;letter-spacing:-1px}
     .sv.g{color:#c78a2e}.sv.r{color:#d6483a}
-    .sl{font-size:10px;font-weight:700;color:#9a8a7c;text-transform:uppercase;letter-spacing:.7px;margin-top:2px}
+    .sl{font-size:12px;font-weight:700;color:#6a5a4c;text-transform:uppercase;letter-spacing:.7px;margin-top:3px}
     .entry{display:flex;align-items:center;justify-content:space-between;background:#faf5f0;border:1px solid #ece0d4;border-radius:10px;padding:9px 12px;margin-bottom:7px;transition:background .15s}
     .entry-l{display:flex;align-items:center;gap:9px;flex:1;min-width:0}
     .ej{font-size:18px;flex-shrink:0}
-    .en{font-size:13px;font-weight:700;color:#b5481f}
-    .es{font-size:11px;color:#8a7568;margin-top:1px}
-    .badge{display:inline-block;background:#f3e4d3;border-radius:20px;padding:2px 9px;font-size:11px;color:#a85428;font-weight:700}
+    .en{font-size:15px;font-weight:700;color:#b5481f}
+    .es{font-size:13px;color:#3a2a1d;margin-top:2px}
+    .badge{display:inline-block;background:#f3e4d3;border-radius:20px;padding:3px 11px;font-size:13px;color:#7a2e10;font-weight:700}
     .badge.g{background:#f5e8da;color:#b5481f}
     .badge.r{background:#fce8e6;color:#c4392b}
     .avatar{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}
@@ -98,7 +98,7 @@
     .bottle.done{background:#f3e4d3;border:1.5px solid #d4a017}
     .bottle.empty{background:#f4f7f4;border:1.5px solid #e8dccc;opacity:.5}
     .repl-ctrl{display:flex;align-items:center;gap:7px;margin-top:5px}
-    .repl-ctrl span{font-size:11px;color:#8a7568;min-width:100px;text-align:center}
+    .repl-ctrl span{font-size:11px;color:#5a3a28;min-width:100px;text-align:center}
     .dh{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:linear-gradient(135deg,#7a2e1a,#8f3a20);border-bottom:1px solid rgba(255,255,255,.08)}
     .dh h4{font-size:14px;font-weight:800;color:#d4f521}
     .dh p{font-size:11px;color:#e0c4a8;margin-top:1px}
@@ -106,9 +106,9 @@
     .audit-entry:last-child{border-bottom:none}
     .audit-dot{width:8px;height:8px;border-radius:50%;margin-top:4px;flex-shrink:0}
     .audit-body{flex:1}
-    .audit-who{font-size:13px;font-weight:700;color:#b5481f}
-    .audit-what{font-size:12px;color:#6b5a4d;margin-top:1px}
-    .audit-when{font-size:10px;color:#a8978a;margin-top:2px}
+    .audit-who{font-size:15px;font-weight:700;color:#b5481f}
+    .audit-what{font-size:14px;color:#3a2a1d;margin-top:2px}
+    .audit-when{font-size:12px;color:#7a6858;margin-top:2px}
     #notif{position:fixed;top:14px;right:14px;z-index:9999;pointer-events:none}
     .np{background:linear-gradient(135deg,#7a2e1a,#b5481f);border:1px solid #c75a2a;color:#d4f521;padding:9px 16px;border-radius:11px;font-size:12px;font-weight:700;margin-bottom:6px;box-shadow:0 6px 24px rgba(0,0,0,.3);animation:si .25s cubic-bezier(.34,1.56,.64,1)}
     .np.err{background:linear-gradient(135deg,#5c1818,#7a2424);border-color:#c44;color:#ffb0b0}
@@ -119,11 +119,11 @@
     /* CONSOLIDATED DAY SUMMARY (Log tab) */
     .day-summary{background:#faf5f0;border:1px solid #ece0d4;border-radius:11px;padding:11px 13px;margin-bottom:9px}
     .day-summary-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
-    .day-summary-head h5{font-size:12px;font-weight:800;color:#9c4a22;text-transform:uppercase;letter-spacing:.6px}
+    .day-summary-head h5{font-size:14px;font-weight:800;color:#7a2e10;text-transform:uppercase;letter-spacing:.6px}
     .person-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0}
     .person-row-l{display:flex;align-items:center;gap:8px}
     .drink-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
-    .drink-tag{font-size:10px;background:#f5ede4;border-radius:10px;padding:2px 8px;color:#a85428;font-weight:600}
+    .drink-tag{font-size:13px;background:#f5ede4;border-radius:10px;padding:3px 10px;color:#7a3010;font-weight:700}
     /* MODAL */
     .modal-overlay{position:fixed;inset:0;background:rgba(6,30,18,.7);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px);animation:fadeIn .2s ease}
     @keyframes fadeIn{from{opacity:0}to{opacity:1}}
@@ -131,10 +131,10 @@
     .modal-box h3{font-size:19px;color:#7a2e1a;margin-bottom:14px;text-align:center;font-weight:800}
     .modal-stat{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid #f0e6d8}
     .modal-stat:last-child{border-bottom:none}
-    .modal-stat-label{font-size:13px;color:#6b5a4d}
+    .modal-stat-label{font-size:15px;color:#3a2a1d}
     .modal-stat-val{font-size:17px;font-weight:800}
-    .modal-close{width:100%;margin-top:16px;background:#f4f7f4;border:1px solid #e8dccc;border-radius:11px;padding:11px;color:#6b5a4d;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s}
-    .modal-question{font-size:16px;color:#7a2e1a;text-align:center;margin-bottom:18px;line-height:1.5;font-weight:600}
+    .modal-close{width:100%;margin-top:16px;background:#f4f7f4;border:1px solid #e8dccc;border-radius:11px;padding:11px;color:#3a2010;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s}
+    .modal-question{font-size:18px;color:#3a1a0a;text-align:center;margin-bottom:18px;line-height:1.5;font-weight:700}
     .modal-btn-row{display:flex;gap:10px}
     .modal-btn{flex:1;border:none;border-radius:10px;padding:13px 8px;font-size:14px;font-weight:700;cursor:pointer}
     .modal-btn-pay{background:linear-gradient(135deg,#c5e000,#d4f521);color:#1f3a0a;box-shadow:0 4px 14px rgba(197,224,0,.4)}
@@ -144,7 +144,7 @@
     .team-banner{width:100%;max-height:200px;object-fit:cover;object-position:center 20%;display:block;border-bottom:3px solid rgba(255,255,255,.12)}
     .team-banner-wrap{position:relative;overflow:hidden}
     .team-banner-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 50%,rgba(110,40,20,.7));pointer-events:none}
-    .team-banner-label{position:absolute;bottom:10px;left:14px;color:#fff;font-size:12px;font-weight:700;letter-spacing:.5px;text-shadow:0 1px 4px rgba(0,0,0,.5)}
+    .team-banner-label{position:absolute;bottom:12px;left:0;right:0;text-align:center;color:#fff;font-size:16px;font-weight:800;letter-spacing:.8px;text-shadow:0 2px 8px rgba(0,0,0,.7)}
     @media(max-width:480px){.grid2{grid-template-columns:1fr}.sg{grid-template-columns:repeat(2,1fr)}}
   </style>
 </head>
@@ -748,7 +748,7 @@ async function showLoginJokePopup(){
       '<div style="font-size:42px;margin-bottom:10px">🎾</div>'+
       '<h3 style="margin-bottom:14px">'+esc(t('welcomeBack'))+', '+esc(CURRENT_NAME)+'!</h3>'+
       '<div id="joke-content" style="font-size:14px;color:#2e1c14;line-height:1.6;margin-bottom:20px;min-height:60px;display:flex;align-items:center;justify-content:center">'+
-        '<span style="color:#a8978a;font-size:13px">🎾 Fetching today\'s joke...</span>'+
+        '<span style="color:#6a3020;font-size:13px">🎾 Fetching today\'s joke...</span>'+
       '</div>'+
       '<button class="modal-btn modal-btn-pay" style="width:100%" onclick="closeModal()">'+esc(t('letsGo'))+'</button>'+
     '</div>'
@@ -913,7 +913,7 @@ function renderLog(){
   var total = ((parseFloat(STATE.logPrice)||0)*STATE.logQty).toFixed(2);
 
   el.innerHTML =
-    '<button class="btn-primary" style="background:linear-gradient(135deg,#b45309,#f8d878);color:#1a0f00;margin-bottom:12px" onclick="showMyBalance()"'+esc(t('myBalanceBtn'))+'</button>'+
+    '<button class="btn-primary" style="background:linear-gradient(135deg,#b45309,#f8d878);color:#1a0f00;margin-bottom:12px" onclick="showMyBalance()">'+esc(t('myBalanceBtn'))+'</button>'+
 
     card(t('whosDrinking'),
       '<div class="chips" style="margin-bottom:10px">'+
@@ -938,11 +938,11 @@ function renderLog(){
       }).join('')+'</div>')+
       '<div class="grid2">'+
         fld(t('drinks'),stepper('logQty',STATE.logQty))+
-        fld(t('pricePerDrink'),'<div style="position:relative"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#8a7568">€</span><input type="number" min="0" step="0.01" value="'+(STATE.logPrice||'')+'" placeholder="0.00" style="padding-left:24px" oninput="STATE.logPrice=this.value;updTotal()"/></div>')+
+        fld(t('pricePerDrink'),'<div style="position:relative"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#5a3a28">€</span><input type="number" min="0" step="0.01" value="'+(STATE.logPrice||'')+'" placeholder="0.00" style="padding-left:24px" oninput="STATE.logPrice=this.value;updTotal()"/></div>')+
       '</div>'+
       '<div class="total-row" id="trow"><span>'+esc(t('totalPrice'))+'</span><span>€'+total+'</span></div>'+
       fld(t('note'),'<input type="text" value="'+esc(STATE.logNote)+'" oninput="STATE.logNote=this.value" placeholder="'+esc(t('noteOptional'))+'"/>') +
-      '<button class="btn-primary" onclick="saveLog()"'+esc(t('logDrinkBtn'))+'</button>')+
+      '<button class="btn-primary" onclick="saveLog()">'+esc(t('logDrinkBtn'))+'</button>')+
 
     renderConsolidatedToday();
 }
@@ -1000,8 +1000,7 @@ function renderConsolidatedToday(){
     var drinkCounts = {};
     pLogs.forEach(function(l){ drinkCounts[l.drink] = (drinkCounts[l.drink]||0) + (l.quantity||0); });
     var tags = Object.entries(drinkCounts).map(function(e){
-      return '<span class="drink-tag">'+emoji(e[0])+' ×'+e[1]+'</span>';
-    }).join('');
+      return '<span class="drink-tag">'+emoji(e[0])+' ×'+e[1]+'</span>';    }).join('');
 
     var earliestDate = pLogs.reduce(function(min,l){ return l.date < min ? l.date : min; }, pLogs[0].date);
     var latestDate = pLogs.reduce(function(max,l){ return l.date > max ? l.date : max; }, pLogs[0].date);
@@ -1037,12 +1036,12 @@ function renderConsolidatedToday(){
           ' <span class="badge">'+b.totalQty+' '+(b.totalQty!==1?t('drinksPlural'):t('drink'))+'</span>'+
           (b.totalSpend>0?' <span style="font-size:11px;color:#b5481f;font-weight:600">€'+b.totalSpend.toFixed(2)+'</span>':'')+
           '</div>'+
-          '<div style="font-size:10px;color:#a8978a;margin-top:1px">'+dateRange+'</div>'+
+          '<div style="font-size:10px;color:#6a3020;margin-top:1px">'+dateRange+'</div>'+
           '<div class="drink-tags">'+b.tags+'</div>'+
           '<div style="display:flex;gap:6px;margin-top:3px">'+statusBits.join('')+'</div>'+
         '</div>'+
       '</div>'+
-      '<span style="font-size:11px;color:#a8978a">'+esc(t('details'))+'</span>'+
+      '<span style="font-size:11px;color:#6a3020">'+esc(t('details'))+'</span>'+
     '</div>';
   };
 
@@ -1141,7 +1140,7 @@ function showDrinkCountPopup(person, drink){
       '<div style="font-size:48px;margin-bottom:10px">🥴</div>'+
       '<h3 style="margin-bottom:6px">'+esc(person)+' '+esc(t('isDown'))+'</h3>'+
       '<div style="font-size:34px;font-weight:800;color:#b5481f;margin-bottom:4px">'+drinkCount+' '+icon+'</div>'+
-      '<div style="font-size:13px;color:#8a7568;margin-bottom:18px">'+esc(drinkName)+(drinkCount!==1?'s':'')+' total — '+totalCount+' '+esc(t('totalOverall'))+'</div>'+
+      '<div style="font-size:13px;color:#5a3a28;margin-bottom:18px">'+esc(drinkName)+(drinkCount!==1?'s':'')+' total — '+totalCount+' '+esc(t('totalOverall'))+'</div>'+
       '<button class="modal-btn modal-btn-pay" style="width:100%" onclick="closeModal()">OK 👍</button>'+
     '</div>'
   );
@@ -1204,7 +1203,7 @@ function showPersonRunningTab(person){
   showModal(
     '<h3>🧾 '+esc(person)+esc(t('runningTabTitle'))+'</h3>'+
     '<div style="text-align:center;margin-bottom:14px">'+
-      '<span style="font-size:12px;color:#8a7568">'+totalQty+' '+(totalQty!==1?t('drinksPlural'):t('drink'))+(totalCost>0?' · €'+totalCost.toFixed(2):'')+' '+t('sinceLastSettlement')+'</span>'+
+      '<span style="font-size:12px;color:#5a3a28">'+totalQty+' '+(totalQty!==1?t('drinksPlural'):t('drink'))+(totalCost>0?' · €'+totalCost.toFixed(2):'')+' '+t('sinceLastSettlement')+'</span>'+
     '</div>'+
     '<div style="max-height:380px;overflow-y:auto;margin-bottom:10px">'+(sections||'<div class="empty">No entries found.</div>')+'</div>'+
     '<button class="modal-close" onclick="closeModal()">'+esc(t('close'))+'</button>'
@@ -1257,7 +1256,7 @@ function showPersonDayDetail(person, date){
   showModal(
     '<h3>🕐 '+esc(person)+esc(t('yourLogTitle'))+'</h3>'+
     '<div style="text-align:center;margin-bottom:14px">'+
-      '<span style="font-size:12px;color:#8a7568">'+fmtDate(date)+' · '+totalQty+' '+(totalQty!==1?t('drinksPlural'):t('drink'))+(totalCost>0?' · €'+totalCost.toFixed(2):'')+'</span>'+
+      '<span style="font-size:12px;color:#5a3a28">'+fmtDate(date)+' · '+totalQty+' '+(totalQty!==1?t('drinksPlural'):t('drink'))+(totalCost>0?' · €'+totalCost.toFixed(2):'')+'</span>'+
     '</div>'+
     '<div style="max-height:340px;overflow-y:auto;margin-bottom:10px">'+(rows||'<div class="empty">No entries found.</div>')+'</div>'+
     '<button class="modal-close" onclick="closeModal()">'+esc(t('close'))+'</button>'
@@ -1319,13 +1318,13 @@ function renderStats(){
     var sortedDrinks=Object.entries(dc).sort(function(a,b){return b[1]-a[1];});
     var fav=sortedDrinks[0]?sortedDrinks[0][0]:'—';
     var allDrinkTags=sortedDrinks.map(function(e){
-      return '<span class="drink-tag">'+emoji(e[0])+' '+esc(e[0].replace(/^.+? /,''))+' ×'+e[1]+'</span>';
+      return '<span class="drink-tag">'+emoji(e[0])+' ×'+e[1]+'</span>';
     }).join('');
     var bd={};pl.forEach(function(l){bd[l.date]=(bd[l.date]||0)+(l.quantity||0);});
     var bars=Object.entries(bd).sort(function(a,b){return b[0].localeCompare(a[0]);}).slice(0,10).map(function(e){
       return '<div style="text-align:center"><div style="width:24px;height:'+Math.max(5,e[1]*7)+'px;background:linear-gradient(to top,#7a2e1a,#b5481f);border-radius:3px;margin-bottom:2px"></div>'+
-        '<div style="font-size:9px;color:#a8978a">'+e[0].slice(5)+'</div>'+
-        '<div style="font-size:10px;color:#8a7568;font-weight:700">'+e[1]+'</div></div>';
+        '<div style="font-size:9px;color:#6a3020">'+e[0].slice(5)+'</div>'+
+        '<div style="font-size:10px;color:#5a3a28;font-weight:700">'+e[1]+'</div></div>';
     }).join('');
     var isMe = p.display_name===CURRENT_NAME;
     html+=card('',
@@ -1337,9 +1336,9 @@ function renderStats(){
         '<div style="text-align:right"><div style="font-size:20px;font-weight:800;color:#b5481f">'+pt+'</div>'+
         (ps>0?'<div style="font-size:12px;color:#b5481f;font-weight:700">€'+ps.toFixed(2)+'</div>':'')+
         '</div></div>'+
-        '<div style="font-size:11px;color:#a8978a;margin-bottom:5px;text-transform:uppercase;letter-spacing:.6px">'+esc(t('drinksBreakdown'))+'</div>'+
+        '<div style="font-size:11px;color:#6a3020;margin-bottom:5px;text-transform:uppercase;letter-spacing:.6px">'+esc(t('drinksBreakdown'))+'</div>'+
         '<div class="drink-tags" style="margin-bottom:10px">'+allDrinkTags+'</div>'+
-        (bars?'<div style="font-size:11px;color:#a8978a;margin-bottom:5px;text-transform:uppercase;letter-spacing:.6px"'+esc(t('daily'))+'</div><div style="display:flex;flex-wrap:wrap;gap:4px;align-items:flex-end">'+bars+'</div>':''));
+        (bars?'<div style="font-size:11px;color:#6a3020;margin-bottom:5px;text-transform:uppercase;letter-spacing:.6px"'+esc(t('daily'))+'</div><div style="display:flex;flex-wrap:wrap;gap:4px;align-items:flex-end">'+bars+'</div>':''));
   });
   el.innerHTML=html;
 }
@@ -1363,7 +1362,7 @@ function renderPayments(){
   html+=card(t('recordPayment'),
     '<div class="grid2">'+
       fld(t('date'),'<input type="date" value="'+STATE.payDate+'" onchange="STATE.payDate=this.value"/>') +
-      fld(t('amount'),'<div style="position:relative"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#8a7568">€</span><input type="number" min="0" step="0.01" value="'+(STATE.payAmount||'')+'" placeholder="0.00" style="padding-left:24px" oninput="STATE.payAmount=this.value"/></div>')+
+      fld(t('amount'),'<div style="position:relative"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#5a3a28">€</span><input type="number" min="0" step="0.01" value="'+(STATE.payAmount||'')+'" placeholder="0.00" style="padding-left:24px" oninput="STATE.payAmount=this.value"/></div>')+
     '</div>'+
     fld(t('paidBy'),'<div class="chips">'+STATE.people.map(function(p){
       var on=STATE.payPayers.indexOf(p.display_name)!==-1;
@@ -1379,8 +1378,8 @@ function renderPayments(){
   var allDates=[...new Set([...Object.keys(cbd),...Object.keys(pbd)])].sort().reverse();
   if(allDates.length) html+=card(t('balanceByDay'),allDates.map(function(d){
     var c=cbd[d]||0,p=pbd[d]||0,pn=c-p;
-    return '<div class="brow"><div><div style="font-size:13px;color:#6b5a4d;font-weight:600">'+fmtDate(d)+'</div>'+
-      '<div style="font-size:11px;color:#a8978a">'+t('totalCost')+' €'+c.toFixed(2)+' · '+t('totalPaid')+' €'+p.toFixed(2)+'</div></div>'+
+    return '<div class="brow"><div><div style="font-size:13px;color:#3a2010;font-weight:600">'+fmtDate(d)+'</div>'+
+      '<div style="font-size:11px;color:#6a3020">'+t('totalCost')+' €'+c.toFixed(2)+' · '+t('totalPaid')+' €'+p.toFixed(2)+'</div></div>'+
       '<span style="font-size:13px;font-weight:700;color:'+(pn>0.005?'#c4392b':pn<-0.005?'#1f8a4f':'#8a7568')+'">'+
       (pn>0.005?'€'+pn.toFixed(2)+' '+t('due'):pn<-0.005?'+€'+Math.abs(pn).toFixed(2):t('settled'))+'</span></div>';
   }).join(''));
@@ -1388,10 +1387,10 @@ function renderPayments(){
   if(STATE.payments.length) html+=card(t('paymentRecords'),STATE.payments.map(function(p){
     var canDel=isMine(p);
     return '<div class="entry"><div class="entry-l"><div>'+
-      '<div class="en" style="color:#b5481f">'+esc(p.payers)+(p.amount>0?' <span style="color:#8a7568;font-weight:400">· €'+parseFloat(p.amount).toFixed(2)+'</span>':'')+'</div>'+
-      (p.non_drinkers?'<div class="es" style="color:#a87a00">Didn\'t drink: '+esc(p.non_drinkers)+'</div>':'')+
+      '<div class="en" style="color:#b5481f">'+esc(p.payers)+(p.amount>0?' <span style="color:#5a3a28;font-weight:400">· €'+parseFloat(p.amount).toFixed(2)+'</span>':'')+'</div>'+
+      (p.non_drinkers?'<div class="es" style="color:#7a5200">Didn\'t drink: '+esc(p.non_drinkers)+'</div>':'')+
       '<div class="es">'+fmtDate(p.date)+(p.note?' · '+esc(p.note):'')+'</div>'+
-      '<div class="es" style="color:#a8978a">'+t('recordedBy')+' '+esc(p.added_by||'unknown')+'</div>'+
+      '<div class="es" style="color:#6a3020">'+t('recordedBy')+' '+esc(p.added_by||'unknown')+'</div>'+
       '</div></div>'+delEditBtns('payments',p.id,'Payment by '+esc(p.payers),canDel,p)+'</div>';
   }).join(''));
   el.innerHTML=html;
@@ -1497,12 +1496,12 @@ function renderHistory(){
         var canDel=isMine(l);
         var loggedBy = l.logged_by || l.added_by || '?';
         var loggedByLine = (loggedBy && loggedBy !== l.person)
-          ? t('loggedBy')+' <strong style="color:#6b5a4d">'+esc(loggedBy)+'</strong> for '+esc(l.person)
+          ? t('loggedBy')+' <strong style="color:#3a2010">'+esc(loggedBy)+'</strong> for '+esc(l.person)
           : t('loggedBy')+' '+esc(loggedBy);
         return '<div class="entry"><div class="entry-l"><span class="ej">'+emoji(l.drink)+'</span><div>'+
           '<div class="en">'+esc(l.person)+(l.quantity>1?' <span class="badge">×'+l.quantity+'</span>':'')+'</div>'+
           '<div class="es">'+esc(l.drink.replace(/^.+? /,''))+(l.total_price>0?' · €'+parseFloat(l.unit_price).toFixed(2)+' ea · €'+parseFloat(l.total_price).toFixed(2):'')+(l.note?' · '+esc(l.note):'')+'</div>'+
-          '<div class="es" style="color:#a8978a">'+loggedByLine+'</div>'+
+          '<div class="es" style="color:#6a3020">'+loggedByLine+'</div>'+
           '</div></div>'+delEditBtns('drink_logs',l.id,esc(l.drink)+' for '+esc(l.person),canDel,l)+'</div>';
       }).join('')+'</div></div>';
   }).join('');
@@ -1554,7 +1553,7 @@ function renderReplace(){
   if(!days.length){el.innerHTML=empty('✅',t('allSettledUp'),t('noUnsettledDays'));return;}
 
   var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
-    '<span style="font-size:12px;color:#8a7568">'+(STATE.undoStack.length?STATE.undoStack.length+' '+t('actionsInHistory'):t('noActions'))+'</span>'+
+    '<span style="font-size:12px;color:#5a3a28">'+(STATE.undoStack.length?STATE.undoStack.length+' '+t('actionsInHistory'):t('noActions'))+'</span>'+
     '<button onclick="undoReplace()" '+(STATE.undoStack.length?'':'disabled')+' style="background:'+(STATE.undoStack.length?'#3a261c':'#f5ede4')+';border:1px solid '+(STATE.undoStack.length?'#c75a2a':'#e8dccc')+';border-radius:8px;padding:6px 13px;cursor:pointer;color:'+(STATE.undoStack.length?'#e8c9a0':'#8a7568')+';font-size:12px;font-weight:600">'+esc(t('undoBtn'))+(STATE.undoStack.length?' ('+STATE.undoStack.length+')':'')+'</button></div>';
 
   html+=sg([{v:tot_o,l:t('bottlesOwed')},{v:tot_r,l:t('replaced'),c:'g'},{v:tot_rem,l:t('stillOwed'),c:tot_rem>0?'r':'g'}]);
@@ -1571,7 +1570,7 @@ function renderReplace(){
     html+='<div class="card" style="padding:0;overflow:hidden;margin-bottom:12px">'+
       '<div class="dh"><div><h4>'+fmtDate(day.date)+'</h4><p>'+day.tr+'/'+day.to+' replaced</p></div>'+
       '<div style="text-align:right">'+(!day.ms?'<div style="font-size:13px;color:#c4392b;font-weight:700">€'+day.pm.toFixed(2)+' due</div>':'<div style="font-size:12px;color:#b5481f">'+esc(t('settled'))+'</div>')+
-      (day.bs?'<div style="font-size:11px;color:#b5481f">🍾 done ✓</div>':'<div style="font-size:11px;color:#a87a00">'+day.trem+' '+t('left')+'</div>')+'</div></div>'+
+      (day.bs?'<div style="font-size:11px;color:#b5481f">🍾 done ✓</div>':'<div style="font-size:11px;color:#7a5200">'+day.trem+' '+t('left')+'</div>')+'</div></div>'+
       '<div style="padding:11px 14px">'+
       day.breakdown.map(function(b){
         var bottles='';
@@ -1588,11 +1587,11 @@ function renderReplace(){
               '<button class="btn-icon" style="border-color:#c75a2a;background:#f3e4d3;color:#b5481f" onclick="replBottle(\''+day.date+'\',\''+b.drink+'\',1)">+</button>'+
               '<span style="color:#b5481f;font-size:11px">'+esc(t('markReplaced'))+'</span></div>' :
             '<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px;color:#b5481f">'+esc(t('allReplaced'))+' ✓</span>'+
-            '<button onclick="replBottle(\''+day.date+'\',\''+b.drink+'\',-1)" style="background:none;border:none;cursor:pointer;color:#8a7568;font-size:12px">'+esc(t('undo'))+'</button></div>')+
+            '<button onclick="replBottle(\''+day.date+'\',\''+b.drink+'\',-1)" style="background:none;border:none;cursor:pointer;color:#5a3a28;font-size:12px">'+esc(t('undo'))+'</button></div>')+
         '</div>';
       }).join('')+
       (day.breakdown.length?'<div style="display:flex;justify-content:space-between;padding-top:7px;border-top:1px solid #ece0d4">'+
-        '<span style="font-size:11px;font-weight:700;color:#8a7568;text-transform:uppercase;letter-spacing:.7px">'+esc(t('dayTotal'))+'</span>'+
+        '<span style="font-size:11px;font-weight:700;color:#5a3a28;text-transform:uppercase;letter-spacing:.7px">'+esc(t('dayTotal'))+'</span>'+
         '<span style="font-size:12px;font-weight:700;color:'+(day.trem>0?'#c4392b':'#1f8a4f')+'">'+day.tr+'/'+day.to+(day.trem>0?' · '+day.trem+' '+t('left'):' · '+t('allDone')+' ✓')+'</span></div>':'')+
       '</div></div>';
   });
@@ -1602,7 +1601,7 @@ function renderReplace(){
     return '<div class="entry"><div class="entry-l"><span class="ej">'+emoji(r.drink)+'</span><div>'+
       '<div class="en">'+r.quantity+'× '+esc(r.drink.replace(/^.+? /,''))+'</div>'+
       '<div class="es">'+esc(t('forDate'))+' '+fmtDate(r.for_date)+(r.replaced_by?' · by '+esc(r.replaced_by):'')+(r.note?' · '+esc(r.note):'')+'</div>'+
-      '<div class="es" style="color:#a8978a">'+t('loggedBy')+' '+esc(r.added_by||'unknown')+'</div>'+
+      '<div class="es" style="color:#6a3020">'+t('loggedBy')+' '+esc(r.added_by||'unknown')+'</div>'+
       '</div></div>'+delEditBtns('replacements',r.id,'Replacement for '+fmtDate(r.for_date),canDel,r)+'</div>';
   }).join(''));
 
@@ -1656,19 +1655,26 @@ function renderAudit(){
     'LOG_DRINK':'#b5481f','DELETE_DRINK_LOGS':'#c4392b',
     'RECORD_PAYMENT':'#1f8a4f','DELETE_PAYMENTS':'#c4392b',
     'MARK_REPLACEMENT':'#d4a017','DELETE_REPLACEMENTS':'#c4392b',
-    'UNDO_REPLACE':'#8a7568','ADMIN_EDIT_DRINK':'#d4a017','DELETE_PERSON':'#c4392b',
-    'EDIT_DRINK_QTY':'#d4a017','ADMIN_EDIT_PAYMENT':'#d4a017','ADMIN_EDIT_REPLACEMENT':'#d4a017'
+    'UNDO_REPLACE':'#5a3a28','ADMIN_EDIT_DRINK':'#d4a017','DELETE_PERSON':'#c4392b',
+    'EDIT_DRINK_QTY':'#d4a017','ADMIN_EDIT_PAYMENT':'#d4a017','ADMIN_EDIT_REPLACEMENT':'#d4a017',
+    'DELETE_AUDIT':'#c4392b'
   };
   var actionLabels={
-    'LOG_DRINK':'logged a drink','DELETE_DRINK_LOGS':'deleted a drink entry',
+    'LOG_DRINK':t('navLog'),'DELETE_DRINK_LOGS':'deleted a drink entry',
     'RECORD_PAYMENT':'recorded a payment','DELETE_PAYMENTS':'deleted a payment',
     'MARK_REPLACEMENT':'marked a replacement','DELETE_REPLACEMENTS':'deleted a replacement',
     'UNDO_REPLACE':'undid replacement changes','ADMIN_EDIT_DRINK':'edited an entry (admin)','DELETE_PERSON':'removed a person',
     'EDIT_DRINK_QTY':'edited a drink quantity','ADMIN_EDIT_PAYMENT':'edited a payment (admin)','ADMIN_EDIT_REPLACEMENT':'edited a replacement (admin)'
   };
-  var html=card(t('activityLog'),
+  var html='';
+  if (IS_ADMIN) {
+    html += '<div style="display:flex;justify-content:flex-end;margin-bottom:10px">'+
+      '<button onclick="clearAllAuditLogs()" style="background:#fce8e6;border:1.5px solid #c4392b;border-radius:9px;padding:8px 16px;color:#c4392b;font-size:13px;font-weight:700;cursor:pointer">🗑 Clear All Audit Logs</button>'+
+    '</div>';
+  }
+  html+=card(t('activityLog'),
     STATE.auditLog.map(function(a){
-      var col=actionColors[a.action]||'#5a5c7a';
+      var col=actionColors[a.action]||'#5a3a28';
       var label=actionLabels[a.action]||a.action.toLowerCase().replace(/_/g,' ');
       var isMe=a.performed_by===CURRENT_NAME;
       var det='';
@@ -1680,15 +1686,34 @@ function renderAudit(){
         if(a.details.payers) det+=' · '+esc(a.details.payers);
         if(a.details.amount) det+=' · €'+parseFloat(a.details.amount).toFixed(2);
       }
-      return '<div class="audit-entry">'+
-        '<div class="audit-dot" style="background:'+col+'"></div>'+
-        '<div class="audit-body">'+
-          '<div class="audit-who">'+esc(a.performed_by)+(isMe?' <span style="font-size:10px;color:#b5481f">'+t('youSuffix')+'</span>':'')+'</div>'+
+      return '<div class="audit-entry" style="align-items:flex-start">'+
+        '<div class="audit-dot" style="background:'+col+';margin-top:6px"></div>'+
+        '<div class="audit-body" style="flex:1">'+
+          '<div class="audit-who">'+esc(a.performed_by)+(isMe?' <span style="font-size:12px;color:#b5481f">'+t('youSuffix')+'</span>':'')+'</div>'+
           '<div class="audit-what">'+label+det+'</div>'+
           '<div class="audit-when">'+fmtDateTime(a.performed_at)+'</div>'+
-        '</div></div>';
+        '</div>'+
+        (IS_ADMIN?'<button class="btn-sm" style="color:#c4392b;font-size:16px;padding:4px" onclick="deleteAuditEntry(\''+a.id+'\')">🗑</button>':'')+
+      '</div>';
     }).join(''));
   el.innerHTML=html;
+}
+
+async function deleteAuditEntry(id){
+  if (!IS_ADMIN) return;
+  var {error} = await SB.from('audit_log').delete().eq('id', id);
+  if (error) { notify('Error: '+error.message, true); return; }
+  notify('Audit entry deleted ✓');
+  await loadAll();
+}
+
+async function clearAllAuditLogs(){
+  if (!IS_ADMIN) return;
+  if (!confirm('Delete ALL audit logs? This cannot be undone.')) return;
+  var {error} = await SB.from('audit_log').delete().neq('id','00000000-0000-0000-0000-000000000000');
+  if (error) { notify('Error: '+error.message, true); return; }
+  notify('All audit logs cleared ✓');
+  await loadAll();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1709,7 +1734,7 @@ function renderPeople(){
       '<input id="people-tab-new-name" type="text" placeholder="'+esc(t('namePlaceholder2'))+'" style="flex:1" onkeydown="if(event.key===\'Enter\')addPersonFromPeopleTab()"/>'+
       '<button class="btn-primary" style="width:auto;padding:9px 16px" onclick="addPersonFromPeopleTab()">'+esc(t('add'))+'</button>'+
     '</div>'+
-    '<p style="font-size:11px;color:#a8978a;margin-top:8px">'+esc(LANG==='de'?'Jeder kann eine neue Person hinzufügen — auch Gäste.':'Anyone can add a new person — guests included.')+'</p>');
+    '<p style="font-size:11px;color:#6a3020;margin-top:8px">'+esc(LANG==='de'?'Jeder kann eine neue Person hinzufügen — auch Gäste.':'Anyone can add a new person — guests included.')+'</p>');
 
   html+=card(t('groupMembers'),
     (STATE.people.length?STATE.people.map(function(p){
@@ -1721,9 +1746,9 @@ function renderPeople(){
         '<div class="avatar" style="background:'+colorFor(p.display_name)+'">'+(p.display_name[0]||'?').toUpperCase()+'</div>'+
         '<div><div class="en">'+esc(p.display_name)+(isMe?' <span style="font-size:10px;color:#b5481f">'+t('youSuffix')+'</span>':'')+'</div>'+
         '<div class="es">'+total+' drink'+(total!==1?'s':'')+' · €'+spend.toFixed(2)+'</div>'+
-        (p.created_by?'<div class="es" style="color:#a8978a">'+t('addedBy')+' '+esc(p.created_by)+'</div>':'')+
+        (p.created_by?'<div class="es" style="color:#6a3020">'+t('addedBy')+' '+esc(p.created_by)+'</div>':'')+
         '</div></div></div>';
-    }).join(''):'<div style="color:#a8978a;font-size:13px">No members yet.</div>'));
+    }).join(''):'<div style="color:#6a3020;font-size:13px">No members yet.</div>'));
   el.innerHTML=html;
 }
 
@@ -1751,7 +1776,7 @@ async function delEntry(table,id,label){
 }
 
 function delEditBtns(table, id, label, canDel, row){
-  var del = canDel ? '<button class="btn-sm" onclick="delEntry(\''+table+'\',\''+id+'\',\''+label+'\')">🗑</button>' : '<span style="font-size:11px;color:#a8978a">🔒</span>';
+  var del = canDel ? '<button class="btn-sm" onclick="delEntry(\''+table+'\',\''+id+'\',\''+label+'\')">🗑</button>' : '<span style="font-size:11px;color:#6a3020">🔒</span>';
   var edit = '';
   if (IS_ADMIN) {
     if (table === 'drink_logs') edit = '<button class="btn-edit" onclick="adminEditDrink(\''+id+'\')">✏️ Edit</button>';
@@ -1886,9 +1911,9 @@ function showMyBalance(){
     '<h3>'+esc(t('yourBalance'))+'</h3>'+
     '<div class="modal-stat"><span class="modal-stat-label">'+esc(t('youOweMoney'))+'</span><span class="modal-stat-val" style="color:'+moneyColor+'">'+(myPending>0.005?'€'+myPending.toFixed(2):'€0.00 ✓')+'</span></div>'+
     '<div class="modal-stat"><span class="modal-stat-label">'+esc(t('bottlesToReplace'))+'</span><span class="modal-stat-val" style="color:'+bottleColor+'">'+(stillOwedBottles>0?stillOwedBottles+' '+esc(t('left')):esc(t('done'))+' ✓')+'</span></div>'+
-    '<div class="modal-stat"><span class="modal-stat-label">'+esc(t('totalSpentPriced'))+'</span><span class="modal-stat-val" style="color:#6b5a4d;font-size:14px">€'+myCost.toFixed(2)+'</span></div>'+
-    '<div class="modal-stat"><span class="modal-stat-label">'+esc(t('totalPaidLbl'))+'</span><span class="modal-stat-val" style="color:#6b5a4d;font-size:14px">€'+myPaid.toFixed(2)+'</span></div>'+
-    '<div class="modal-stat"><span class="modal-stat-label">'+esc(t('freeDrinksLogged'))+'</span><span class="modal-stat-val" style="color:#6b5a4d;font-size:14px">'+totalOwedBottles+'</span></div>'+
+    '<div class="modal-stat"><span class="modal-stat-label">'+esc(t('totalSpentPriced'))+'</span><span class="modal-stat-val" style="color:#3a2010;font-size:14px">€'+myCost.toFixed(2)+'</span></div>'+
+    '<div class="modal-stat"><span class="modal-stat-label">'+esc(t('totalPaidLbl'))+'</span><span class="modal-stat-val" style="color:#3a2010;font-size:14px">€'+myPaid.toFixed(2)+'</span></div>'+
+    '<div class="modal-stat"><span class="modal-stat-label">'+esc(t('freeDrinksLogged'))+'</span><span class="modal-stat-val" style="color:#3a2010;font-size:14px">'+totalOwedBottles+'</span></div>'+
     '<button class="modal-close" onclick="closeModal()">'+esc(t('close'))+'</button>'
   );
 }
