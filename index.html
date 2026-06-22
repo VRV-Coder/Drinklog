@@ -145,7 +145,29 @@
     .team-banner-wrap{position:relative;overflow:hidden}
     .team-banner-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 50%,rgba(110,40,20,.7));pointer-events:none}
     .team-banner-label{position:absolute;bottom:12px;left:0;right:0;text-align:center;color:#fff;font-size:16px;font-weight:800;letter-spacing:.8px;text-shadow:0 2px 8px rgba(0,0,0,.7)}
-    @media(max-width:480px){.grid2{grid-template-columns:1fr}.sg{grid-template-columns:repeat(2,1fr)}}
+    /* QUICK-TAP BAR */
+    .bar-drink-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:4px}
+    .bar-drink-btn{background:#faf5f0;border:2px solid #e8dccc;border-radius:14px;padding:10px 6px;text-align:center;cursor:pointer;transition:all .14s;position:relative;user-select:none;-webkit-tap-highlight-color:transparent}
+    .bar-drink-btn:active{transform:scale(.93);background:#f3e4d3}
+    .bar-drink-btn.selected{border-color:#b5481f;background:#fce4d0}
+    .bar-drink-btn .bdb-emoji{font-size:28px;display:block;margin-bottom:3px;line-height:1}
+    .bar-drink-btn .bdb-name{font-size:11px;font-weight:700;color:#5a3a28;display:block}
+    .bar-drink-btn .bdb-price{font-size:11px;color:#b5481f;font-weight:700;display:block}
+    .bar-drink-btn .bdb-price input{width:44px;border:none;background:transparent;color:#b5481f;font-weight:700;font-size:11px;text-align:center;outline:none;padding:0}
+    .running-tab-row{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#faf5f0;border-radius:10px;margin-bottom:7px;border:1.5px solid #f0dece}
+    .running-tab-row.mine{border-color:#b5481f;background:#fce8da}
+    .rtab-name{font-size:15px;font-weight:700;color:#1a0e08}
+    .rtab-drinks{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+    .rtab-drink-item{background:#f3e4d3;border-radius:8px;padding:3px 8px;font-size:13px;font-weight:600;color:#7a2e10;display:flex;align-items:center;gap:4px}
+    .rtab-drink-item button{background:none;border:none;cursor:pointer;color:#c4392b;font-size:14px;font-weight:700;padding:0 2px;line-height:1}
+    .rtab-drink-item button.plus{color:#1f7a47}
+    .rtab-total{font-size:16px;font-weight:800;color:#b5481f;white-space:nowrap}
+    .rtab-free{font-size:11px;color:#7a5200;font-weight:600}
+    .person-bar-select{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}
+    .pbs-btn{padding:8px 16px;border-radius:24px;border:2px solid #e8dccc;background:#faf5f0;font-size:14px;font-weight:700;color:#5a3a28;cursor:pointer;transition:all .14s;display:flex;align-items:center;gap:6px}
+    .pbs-btn.active{border-color:#b5481f;background:#fce4d0;color:#7a2e10}
+    .pbs-btn .pbs-avatar{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+    @media(max-width:480px){.grid2{grid-template-columns:1fr}.sg{grid-template-columns:repeat(2,1fr)}.bar-drink-grid{grid-template-columns:repeat(4,1fr)}}
   </style>
 </head>
 <body>
@@ -228,11 +250,17 @@ var GUEST_TOKEN = localStorage.getItem('guest_token') || '';
 
 var DRINK_TYPES = ["🍺 Beer","🍷 Wine","🥃 Spirits","🍹 Cocktail","🧃 Juice","💧 Water","☕ Coffee","🧋 Other"];
 var AVATAR_COLORS = ["#b5481f","#c5a000","#0e6b8c","#b4502a","#9c4a22","#8c3a1f","#1f5a7a","#7a8c1f"];
+
+// Default prices per drink — persisted in localStorage, editable inline
+var DRINK_PRICES = JSON.parse(localStorage.getItem('drink_prices')||'{}');
+function getDrinkPrice(drink){ return parseFloat(DRINK_PRICES[drink])||0; }
+function setDrinkPrice(drink, price){ DRINK_PRICES[drink]=parseFloat(price)||0; localStorage.setItem('drink_prices',JSON.stringify(DRINK_PRICES)); }
+
 var STATE = {
   tab:'log', people:[], logs:[], payments:[], replacements:[], auditLog:[],
   logPerson:'', logDrink:'🍺 Beer', logQty:1, logPrice:'', logDate:td(), logNote:'',
   payPayers:[], payNonDrinkers:[], payAmount:'', payDate:td(), payNote:'',
-  undoStack:[]
+  undoStack:[], showAdvancedLog:false
 };
 
 // ── LANGUAGE / TRANSLATIONS ──────────────────────────────────
@@ -864,12 +892,27 @@ function isMine(row){
 
 // ── DELEGATED CLICK HANDLER (survives re-renders, avoids inline-onclick escaping issues) ──
 document.addEventListener('click', function(e){
+  // Don't fire on price-input clicks inside the btn
+  if (e.target.tagName === 'INPUT') return;
+
   var target = e.target.closest('[data-drink-select]');
-  if (target) {
-    var drink = target.getAttribute('data-drink-select');
-    STATE.logDrink = drink;
-    renderTab('log');
+  if (!target) return;
+
+  var drink = target.getAttribute('data-drink-select');
+  STATE.logDrink = drink;
+
+  // If it's a bar-drink-btn (quick tap grid) AND a person is selected → log instantly
+  if (target.classList.contains('bar-drink-btn')) {
+    if (!STATE.logPerson) {
+      notify(LANG==='de'?'Bitte zuerst Person auswählen':'Select a person first', true);
+      return;
+    }
+    quickAddDrink(STATE.logPerson, drink, e);
+    return;
   }
+
+  // Otherwise (chip in advanced form) just select
+  renderTab('log');
 });
 
 // ── TABS ────────────────────────────────────────────────────
@@ -910,25 +953,74 @@ function renderTab(t){
 // ══════════════════════════════════════════════════════════════
 function renderLog(){
   var el = document.getElementById('tab-log');
-  var total = ((parseFloat(STATE.logPrice)||0)*STATE.logQty).toFixed(2);
+  var isDE = LANG === 'de';
 
-  el.innerHTML =
-    '<button class="btn-primary" style="background:linear-gradient(135deg,#b45309,#f8d878);color:#1a0f00;margin-bottom:12px" onclick="showMyBalance()">'+esc(t('myBalanceBtn'))+'</button>'+
+  // ── SECTION 1: My Balance button ──
+  var html = '<button class="btn-primary" style="background:linear-gradient(135deg,#b45309,#f8d878);color:#1a0f00;margin-bottom:14px" onclick="showMyBalance()">'+esc(t('myBalanceBtn'))+'</button>';
 
-    card(t('whosDrinking'),
-      '<div class="chips" style="margin-bottom:10px">'+
-        STATE.people.map(function(p){
-          var on = STATE.logPerson===p.display_name;
-          return '<span class="chip'+(on?' cp':'')+'" onclick="STATE.logPerson=\''+esc(p.display_name)+'\';renderTab(\'log\')">'+(p.display_name===CURRENT_NAME?'<span class="mine-dot"></span>':'')+esc(p.display_name)+'</span>';
-        }).join('')+
-        (STATE.people.find(function(p){return p.display_name===CURRENT_NAME;}) ? '' :
-          '<span class="chip cp" onclick="STATE.logPerson=\''+esc(CURRENT_NAME)+'\';renderTab(\'log\')">'+esc(CURRENT_NAME)+' '+t('youSuffix')+'</span>')+
-      '</div>'+
-      '<div style="display:flex;gap:8px">'+
-      '<input id="np" type="text" placeholder="'+esc(t('addNewNamePlaceholder'))+'" style="flex:1" onkeydown="if(event.key===\'Enter\'){addNewPersonFromInput(this)}"/>'+
-      '</div>')+
+  // ── SECTION 2: Person selector ──
+  var allPeople = STATE.people.slice();
+  // Ensure current user is in list
+  if (CURRENT_NAME && !allPeople.find(function(p){return p.display_name===CURRENT_NAME;})) {
+    allPeople.unshift({display_name:CURRENT_NAME});
+  }
 
-    card(t('logADrink'),
+  html += '<div class="card" style="margin-bottom:14px">';
+  html += '<div class="card-title">'+(isDE?'WER TRINKT':'WHO\'S DRINKING')+'</div>';
+  html += '<div class="person-bar-select">';
+  allPeople.forEach(function(p){
+    var isActive = STATE.logPerson === p.display_name;
+    var isMe = p.display_name === CURRENT_NAME;
+    html += '<button class="pbs-btn'+(isActive?' active':'')+'" onclick="STATE.logPerson=\''+esc(p.display_name)+'\';renderTab(\'log\')">'+
+      '<div class="pbs-avatar" style="background:'+colorFor(p.display_name)+'">'+p.display_name[0].toUpperCase()+'</div>'+
+      esc(p.display_name)+(isMe?' <span style="font-size:11px;opacity:.7">'+t('youSuffix')+'</span>':'')+
+    '</button>';
+  });
+  html += '</div>';
+  // Add new person input
+  html += '<div style="display:flex;gap:8px;margin-top:4px">'+
+    '<input id="np" type="text" placeholder="'+esc(t('addNewNamePlaceholder'))+'" style="flex:1" onkeydown="if(event.key===\'Enter\'){addNewPersonFromInput(this)}"/>'+
+  '</div>';
+  html += '</div>';
+
+  // ── SECTION 3: Quick-tap drink grid ──
+  html += '<div class="card" style="margin-bottom:14px">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
+  html += '<div class="card-title" style="margin-bottom:0">'+(isDE?'GETRÄNK TIPPEN':'TAP A DRINK')+'</div>';
+  if (STATE.logPerson) {
+    html += '<span style="font-size:13px;font-weight:700;color:#b5481f">'+esc(STATE.logPerson)+'</span>';
+  }
+  html += '</div>';
+  html += '<div class="bar-drink-grid">';
+  DRINK_TYPES.forEach(function(d){
+    var price = getDrinkPrice(d);
+    var isSelected = STATE.logDrink === d;
+    html += '<div class="bar-drink-btn'+(isSelected?' selected':'')+'" data-drink-select="'+esc(d)+'">'+
+      '<span class="bdb-emoji">'+emoji(d)+'</span>'+
+      '<span class="bdb-name">'+esc(d.replace(/^.+? /,''))+'</span>'+
+      '<span class="bdb-price">'+
+        '<span style="font-size:10px">€</span>'+
+        '<input type="number" min="0" step="0.1" value="'+(price||'')+'" placeholder="0" '+
+          'onclick="event.stopPropagation()" '+
+          'onchange="setDrinkPrice(\''+esc(d)+'\',this.value)" '+
+          'style="width:38px;border:none;background:transparent;color:#b5481f;font-weight:700;font-size:12px;text-align:center;outline:none;padding:0"/>'+
+      '</span>'+
+    '</div>';
+  });
+  html += '</div>';
+  html += '<div style="font-size:11px;color:#7a5200;margin-top:6px;text-align:center">'+(isDE?'Preis pro Getränk tippen um zu speichern':'Tap a drink to log it instantly — edit price below emoji')+'</div>';
+  html += '</div>';
+
+  // ── SECTION 4: Today's running tab ──
+  html += renderRunningTodayTab();
+
+  // ── SECTION 5: Advanced log toggle ──
+  html += '<button onclick="STATE.showAdvancedLog=!STATE.showAdvancedLog;renderTab(\'log\')" style="width:100%;background:none;border:1.5px solid #e8dccc;border-radius:10px;padding:10px;color:#5a3a28;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:12px">'+
+    (STATE.showAdvancedLog ? '▲ ' : '▼ ')+(isDE?'Erweiterte Eingabe':'Advanced Log')+'</button>';
+
+  if (STATE.showAdvancedLog){
+    var total = ((parseFloat(STATE.logPrice)||0)*STATE.logQty).toFixed(2);
+    html += card(t('logADrink'),
       '<div class="grid2">'+
         fld(t('date'),'<input type="date" value="'+STATE.logDate+'" onchange="STATE.logDate=this.value"/>')+
         fld(t('person'),'<select onchange="STATE.logPerson=this.value">'+pOpts(STATE.logPerson)+'</select>')+
@@ -942,9 +1034,116 @@ function renderLog(){
       '</div>'+
       '<div class="total-row" id="trow"><span>'+esc(t('totalPrice'))+'</span><span>€'+total+'</span></div>'+
       fld(t('note'),'<input type="text" value="'+esc(STATE.logNote)+'" oninput="STATE.logNote=this.value" placeholder="'+esc(t('noteOptional'))+'"/>') +
-      '<button class="btn-primary" onclick="saveLog()">'+esc(t('logDrinkBtn'))+'</button>')+
+      '<button class="btn-primary" onclick="saveLog()">'+esc(t('logDrinkBtn'))+'</button>');
+  }
 
-    renderConsolidatedToday();
+  // ── SECTION 6: Historical consolidated running tabs ──
+  html += renderConsolidatedToday();
+
+  el.innerHTML = html;
+}
+
+// Render today's bar tab (only today, live running)
+function renderRunningTodayTab(){
+  var today = td();
+  var todayLogs = STATE.logs.filter(function(l){ return l.date === today; });
+  if (!todayLogs.length) return '';
+
+  var isDE = LANG === 'de';
+
+  // Group by person
+  var byPerson = {};
+  todayLogs.forEach(function(l){
+    if (!byPerson[l.person]) byPerson[l.person] = { entries:[], total:0, freeCount:0 };
+    byPerson[l.person].entries.push(l);
+    byPerson[l.person].total += parseFloat(l.total_price)||0;
+    if ((parseFloat(l.unit_price)||0) === 0) byPerson[l.person].freeCount += (l.quantity||0);
+  });
+
+  var rows = Object.keys(byPerson).sort().map(function(person){
+    var pd = byPerson[person];
+    var isMe = person === CURRENT_NAME;
+
+    // Consolidate drink counts per type
+    var drinkTotals = {};
+    pd.entries.forEach(function(l){ drinkTotals[l.drink]=(drinkTotals[l.drink]||0)+(l.quantity||0); });
+
+    var drinkItems = Object.entries(drinkTotals).map(function(e){
+      var d=e[0], qty=e[1];
+      // Find the most recent entry for this drink (for editing)
+      var latestId = pd.entries.filter(function(l){return l.drink===d;}).sort(function(a,b){
+        return new Date(b.logged_at)-new Date(a.logged_at);
+      })[0];
+      var canEdit = latestId && isMine(latestId);
+      return '<span class="rtab-drink-item">'+
+        (canEdit?'<button class="plus" onclick="quickAddDrink(\''+esc(person)+'\',\''+esc(d)+'\',event)">+</button>':'')+
+        emoji(d)+' ×'+qty+
+        (canEdit?'<button onclick="quickRemoveDrink(\''+esc(person)+'\',\''+esc(d)+'\',event)">−</button>':'')+
+      '</span>';
+    }).join('');
+
+    return '<div class="running-tab-row'+(isMe?' mine':'')+'" onclick="showPersonDayDetail(\''+esc(person)+'\',\''+today+'\')">'+
+      '<div style="flex:1;min-width:0">'+
+        '<div style="display:flex;align-items:center;gap:8px">'+
+          '<div class="pbs-avatar" style="background:'+colorFor(person)+';width:28px;height:28px;font-size:13px">'+person[0].toUpperCase()+'</div>'+
+          '<span class="rtab-name">'+esc(person)+(isMe?' <span style="font-size:12px;color:#b5481f">'+t('youSuffix')+'</span>':'')+'</span>'+
+        '</div>'+
+        '<div class="rtab-drinks" style="margin-top:6px">'+drinkItems+'</div>'+
+        (pd.freeCount>0?'<div class="rtab-free" style="margin-top:4px">🍾 '+pd.freeCount+' '+(isDE?'kostenlos':'free')+'</div>':'')+
+      '</div>'+
+      '<div style="text-align:right;padding-left:10px">'+
+        (pd.total>0?'<div class="rtab-total">€'+pd.total.toFixed(2)+'</div>':'')+
+        '<div style="font-size:11px;color:#7a5200;margin-top:2px">👁 '+esc(t('details'))+'</div>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+
+  return '<div class="card" style="margin-bottom:14px">'+
+    '<div class="card-title">'+(isDE?'HEUTE — LAUFENDE RECHNUNG':'TODAY\'S RUNNING TAB')+'</div>'+
+    rows+
+  '</div>';
+}
+
+// Quick add a drink directly from the running tab +/- buttons
+async function quickAddDrink(person, drink, event){
+  if (event) event.stopPropagation();
+  if (!person) return;
+  await addPersonToTable(person);
+  var price = getDrinkPrice(drink);
+  var insertObj = {
+    date:td(), person:person, drink:drink, quantity:1,
+    unit_price:price, total_price:price,
+    note:'', added_by:CURRENT_NAME, logged_by:CURRENT_NAME
+  };
+  if (IS_ADMIN && CURRENT_USER) insertObj.user_id = CURRENT_USER.id;
+  if (IS_GUEST) insertObj.guest_token = GUEST_TOKEN;
+  var {data,error} = await SB.from('drink_logs').insert(insertObj).select().single();
+  if (error){ notify('Error: '+error.message,true); return; }
+  await audit('LOG_DRINK','drink_logs',data.id,{person:person,drink:drink,qty:1,total:price});
+  await loadAll();
+  showDrinkCountPopup(person, drink);
+}
+
+async function quickRemoveDrink(person, drink, event){
+  event.stopPropagation();
+  // Find the most recent entry for this person+drink today that the user can edit
+  var today = td();
+  var match = STATE.logs
+    .filter(function(l){ return l.person===person && l.drink===drink && l.date===today && isMine(l); })
+    .sort(function(a,b){ return new Date(b.logged_at)-new Date(a.logged_at); })[0];
+  if (!match){ notify(LANG==='de'?'Nichts zu entfernen':'Nothing to remove',true); return; }
+  if (match.quantity <= 1){
+    var {error} = await SB.from('drink_logs').delete().eq('id',match.id);
+    if(error){notify('Error: '+error.message,true);return;}
+    await audit('DELETE_DRINK_LOGS','drink_logs',match.id,{person:person,drink:drink});
+  } else {
+    var newQty = match.quantity - 1;
+    var price = parseFloat(match.unit_price)||0;
+    var {error} = await SB.from('drink_logs').update({quantity:newQty,total_price:price*newQty}).eq('id',match.id);
+    if(error){notify('Error: '+error.message,true);return;}
+    await audit('EDIT_DRINK_QTY','drink_logs',match.id,{person:person,drink:drink,new_qty:newQty});
+  }
+  await loadAll();
 }
 
 // Consolidate all of today's (and recent days') drinks per person
@@ -1100,7 +1299,11 @@ async function saveLog(){
   if(!STATE.logPerson){notify(t('selectPersonFirst'),true);return;}
   await addPersonToTable(STATE.logPerson); // ensure they're in the people table
 
-  var unit=parseFloat(STATE.logPrice)||0, total=unit*STATE.logQty;
+  var unit = parseFloat(STATE.logPrice);
+  // Fall back to the saved default price for this drink type if no price entered
+  if (!unit && unit !== 0) unit = getDrinkPrice(STATE.logDrink);
+  unit = unit || 0;
+  var total = unit * STATE.logQty;
   var loggedPerson = STATE.logPerson;
   var loggedDrink = STATE.logDrink;
   var insertObj = {
@@ -1359,6 +1562,9 @@ function renderPayments(){
     {v:'€'+tp.toFixed(2),l:t('totalPaid'),c:'g'},
     {v:(pend>0.005?'€'+pend.toFixed(2):pend<-0.005?'+€'+Math.abs(pend).toFixed(2):'€0.00'),l:t('pending'),c:pend>0.005?'r':pend<-0.005?'g':''}
   ]);
+
+  // Settle Bill button
+  html += '<button onclick="showSettleBill()" style="width:100%;background:linear-gradient(135deg,#c4392b,#e85050);border:none;border-radius:12px;padding:14px;color:#fff;font-size:16px;font-weight:800;cursor:pointer;margin-bottom:14px;box-shadow:0 4px 16px rgba(196,57,43,.4);letter-spacing:.3px">🧾 '+esc(LANG==='de'?'Rechnung begleichen':'Settle the Bill')+'</button>';
   html+=card(t('recordPayment'),
     '<div class="grid2">'+
       fld(t('date'),'<input type="date" value="'+STATE.payDate+'" onchange="STATE.payDate=this.value"/>') +
@@ -1394,6 +1600,150 @@ function renderPayments(){
       '</div></div>'+delEditBtns('payments',p.id,'Payment by '+esc(p.payers),canDel,p)+'</div>';
   }).join(''));
   el.innerHTML=html;
+}
+
+// ── SETTLE BILL MODAL ───────────────────────────────────────
+async function showSettleBill(){
+  // Compute per-person balance: money owed (priced drinks) minus payments made
+  var people = [...new Set(STATE.logs.map(function(l){ return l.person; }))].sort();
+
+  var rows = people.map(function(person){
+    var spent = STATE.logs.reduce(function(s,l){
+      return l.person===person && (parseFloat(l.unit_price)||0) > 0 ? s+(parseFloat(l.total_price)||0) : s;
+    }, 0);
+    var paid = STATE.payments.reduce(function(s,p){
+      var payers = (p.payers||'').split(',').map(function(x){return x.trim();});
+      return payers.indexOf(person)!==-1 ? s+(parseFloat(p.amount)||0) : s;
+    }, 0);
+    var owes = spent - paid;
+    return { name: person, spent: spent, paid: paid, owes: owes };
+  }).filter(function(r){ return r.spent > 0; })
+    .sort(function(a,b){ return b.owes - a.owes; }); // most owed first
+
+  var totalOwed = rows.reduce(function(s,r){ return r.owes > 0 ? s + r.owes : s; }, 0);
+  var allSettled = rows.every(function(r){ return r.owes <= 0.005; });
+
+  // Show modal immediately with loading message
+  showModal(
+    '<div style="text-align:center;margin-bottom:16px">'+
+      '<div style="font-size:40px;margin-bottom:8px">🧾</div>'+
+      '<h3 style="margin-bottom:4px">'+(LANG==='de'?'Rechnung begleichen':'Settle the Bill')+'</h3>'+
+      '<div id="settle-funny-msg" style="font-size:13px;color:#7a5200;margin-bottom:14px;min-height:18px">'+
+        '<span style="color:#a8978a;font-style:italic">✨ '+( LANG==='de'?'Generiere Nachricht...':'Generating message...')+'</span>'+
+      '</div>'+
+    '</div>'+
+    (allSettled
+      ? '<div style="text-align:center;padding:20px;background:#f0fce8;border-radius:12px;margin-bottom:14px">'+
+          '<div style="font-size:32px;margin-bottom:8px">🎉</div>'+
+          '<div style="font-size:16px;font-weight:700;color:#1f7a47">'+(LANG==='de'?'Alles beglichen! Runde auf das Haus! 🍺':'All settled up! Drinks on the house! 🍺')+'</div>'+
+        '</div>'
+      : '<div style="margin-bottom:14px">'+
+          rows.map(function(r){
+            var isMe = r.name === CURRENT_NAME;
+            var color = r.owes > 0.005 ? '#c4392b' : r.owes < -0.005 ? '#1f7a47' : '#5a3a28';
+            var statusIcon = r.owes > 0.005 ? '💸' : r.owes < -0.005 ? '✅' : '👌';
+            var label = r.owes > 0.005
+              ? (LANG==='de'?'schuldet':'owes')+' €'+r.owes.toFixed(2)
+              : r.owes < -0.005
+              ? (LANG==='de'?'overpaid':'overpaid')+' €'+Math.abs(r.owes).toFixed(2)
+              : (LANG==='de'?'Beglichen ✓':'Settled ✓');
+            return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:'+(r.owes>0.005?'#fce8e6':r.owes<-0.005?'#e8f5e0':'#f5ede4')+';border-radius:10px;margin-bottom:8px">'+
+              '<div style="display:flex;align-items:center;gap:10px">'+
+                '<div style="width:34px;height:34px;border-radius:50%;background:'+colorFor(r.name)+';display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff">'+r.name[0].toUpperCase()+'</div>'+
+                '<div>'+
+                  '<div style="font-size:15px;font-weight:700;color:#1a0e08">'+esc(r.name)+(isMe?' <span style="font-size:11px;color:#b5481f">('+t('youSuffix')+')</span>':'')+'</div>'+
+                  '<div style="font-size:12px;color:#5a3a28">'+
+                    (LANG==='de'?'Getrunken':'Spent')+': €'+r.spent.toFixed(2)+' · '+(LANG==='de'?'Bezahlt':'Paid')+': €'+r.paid.toFixed(2)+
+                  '</div>'+
+                '</div>'+
+              '</div>'+
+              '<div style="text-align:right">'+
+                '<div style="font-size:20px">'+statusIcon+'</div>'+
+                '<div style="font-size:13px;font-weight:800;color:'+color+'">'+label+'</div>'+
+              '</div>'+
+            '</div>';
+          }).join('')+
+          (totalOwed > 0
+            ? '<div style="border-top:2px dashed #e8dccc;margin-top:8px;padding-top:10px;display:flex;justify-content:space-between;align-items:center">'+
+                '<span style="font-size:14px;font-weight:700;color:#5a3a28">'+(LANG==='de'?'Gesamt ausstehend':'Total outstanding')+'</span>'+
+                '<span style="font-size:20px;font-weight:800;color:#c4392b">€'+totalOwed.toFixed(2)+'</span>'+
+              '</div>'
+            : '')+
+        '</div>')+
+    '<button class="modal-close" onclick="closeModal()">'+esc(t('close'))+'</button>'
+  );
+
+  // Fetch funny AI message in the background
+  var funnyMsg = await fetchSettleMessage(rows, totalOwed, allSettled);
+  var msgEl = document.getElementById('settle-funny-msg');
+  if (msgEl) msgEl.innerHTML = funnyMsg;
+}
+
+async function fetchSettleMessage(rows, totalOwed, allSettled){
+  var today = new Date().toISOString().split('T')[0];
+  var cacheKey = 'settle_msg_'+today+'_'+LANG;
+  try {
+    var cached = JSON.parse(localStorage.getItem(cacheKey)||'null');
+    if (cached && cached.msg) return cached.msg;
+  } catch(e){}
+
+  // Build context
+  var biggest = rows.filter(function(r){return r.owes>0.005;}).sort(function(a,b){return b.owes-a.owes;})[0];
+  var topDebtor = biggest ? biggest.name : null;
+  var topAmount = biggest ? biggest.owes.toFixed(2) : null;
+
+  var isDE = LANG === 'de';
+  var context = allSettled
+    ? (isDE ? 'Alle haben bezahlt, nichts mehr offen.' : 'Everyone has paid, nothing is outstanding.')
+    : topDebtor
+    ? (isDE
+        ? topDebtor+' schuldet am meisten: €'+topAmount+'. Insgesamt ausstehend: €'+totalOwed.toFixed(2)+'.'
+        : topDebtor+' owes the most: €'+topAmount+'. Total outstanding: €'+totalOwed.toFixed(2)+'.')
+    : '';
+
+  var prompt = (isDE ? 'Antworte NUR auf Deutsch. ' : 'Respond ONLY in English. ')+
+    'You are the hilarious mascot of an amateur tennis club. '+
+    'Generate ONE very short (max 25 words), genuinely funny message about friends paying the bar bill after tennis. '+
+    (allSettled
+      ? 'Everyone has paid up — celebrate that surprisingly! Be sarcastic/shocked/amazed that everyone actually paid.'
+      : 'Some people still owe money. Be dramatically outraged, or like a disappointed parent, or use tennis metaphors to guilt-trip the debtors. Context: '+context)+
+    ' Use 1 emoji. Pure punchline only — no label, no preamble.';
+
+  try {
+    var res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model:'claude-sonnet-4-6', max_tokens:80,
+        messages:[{role:'user', content: prompt}]
+      })
+    });
+    if(!res.ok) throw new Error('API '+res.status);
+    var data = await res.json();
+    var msg = (data.content&&data.content[0]&&data.content[0].text||'').trim();
+    if(msg){
+      try{ localStorage.setItem(cacheKey, JSON.stringify({msg:msg})); }catch(e){}
+      return '<em>'+esc(msg)+'</em>';
+    }
+  } catch(e){ console.warn('Settle message API failed:', e.message); }
+
+  // Fallback static funny lines
+  var fallbacks_en = [
+    "💸 Venmo, cash, kidney — we accept all forms of payment.",
+    "🎾 Double fault on your bank account. Pay up, champ.",
+    "😤 Your tab is longer than the longest match in Wimbledon history.",
+    "🧾 The bill doesn't do tiebreaks. You either pay or you don't.",
+    "🍺 The bar remembers everything. Even if you don't.",
+  ];
+  var fallbacks_de = [
+    "💸 Überweisung, Bargeld, Niere — wir akzeptieren alles.",
+    "🎾 Doppelfehler auf deinem Konto. Zahl, Champ.",
+    "😤 Dein Tab ist länger als das längste Match in Wimbledon.",
+    "🧾 Die Rechnung macht kein Tiebreak. Zahlen oder nicht zahlen.",
+    "🍺 Die Bar erinnert sich an alles. Auch wenn du es nicht tust.",
+  ];
+  var list = isDE ? fallbacks_de : fallbacks_en;
+  return '<em>'+esc(list[Math.floor(Math.random()*list.length)])+'</em>';
 }
 
 function confirmPaymentChoice(){
