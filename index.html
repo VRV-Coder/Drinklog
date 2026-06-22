@@ -134,6 +134,7 @@
     .modal-stat-label{font-size:15px;color:#3a2a1d}
     .modal-stat-val{font-size:17px;font-weight:800}
     .modal-close{width:100%;margin-top:16px;background:#f4f7f4;border:1px solid #e8dccc;border-radius:11px;padding:11px;color:#3a2010;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s}
+    .modal-primary{width:100%;background:linear-gradient(135deg,#7a2e1a,#b5481f);border:none;border-radius:11px;padding:13px;color:#fff;font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 4px 14px rgba(122,46,26,.35)}
     .modal-question{font-size:18px;color:#3a1a0a;text-align:center;margin-bottom:18px;line-height:1.5;font-weight:700}
     .modal-btn-row{display:flex;gap:10px}
     .modal-btn{flex:1;border:none;border-radius:10px;padding:13px 8px;font-size:14px;font-weight:700;cursor:pointer}
@@ -146,15 +147,15 @@
     .team-banner-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 50%,rgba(110,40,20,.7));pointer-events:none}
     .team-banner-label{position:absolute;bottom:12px;left:0;right:0;text-align:center;color:#fff;font-size:16px;font-weight:800;letter-spacing:.8px;text-shadow:0 2px 8px rgba(0,0,0,.7)}
     /* QUICK-TAP BAR */
-    .bar-drink-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:4px}
-    .bar-drink-btn{background:#faf5f0;border:2px solid #e8dccc;border-radius:14px;padding:12px 6px;text-align:center;cursor:pointer;transition:all .14s;position:relative;user-select:none;-webkit-tap-highlight-color:transparent}
+    .bar-drink-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:4px}
+    .bar-drink-btn{background:#faf5f0;border:2px solid #e8dccc;border-radius:14px;padding:10px 5px;text-align:center;cursor:pointer;transition:all .14s;position:relative;user-select:none;-webkit-tap-highlight-color:transparent;overflow:hidden}
     .bar-drink-btn:active{transform:scale(.93);background:#f3e4d3}
     .bar-drink-btn.selected{border-color:#b5481f;background:#fce4d0}
-    .bar-drink-btn .bdb-emoji{font-size:30px;display:block;margin-bottom:4px;line-height:1}
-    .bar-drink-btn .bdb-name{font-size:12px;font-weight:700;color:#3a2010;display:block;margin-bottom:4px}
-    .bar-drink-btn .bdb-price{display:flex;align-items:center;justify-content:center;gap:1px;background:#fff;border:1.5px solid #e8dccc;border-radius:8px;padding:4px 6px;margin:0 2px}
-    .bar-drink-btn .bdb-price span{font-size:13px;font-weight:800;color:#b5481f}
-    .bar-drink-btn .bdb-price input{width:46px;border:none;background:transparent;color:#b5481f;font-weight:800;font-size:14px;text-align:center;outline:none;padding:0}
+    .bar-drink-btn .bdb-emoji{font-size:26px;display:block;margin-bottom:3px;line-height:1}
+    .bar-drink-btn .bdb-name{font-size:10px;font-weight:700;color:#3a2010;display:block;margin-bottom:4px;line-height:1.25;word-break:keep-all}
+    .bar-drink-btn .bdb-price{display:flex;align-items:center;justify-content:center;gap:1px;background:#fff;border:1.5px solid #e8dccc;border-radius:8px;padding:3px 5px;margin:0 2px}
+    .bar-drink-btn .bdb-price span{font-size:12px;font-weight:800;color:#b5481f}
+    .bar-drink-btn .bdb-price input{width:40px;border:none;background:transparent;color:#b5481f;font-weight:800;font-size:13px;text-align:center;outline:none;padding:0}
     .running-tab-row{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#faf5f0;border-radius:10px;margin-bottom:7px;border:1.5px solid #f0dece}
     .running-tab-row.mine{border-color:#b5481f;background:#fce8da}
     .rtab-name{font-size:15px;font-weight:700;color:#1a0e08}
@@ -170,7 +171,7 @@
     .pbs-btn .pbs-avatar{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}
     .btn-advanced-toggle{width:100%;background:#faf5f0;border:2px solid #b5481f;border-radius:12px;padding:13px 16px;color:#7a2e10;font-size:15px;font-weight:800;cursor:pointer;margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:.2px}
     .btn-advanced-toggle:hover{background:#fce4d0}
-    @media(max-width:480px){.grid2{grid-template-columns:1fr}.sg{grid-template-columns:repeat(2,1fr)}.bar-drink-grid{grid-template-columns:repeat(4,1fr)}}
+    @media(max-width:480px){.grid2{grid-template-columns:1fr}.sg{grid-template-columns:repeat(2,1fr)}.bar-drink-grid{grid-template-columns:repeat(3,1fr)}}
   </style>
 </head>
 <body>
@@ -251,7 +252,20 @@ var CURRENT_USER = null;     // Supabase auth user object (admin only)
 var CURRENT_NAME = '';       // display name for everyone
 var GUEST_TOKEN = localStorage.getItem('guest_token') || '';
 
-var DRINK_TYPES = ["🍺 Beer","🍷 Wine","🥃 Spirits","🍹 Cocktail","🧃 Juice","💧 Water","☕ Coffee","🧋 Other"];
+var DRINK_TYPES = [
+  "🍺 Beer (Weizen)",
+  "🍺 Beer AF (Weizen)",
+  "🍺 Beer (Pils)",
+  "🍺 Beer AF (Pils)",
+  "🍺 Radler",
+  "🍷 Wine",
+  "🥃 Spirits",
+  "🍹 Cocktail",
+  "🧃 Juice",
+  "💧 Water",
+  "☕ Coffee",
+  "🧋 Other"
+];
 var AVATAR_COLORS = ["#b5481f","#c5a000","#0e6b8c","#b4502a","#9c4a22","#8c3a1f","#1f5a7a","#7a8c1f"];
 
 // Default prices per drink — persisted in localStorage, editable inline
@@ -1890,6 +1904,67 @@ function renderHistory(){
 // ══════════════════════════════════════════════════════════════
 // REPLACE TAB
 // ══════════════════════════════════════════════════════════════
+// Returns true if this drink type counts as a "beer/radler" for crate calculation
+function isBeerDrink(drink){
+  var d = (drink||'').toLowerCase();
+  return d.indexOf('beer') !== -1 || d.indexOf('radler') !== -1 || d.indexOf('bier') !== -1;
+}
+
+function isWaterDrink(drink){
+  var d = (drink||'').toLowerCase();
+  return d.indexOf('water') !== -1 || d.indexOf('wasser') !== -1;
+}
+
+var CRATE_SIZE_BEER  = 20;
+var CRATE_SIZE_WATER = 6;
+var CRATE_SIZE = 20; // kept for backward compat
+var CRATE_PRICE_BEER  = parseFloat(localStorage.getItem('crate_price_beer'))||12;  // €12 per crate default
+var CRATE_PRICE_WATER = parseFloat(localStorage.getItem('crate_price_water'))||5;  // €5 per crate default
+
+function setCratePrice(type, val){
+  if (type==='beer')  { CRATE_PRICE_BEER  = parseFloat(val)||12; localStorage.setItem('crate_price_beer',  CRATE_PRICE_BEER); }
+  if (type==='water') { CRATE_PRICE_WATER = parseFloat(val)||5;  localStorage.setItem('crate_price_water', CRATE_PRICE_WATER); }
+}
+
+function getCratePrice(drink){
+  if (isBeerDrink(drink))  return CRATE_PRICE_BEER;
+  if (isWaterDrink(drink)) return CRATE_PRICE_WATER;
+  return 0;
+}
+
+// Calculate the value (in €) of a given number of bottles of a drink
+function calcDrinkValue(drink, count){
+  var cs = crateSize(drink);
+  var cp = getCratePrice(drink);
+  if (!cs || !cp) return 0;
+  return (count / cs) * cp;
+}
+
+function crateSize(drink){
+  if (isWaterDrink(drink)) return CRATE_SIZE_WATER;
+  if (isBeerDrink(drink))  return CRATE_SIZE_BEER;
+  return 0; // 0 = no crate grouping
+}
+
+function hasCrates(drink){ return crateSize(drink) > 0; }
+
+// Format a count as "X crate(s) + Y btl" for any crate-eligible drink
+function fmtCrates(drink, count, isDE){
+  var cs = crateSize(drink);
+  if (!cs || count < cs) return count + ' ' + (isDE ? 'Fl.' : 'btl');
+  var crates = Math.floor(count / cs);
+  var rem = count % cs;
+  var cl = isDE ? ('Kiste'+(crates>1?'n':'')) : ('crate'+(crates>1?'s':''));
+  if (rem === 0) return crates + ' ' + cl;
+  return crates + ' ' + cl + ' + ' + rem;
+}
+
+function fmtDrinkCount(drink, count, isDE){
+  var cs = crateSize(drink);
+  if (cs && count >= cs) return fmtCrates(drink, count, isDE);
+  return count + (isDE ? ' Fl.' : ' btl');
+}
+
 function renderReplace(){
   var el=document.getElementById('tab-replace');
   var cbd={},pbd={};
@@ -1900,7 +1975,7 @@ function renderReplace(){
   // Priced drinks are settled via the Payments tab instead.
   STATE.logs.forEach(function(l){
     var unitPrice = parseFloat(l.unit_price)||0;
-    if (unitPrice > 0) return; // skip — this is a paid drink, not a replace-owed one
+    if (unitPrice > 0) return;
     if(!cdd[l.date])cdd[l.date]={};
     cdd[l.date][l.drink]=(cdd[l.date][l.drink]||0)+(l.quantity||0);
   });
@@ -1908,73 +1983,141 @@ function renderReplace(){
     if(!rdd[r.for_date])rdd[r.for_date]={};
     rdd[r.for_date][r.drink]=(rdd[r.for_date][r.drink]||0)+(r.quantity||0);
   });
-  var days=Object.keys(cdd).sort().reverse().map(function(d){
-    var consumed=cdd[d]||{},replaced=rdd[d]||{};
-    var breakdown=Object.keys(consumed).map(function(drink){
-      var owed=consumed[drink]||0,done=Math.min(replaced[drink]||0,owed);
-      return {drink:drink,owed:owed,replaced:done,remaining:Math.max(0,owed-done)};
-    });
-    var to=breakdown.reduce(function(s,b){return s+b.owed;},0);
-    var tr=breakdown.reduce(function(s,b){return s+b.replaced;},0);
-    var trem=breakdown.reduce(function(s,b){return s+b.remaining;},0);
-    var pm=(cbd[d]||0)-(pbd[d]||0);
-    return {date:d,breakdown:breakdown,to:to,tr:tr,trem:trem,pm:pm,ms:pm<=0.005,bs:trem===0};
-  }).filter(function(d){return d.to>0;}); // only show days that actually have zero-price (replace-owed) drinks
 
+  // Build ALL-TIME per-drink totals (not day-scoped)
   var ob={};
-  days.forEach(function(d){d.breakdown.forEach(function(b){
-    if(!ob[b.drink])ob[b.drink]={owed:0,replaced:0,remaining:0};
-    ob[b.drink].owed+=b.owed;ob[b.drink].replaced+=b.replaced;ob[b.drink].remaining+=b.remaining;
-  });});
-  var tot_o=Object.values(ob).reduce(function(s,v){return s+v.owed;},0);
-  var tot_r=Object.values(ob).reduce(function(s,v){return s+v.replaced;},0);
-  var tot_rem=Object.values(ob).reduce(function(s,v){return s+v.remaining;},0);
+  Object.keys(cdd).forEach(function(d){
+    Object.keys(cdd[d]).forEach(function(drink){
+      if(!ob[drink])ob[drink]={owed:0,replaced:0,remaining:0,byDate:{}};
+      var owed = cdd[d][drink]||0;
+      var repd = Math.min((rdd[d]&&rdd[d][drink])||0, owed);
+      ob[drink].owed += owed;
+      ob[drink].replaced += repd;
+      ob[drink].remaining += Math.max(0, owed - repd);
+      ob[drink].byDate[d] = {owed:owed, replaced:repd, remaining:Math.max(0,owed-repd)};
+    });
+  });
 
-  if(!days.length){el.innerHTML=empty('✅',t('allSettledUp'),t('noUnsettledDays'));return;}
+  // Filter to drinks that still have something owed
+  var allDrinks = Object.keys(ob).filter(function(d){ return ob[d].owed > 0; });
 
+  var tot_o = allDrinks.reduce(function(s,d){return s+ob[d].owed;},0);
+  var tot_r = allDrinks.reduce(function(s,d){return s+ob[d].replaced;},0);
+  var tot_rem = allDrinks.reduce(function(s,d){return s+ob[d].remaining;},0);
+
+  if(!allDrinks.length){el.innerHTML=empty('✅',t('allSettledUp'),t('noUnsettledDays'));return;}
+
+  var isDE = LANG === 'de';
+
+  // ── UNDO + SUMMARY STATS ──────────────────────────────────
   var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
     '<span style="font-size:12px;color:#5a3a28">'+(STATE.undoStack.length?STATE.undoStack.length+' '+t('actionsInHistory'):t('noActions'))+'</span>'+
-    '<button onclick="undoReplace()" '+(STATE.undoStack.length?'':'disabled')+' style="background:'+(STATE.undoStack.length?'#3a261c':'#f5ede4')+';border:1px solid '+(STATE.undoStack.length?'#c75a2a':'#e8dccc')+';border-radius:8px;padding:6px 13px;cursor:pointer;color:'+(STATE.undoStack.length?'#e8c9a0':'#8a7568')+';font-size:12px;font-weight:600">'+esc(t('undoBtn'))+(STATE.undoStack.length?' ('+STATE.undoStack.length+')':'')+'</button></div>';
+    '<button onclick="undoReplace()" '+(STATE.undoStack.length?'':'disabled')+
+    ' style="background:'+(STATE.undoStack.length?'#3a261c':'#f5ede4')+';border:1px solid '+(STATE.undoStack.length?'#c75a2a':'#e8dccc')+
+    ';border-radius:8px;padding:6px 13px;cursor:pointer;color:'+(STATE.undoStack.length?'#e8c9a0':'#8a7568')+';font-size:12px;font-weight:600">'+
+    esc(t('undoBtn'))+(STATE.undoStack.length?' ('+STATE.undoStack.length+')':'')+'</button></div>';
+
+  // Crate price settings (editable inline)
+  html += '<div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap">'+
+    '<span style="font-size:12px;font-weight:700;color:#5a3a28;white-space:nowrap">📦 '+(isDE?'Kisten-Preis:':'Crate prices:')+'</span>'+
+    '<div style="display:flex;align-items:center;gap:5px;background:#fff;border:1.5px solid #e8dccc;border-radius:8px;padding:5px 10px">'+
+      '<span style="font-size:12px;color:#7a2e10">🍺 €</span>'+
+      '<input type="number" min="0" step="0.5" value="'+CRATE_PRICE_BEER+'" style="width:50px;border:none;outline:none;font-size:14px;font-weight:700;color:#b5481f;text-align:center" '+
+        'onchange="setCratePrice(\'beer\',this.value)" title="'+(isDE?'Preis pro Kiste Bier':'Price per crate of beer')+'"/>'+
+      '<span style="font-size:11px;color:#a8978a">/'+CRATE_SIZE_BEER+'</span>'+
+    '</div>'+
+    '<div style="display:flex;align-items:center;gap:5px;background:#fff;border:1.5px solid #e8dccc;border-radius:8px;padding:5px 10px">'+
+      '<span style="font-size:12px;color:#0e6b8c">💧 €</span>'+
+      '<input type="number" min="0" step="0.5" value="'+CRATE_PRICE_WATER+'" style="width:50px;border:none;outline:none;font-size:14px;font-weight:700;color:#0e6b8c;text-align:center" '+
+        'onchange="setCratePrice(\'water\',this.value)" title="'+(isDE?'Preis pro Kiste Wasser':'Price per crate of water')+'"/>'+
+      '<span style="font-size:11px;color:#a8978a">/'+CRATE_SIZE_WATER+'</span>'+
+    '</div>'+
+  '</div>';
 
   html+=sg([{v:tot_o,l:t('bottlesOwed')},{v:tot_r,l:t('replaced'),c:'g'},{v:tot_rem,l:t('stillOwed'),c:tot_rem>0?'r':'g'}]);
 
-  if(Object.keys(ob).length) html+=card(t('allUnsettledTotals'),Object.entries(ob).map(function(e){
-    var drink=e[0],v=e[1],pct=v.owed>0?Math.round(v.replaced/v.owed*100):100;
-    return '<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;margin-bottom:3px">'+
-      '<span style="font-size:13px;font-weight:600">'+esc(drink)+'</span>'+
-      '<span style="font-size:12px;font-weight:700;color:'+(v.remaining>0?'#a87a00':'#1f8a4f')+'">'+v.replaced+'/'+v.owed+(v.remaining>0?' · '+v.remaining+' '+t('left'):' ✓')+'</span></div>'+
-      '<div class="prog"><div class="prog-fill'+(v.remaining===0?' done':'')+'" style="width:'+pct+'%"></div></div></div>';
-  }).join(''));
-
-  days.forEach(function(day){
-    html+='<div class="card" style="padding:0;overflow:hidden;margin-bottom:12px">'+
-      '<div class="dh"><div><h4>'+fmtDate(day.date)+'</h4><p>'+day.tr+'/'+day.to+' replaced</p></div>'+
-      '<div style="text-align:right">'+(!day.ms?'<div style="font-size:13px;color:#c4392b;font-weight:700">€'+day.pm.toFixed(2)+' due</div>':'<div style="font-size:12px;color:#b5481f">'+esc(t('settled'))+'</div>')+
-      (day.bs?'<div style="font-size:11px;color:#b5481f">🍾 done ✓</div>':'<div style="font-size:11px;color:#7a5200">'+day.trem+' '+t('left')+'</div>')+'</div></div>'+
-      '<div style="padding:11px 14px">'+
-      day.breakdown.map(function(b){
-        var bottles='';
-        for(var i=0;i<b.owed;i++) bottles+='<div class="bottle '+(i<b.replaced?'done':'empty')+'">'+emoji(b.drink)+'</div>';
-        return '<div style="margin-bottom:11px">'+
-          '<div style="display:flex;justify-content:space-between;margin-bottom:4px">'+
-          '<span style="font-size:13px;font-weight:600;color:#2e1c14">'+esc(b.drink)+'</span>'+
-          '<span style="font-size:11px;font-weight:700;color:'+(b.remaining>0?'#a87a00':'#1f8a4f')+'">'+b.replaced+'/'+b.owed+(b.remaining===0?' ✓':'')+'</span></div>'+
-          '<div class="bottles">'+bottles+'</div>'+
-          (b.remaining>0?
-            '<div class="repl-ctrl">'+
-              '<button class="btn-icon" onclick="replBottle(\''+day.date+'\',\''+b.drink+'\',-1)" '+(b.replaced<=0?'disabled':'')+'>−</button>'+
-              '<span>'+b.remaining+' '+esc(t('toReplace'))+'</span>'+
-              '<button class="btn-icon" style="border-color:#c75a2a;background:#f3e4d3;color:#b5481f" onclick="replBottle(\''+day.date+'\',\''+b.drink+'\',1)">+</button>'+
-              '<span style="color:#b5481f;font-size:11px">'+esc(t('markReplaced'))+'</span></div>' :
-            '<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px;color:#b5481f">'+esc(t('allReplaced'))+' ✓</span>'+
-            '<button onclick="replBottle(\''+day.date+'\',\''+b.drink+'\',-1)" style="background:none;border:none;cursor:pointer;color:#5a3a28;font-size:12px">'+esc(t('undo'))+'</button></div>')+
+  // ── CRATE SUMMARY BANNER (beer + water) ──────────────────
+  var crateEligible = allDrinks.filter(function(d){ return hasCrates(d) && ob[d].owed >= crateSize(d); });
+  if (crateEligible.length) {
+    html += '<div style="background:linear-gradient(135deg,#f5e8da,#fce4d0);border:2px solid #b5481f;border-radius:13px;padding:14px 16px;margin-bottom:12px">'+
+      '<div style="font-size:12px;font-weight:800;color:#7a2e10;text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">📦 '+(isDE?'Kisten-Übersicht':'Crate Summary')+'</div>'+
+      crateEligible.map(function(d){
+        var v = ob[d], cs = crateSize(d);
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid rgba(181,72,31,.12)">'+
+          '<div>'+
+            '<div style="font-size:14px;font-weight:700;color:#3a1a0a">'+emoji(d)+' '+esc(d.replace(/^.+? /,''))+'</div>'+
+            '<div style="font-size:12px;color:#7a2e10">'+fmtCrates(d,v.owed,isDE)+' '+(isDE?'gesamt':'total')+'</div>'+
+          '</div>'+
+          '<div style="text-align:right">'+
+            (v.remaining>0
+              ? '<div style="font-size:15px;font-weight:800;color:#c4392b">'+fmtCrates(d,v.remaining,isDE)+' '+esc(isDE?'fehlt':'left')+'</div>'
+              : '<div style="font-size:14px;font-weight:800;color:#1f8a4f">✓ '+(isDE?'Erledigt':'Done')+'</div>')+
+          '</div>'+
         '</div>';
       }).join('')+
-      (day.breakdown.length?'<div style="display:flex;justify-content:space-between;padding-top:7px;border-top:1px solid #ece0d4">'+
-        '<span style="font-size:11px;font-weight:700;color:#5a3a28;text-transform:uppercase;letter-spacing:.7px">'+esc(t('dayTotal'))+'</span>'+
-        '<span style="font-size:12px;font-weight:700;color:'+(day.trem>0?'#c4392b':'#1f8a4f')+'">'+day.tr+'/'+day.to+(day.trem>0?' · '+day.trem+' '+t('left'):' · '+t('allDone')+' ✓')+'</span></div>':'')+
-      '</div></div>';
-  });
+    '</div>';
+  }
+
+  // ── PER-DRINK ALL-TIME CARDS (not date-scoped) ──────────
+  html += card(isDE?'Alle Getränke — Gesamt':'All Drinks — Running Total',
+    allDrinks.map(function(drink){
+      var v = ob[drink];
+      var cs = crateSize(drink);
+      var showCrate = cs > 0 && v.owed >= cs;
+      var owedLabel  = showCrate ? fmtCrates(drink,v.replaced,isDE)+' / '+fmtCrates(drink,v.owed,isDE) : v.replaced+'/'+v.owed;
+      var remLabel   = showCrate ? fmtCrates(drink,v.remaining,isDE) : v.remaining;
+      var pct = v.owed>0?Math.round(v.replaced/v.owed*100):100;
+
+      // Build bottle icons (show crate icons then remainder)
+      var bottles = '';
+      if (showCrate) {
+        var cratesOwed     = Math.floor(v.owed/cs), remOwed = v.owed%cs;
+        var cratesReplaced = Math.floor(v.replaced/cs);
+        for (var c=0;c<cratesOwed;c++) bottles+='<div class="bottle '+(c<cratesReplaced?'done':'empty')+'" style="width:34px;height:34px;font-size:19px;border-radius:8px" title="1 crate ('+cs+')">📦</div>';
+        for (var i=0;i<remOwed;i++) {
+          var idx = cratesOwed*cs+i;
+          bottles+='<div class="bottle '+(idx<v.replaced?'done':'empty')+'">'+emoji(drink)+'</div>';
+        }
+      } else {
+        var cap = Math.min(v.owed, 30);
+        for (var i=0;i<cap;i++) bottles+='<div class="bottle '+(i<v.replaced?'done':'empty')+'">'+emoji(drink)+'</div>';
+        if (v.owed>30) bottles+='<span style="font-size:11px;color:#7a5200;align-self:center"> +'+(v.owed-30)+' more</span>';
+      }
+
+      // Count how many dates have entries for this drink
+      var datesCount = Object.keys(v.byDate).length;
+
+      return '<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #ece0d4">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">'+
+          '<div>'+
+            '<div style="font-size:15px;font-weight:800;color:#2e1c14">'+emoji(drink)+' '+esc(drink.replace(/^.+? /,''))+'</div>'+
+            '<div style="font-size:12px;color:#7a5200;margin-top:1px;cursor:pointer;text-decoration:underline" onclick="showReplaceByDate(\''+esc(drink)+'\')">'+
+              '👁 '+datesCount+' '+(isDE?'Tag'+(datesCount!==1?'e':''):'day'+(datesCount!==1?'s':''))+' — '+esc(isDE?'Details':'see details')+
+            '</div>'+
+          '</div>'+
+          '<div style="text-align:right">'+
+            '<div style="font-size:14px;font-weight:800;color:'+(v.remaining>0?'#c4392b':'#1f8a4f')+'">'+
+              (v.remaining>0?remLabel+' '+(isDE?'offen':'left'):'✓ '+(isDE?'Erledigt':'Done'))+
+            '</div>'+
+            '<div style="font-size:12px;color:#7a5200">'+owedLabel+'</div>'+
+          '</div>'+
+        '</div>'+
+        '<div class="prog" style="margin-bottom:8px"><div class="prog-fill'+(v.remaining===0?' done':'')+'" style="width:'+pct+'%"></div></div>'+
+        '<div class="bottles" style="margin-bottom:8px">'+bottles+'</div>'+
+        (v.remaining>0?
+          '<div class="repl-ctrl">'+
+            '<button class="btn-icon" onclick="replBottleAllTime(\''+esc(drink)+'\',-1)" '+(v.replaced<=0?'disabled':'')+'>−</button>'+
+            '<span>'+(showCrate?remLabel:v.remaining)+' '+esc(t('toReplace'))+'</span>'+
+            '<button class="btn-icon" style="border-color:#c75a2a;background:#f3e4d3;color:#b5481f" onclick="replBottleAllTime(\''+esc(drink)+'\',1)">+</button>'+
+            '<span style="color:#b5481f;font-size:12px;font-weight:700">'+esc(t('markReplaced'))+'</span>'+
+          '</div>' :
+          '<div style="display:flex;align-items:center;gap:6px">'+
+            '<span style="font-size:13px;color:#b5481f;font-weight:700">'+esc(t('allReplaced'))+' ✓</span>'+
+            '<button onclick="replBottleAllTime(\''+esc(drink)+'\',-1)" style="background:none;border:none;cursor:pointer;color:#5a3a28;font-size:13px">'+esc(t('undo'))+'</button>'+
+          '</div>')+
+      '</div>';
+    }).join('')
+  );
 
   if(STATE.replacements.length) html+=card(t('replacementLog'),STATE.replacements.map(function(r){
     var canDel=isMine(r);
@@ -1986,6 +2129,253 @@ function renderReplace(){
   }).join(''));
 
   el.innerHTML=html;
+}
+
+// Shows the "who is replacing?" popup when + is tapped
+function replBottleAllTime(drink, delta){
+  if (delta < 0) {
+    // Undo silently — find most recent replacement for this drink
+    var rdd = {};
+    STATE.replacements.forEach(function(r){
+      if (r.drink !== drink) return;
+      rdd[r.for_date] = (rdd[r.for_date]||0) + (r.quantity||0);
+    });
+    var dates = Object.keys(rdd).sort().reverse();
+    for (var i=0; i<dates.length; i++) {
+      if ((rdd[dates[i]]||0) > 0) { replBottle(dates[i], drink, -1); return; }
+    }
+    notify(LANG==='de'?'Nichts zum Rückgängig machen':'Nothing to undo', true);
+    return;
+  }
+
+  // Find target date (oldest with remaining bottles)
+  var cdd = {}, rdd = {};
+  STATE.logs.forEach(function(l){
+    if ((parseFloat(l.unit_price)||0) > 0) return;
+    if (l.drink !== drink) return;
+    cdd[l.date] = (cdd[l.date]||0) + (l.quantity||0);
+  });
+  STATE.replacements.forEach(function(r){
+    if (r.drink !== drink) return;
+    rdd[r.for_date] = (rdd[r.for_date]||0) + (r.quantity||0);
+  });
+  var dates = Object.keys(cdd).sort();
+  var targetDate = null;
+  var totalRem = 0;
+  dates.forEach(function(d){ totalRem += Math.max(0,(cdd[d]||0)-(rdd[d]||0)); });
+  for (var i=0; i<dates.length; i++) {
+    if ((cdd[dates[i]]||0) - (rdd[dates[i]]||0) > 0) { targetDate = dates[i]; break; }
+  }
+  if (!targetDate) { notify(LANG==='de'?'Alles ersetzt!':'All replaced! 🎉'); return; }
+
+  showReplaceWhoPopup(drink, targetDate, totalRem);
+}
+
+// Show "Who is replacing? For whom?" popup
+function showReplaceWhoPopup(drink, targetDate, totalRem){
+  var isDE = LANG === 'de';
+  var cs = crateSize(drink);
+  var cp = getCratePrice(drink);
+  var totalVal = calcDrinkValue(drink, totalRem).toFixed(2);
+  var crateLabel = cs ? (Math.floor(totalRem/cs)>0 ? fmtCrates(drink,totalRem,isDE) : totalRem+(isDE?' Fl.':' btl')) : totalRem+(isDE?' Fl.':' btl');
+
+  // Build person selectors
+  var people = STATE.people.map(function(p){ return p.display_name; });
+  if (!people.length) people = [CURRENT_NAME];
+
+  var personOpts = people.map(function(name){
+    return '<option value="'+esc(name)+'"'+(name===CURRENT_NAME?' selected':'')+'>'+esc(name)+'</option>';
+  }).join('');
+
+  // Who has the most debt for this drink?
+  var debtByPerson = {};
+  STATE.logs.forEach(function(l){
+    if ((parseFloat(l.unit_price)||0) > 0) return;
+    if (l.drink !== drink) return;
+    debtByPerson[l.person] = (debtByPerson[l.person]||0) + (l.quantity||0);
+  });
+  // subtract their own replacements from their debt
+  STATE.replacements.forEach(function(r){
+    if (r.drink !== drink) return;
+    var by = r.replaced_by || r.added_by || '';
+    // just show total owed by person; replacements reduce the global pool
+  });
+  var topDebtor = Object.entries(debtByPerson).sort(function(a,b){return b[1]-a[1];})[0];
+  var defaultFor = topDebtor ? topDebtor[0] : (people[0]||'');
+  var forOpts = people.map(function(name){
+    return '<option value="'+esc(name)+'"'+(name===defaultFor?' selected':'')+'>'+esc(name)+'</option>';
+  }).join('');
+
+  showModal(
+    '<h3>🍾 '+(isDE?'Wer ersetzt?':'Who\'s replacing?')+'</h3>'+
+    '<div style="background:#f5e8da;border-radius:10px;padding:10px 14px;margin-bottom:16px;text-align:center">'+
+      '<div style="font-size:14px;font-weight:700;color:#7a2e10">'+emoji(drink)+' '+esc(drink.replace(/^.+? /,''))+'</div>'+
+      '<div style="font-size:13px;color:#7a5200;margin-top:3px">'+
+        crateLabel+' '+(isDE?'ausstehend':'remaining')+
+        (cp&&cs?' · €'+totalVal+' '+(isDE?'Wert':'value'):'')+'</div>'+
+      (cp&&cs?'<div style="font-size:11px;color:#a87a00;margin-top:2px">'+(isDE?'Kiste':'Crate')+': €'+cp.toFixed(2)+' / '+cs+' '+(isDE?'Fl.':'btl')+'</div>':'')+
+    '</div>'+
+
+    // Quantity to replace
+    '<div style="margin-bottom:14px">'+
+      '<label style="display:block;font-size:12px;font-weight:700;color:#5a3a28;text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px">'+(isDE?'Anzahl ersetzen':'Quantity to replace')+'</label>'+
+      '<div style="display:flex;align-items:center;gap:10px">'+
+        '<button class="btn-icon" onclick="var i=document.getElementById(\'repl-qty\');i.value=Math.max(1,parseInt(i.value||1)-1);replUpdateCost()">−</button>'+
+        '<input id="repl-qty" type="number" min="1" value="1" style="width:60px;text-align:center;font-size:18px;font-weight:800;border:2px solid #e8dccc;border-radius:9px;padding:8px;color:#1a0e08" oninput="replUpdateCost()"/>'+
+        '<button class="btn-icon" onclick="var i=document.getElementById(\'repl-qty\');i.value=parseInt(i.value||0)+1;replUpdateCost()">+</button>'+
+        (cs?'<button onclick="var i=document.getElementById(\'repl-qty\');i.value='+cs+';replUpdateCost()" style="background:#fce4d0;border:2px solid #b5481f;border-radius:9px;padding:6px 12px;font-size:12px;font-weight:700;color:#7a2e10;cursor:pointer">📦 1 '+(isDE?'Kiste':'crate')+'</button>':'')+
+      '</div>'+
+    '</div>'+
+
+    // Who is replacing
+    '<div style="margin-bottom:12px">'+
+      '<label style="display:block;font-size:12px;font-weight:700;color:#5a3a28;text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px">'+(isDE?'Wird ersetzt von':'Replaced by')+'</label>'+
+      '<select id="repl-by" style="width:100%;padding:10px 12px;border-radius:9px;border:2px solid #e8dccc;font-size:15px;font-weight:600;color:#1a0e08;background:#faf5f0" onchange="replUpdateCost()">'+personOpts+'</select>'+
+    '</div>'+
+
+    // For whom (who originally owed the drinks)
+    '<div style="margin-bottom:12px">'+
+      '<label style="display:block;font-size:12px;font-weight:700;color:#5a3a28;text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px">'+(isDE?'Getrunken von (für wen)':'For whom (who drank them)')+'</label>'+
+      '<select id="repl-for" style="width:100%;padding:10px 12px;border-radius:9px;border:2px solid #e8dccc;font-size:15px;font-weight:600;color:#1a0e08;background:#faf5f0">'+forOpts+'</select>'+
+    '</div>'+
+
+    // Cost summary (dynamic)
+    '<div id="repl-cost-box" style="background:#f0fce8;border:2px solid #c5e000;border-radius:10px;padding:10px 14px;margin-bottom:16px;display:'+(cp&&cs?'block':'none')+'">'+
+      '<div style="font-size:12px;font-weight:700;color:#5a3a28;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">'+(isDE?'Wert':'Value')+'</div>'+
+      '<div id="repl-cost-label" style="font-size:18px;font-weight:800;color:#1f7a47">€0.00</div>'+
+      '<div style="font-size:11px;color:#5a3a28;margin-top:2px">'+(isDE?'(Betrag, der erstattet werden sollte)':'(amount that should be reimbursed)')+'</div>'+
+    '</div>'+
+
+    '<button class="modal-primary" onclick="confirmReplaceWho(\''+esc(drink)+'\',\''+targetDate+'\')">✓ '+(isDE?'Ersetzung bestätigen':'Confirm Replacement')+'</button>'+
+    '<input type="hidden" id="repl-drink-hidden" value="'+esc(drink)+'"/>'+
+    '<button class="modal-close" style="margin-top:8px" onclick="closeModal()">'+esc(t('close'))+'</button>'
+  );
+
+  // init cost display after a tiny delay (DOM needs to be ready)
+  if (cp && cs) setTimeout(replUpdateCost, 50);
+}
+
+function replUpdateCost(){
+  var qty = parseInt(document.getElementById('repl-qty')&&document.getElementById('repl-qty').value)||1;
+  var byEl = document.getElementById('repl-by');
+  var forEl = document.getElementById('repl-for');
+  var by = byEl ? byEl.value : '';
+  var forPerson = forEl ? forEl.value : '';
+  var costBox = document.getElementById('repl-cost-box');
+  var costLabel = document.getElementById('repl-cost-label');
+  // Find drink from whichever replace popup is open — store in hidden element
+  var drinkEl = document.getElementById('repl-drink-hidden');
+  var drink = drinkEl ? drinkEl.value : '';
+  if (!drink) {
+    // fallback: try to find from context
+    return;
+  }
+  var val = calcDrinkValue(drink, qty);
+  if (costLabel) costLabel.textContent = '€'+val.toFixed(2);
+  if (costBox && val > 0) {
+    costBox.style.display = 'block';
+    var isDE = LANG === 'de';
+    if (by && forPerson && by !== forPerson) {
+      costLabel.textContent = '€'+val.toFixed(2)+' — '+esc(by)+' '+(isDE?'sollte von':'should get from')+' '+esc(forPerson)+' erhalten';
+    } else {
+      costLabel.textContent = '€'+val.toFixed(2);
+    }
+  }
+}
+
+async function confirmReplaceWho(drink, targetDate){
+  var qtyEl = document.getElementById('repl-qty');
+  var byEl  = document.getElementById('repl-by');
+  var forEl = document.getElementById('repl-for');
+  var qty      = Math.max(1, parseInt(qtyEl&&qtyEl.value)||1);
+  var replacedBy = byEl  ? byEl.value  : CURRENT_NAME;
+  var forPerson  = forEl ? forEl.value : '';
+  var val = calcDrinkValue(drink, qty);
+
+  closeModal();
+
+  // Save the replacement
+  STATE.undoStack.push(JSON.parse(JSON.stringify(STATE.replacements)));
+  if (STATE.undoStack.length > 20) STATE.undoStack.shift();
+
+  var existing = STATE.replacements.find(function(r){ return r.for_date===targetDate && r.drink===drink; });
+  var note = forPerson ? (LANG==='de'?'für ':' for ')+forPerson : '';
+  if (val > 0) note += (note?' · ':'')+'€'+val.toFixed(2);
+
+  if (existing) {
+    await SB.from('replacements').update({
+      quantity: existing.quantity + qty,
+      replaced_by: replacedBy,
+      note: note
+    }).eq('id', existing.id);
+  } else {
+    var insertObj = {
+      for_date: targetDate, drink: drink, quantity: qty,
+      replaced_by: replacedBy, note: note, added_by: CURRENT_NAME
+    };
+    if (IS_ADMIN && CURRENT_USER) insertObj.user_id = CURRENT_USER.id;
+    if (IS_GUEST) insertObj.guest_token = GUEST_TOKEN;
+    var {data} = await SB.from('replacements').insert(insertObj).select().single();
+    await audit('MARK_REPLACEMENT','replacements',data&&data.id,{date:targetDate,drink:drink,qty:qty,replaced_by:replacedBy,for:forPerson,value:val});
+  }
+
+  // Show confirmation toast with payment detail
+  var isDE = LANG === 'de';
+  var msg = qty+'× '+drink+' '+(isDE?'ersetzt von':'replaced by')+' '+replacedBy;
+  if (forPerson && forPerson !== replacedBy) msg += (isDE?' für ':' for ')+forPerson;
+  if (val > 0) msg += ' · €'+val.toFixed(2);
+  notify(msg+' ✓');
+
+  await loadAll();
+}
+
+// Show day-wise breakdown for a specific drink in a modal
+function showReplaceByDate(drink){
+  var isDE = LANG === 'de';
+  var cdd = {}, rdd = {};
+  STATE.logs.forEach(function(l){
+    if ((parseFloat(l.unit_price)||0) > 0) return;
+    if (l.drink !== drink) return;
+    cdd[l.date] = (cdd[l.date]||0) + (l.quantity||0);
+  });
+  STATE.replacements.forEach(function(r){
+    if (r.drink !== drink) return;
+    rdd[r.for_date] = (rdd[r.for_date]||0) + (r.quantity||0);
+  });
+
+  var dates = Object.keys(cdd).sort().reverse();
+  var cs = crateSize(drink);
+  var totalOwed = 0, totalReplaced = 0;
+
+  var rows = dates.map(function(d){
+    var owed = cdd[d]||0;
+    var replaced = Math.min(rdd[d]||0, owed);
+    var rem = Math.max(0, owed-replaced);
+    totalOwed += owed; totalReplaced += replaced;
+    var owedLabel  = (cs && owed >= cs)     ? fmtCrates(drink,owed,isDE)     : owed+(isDE?' Fl.':' btl');
+    var replLabel  = (cs && replaced >= cs)  ? fmtCrates(drink,replaced,isDE) : replaced+(isDE?' Fl.':' btl');
+    var remLabel   = (cs && rem >= cs)       ? fmtCrates(drink,rem,isDE)      : rem;
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #ece0d4">'+
+      '<div>'+
+        '<div style="font-size:14px;font-weight:700;color:#2e1c14">'+fmtDate(d)+'</div>'+
+        '<div style="font-size:12px;color:#7a5200">'+replLabel+' / '+owedLabel+'</div>'+
+      '</div>'+
+      (rem>0
+        ? '<span style="font-size:13px;font-weight:800;color:#c4392b">'+remLabel+' '+(isDE?'offen':'left')+'</span>'
+        : '<span style="font-size:13px;font-weight:800;color:#1f8a4f">✓</span>')+
+    '</div>';
+  }).join('');
+
+  var totalRem = totalOwed - totalReplaced;
+  var cs2 = crateSize(drink);
+  showModal(
+    '<h3>'+emoji(drink)+' '+esc(drink.replace(/^.+? /,''))+'</h3>'+
+    '<div style="text-align:center;margin-bottom:14px;font-size:13px;color:#7a5200">'+
+      (cs2 && totalOwed>=cs2 ? fmtCrates(drink,totalReplaced,isDE)+' / '+fmtCrates(drink,totalOwed,isDE) : totalReplaced+'/'+totalOwed)+
+      (totalRem>0?' — '+(cs2 && totalRem>=cs2?fmtCrates(drink,totalRem,isDE):totalRem)+' '+(isDE?'fehlt':'left'):'')+'</div>'+
+    '<div style="max-height:360px;overflow-y:auto;margin-bottom:12px">'+rows+'</div>'+
+    '<button class="modal-close" onclick="closeModal()">'+esc(t('close'))+'</button>'
+  );
 }
 
 async function replBottle(date,drink,delta){
