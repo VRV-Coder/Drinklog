@@ -219,6 +219,7 @@
     <nav id="main-nav">
       <button class="active" onclick="switchTab('log',this)"><span id="nav-log-label">📋 Log</span></button>
       <button onclick="switchTab('stats',this)"><span id="nav-stats-label">📊 Stats</span></button>
+      <button onclick="switchTab('dashboard',this)"><span id="nav-dashboard-label">📈 Dashboard</span></button>
       <button onclick="switchTab('payments',this)"><span id="nav-payments-label">💶 Payments</span></button>
       <button onclick="switchTab('history',this)" id="nav-history-btn" style="display:none"><span id="nav-history-label">📅 History</span></button>
       <button onclick="switchTab('replace',this)"><span id="nav-replace-label">🔄 Replace</span></button>
@@ -234,6 +235,7 @@
   <div class="content">
     <div id="tab-log"></div>
     <div id="tab-stats"    style="display:none"></div>
+    <div id="tab-dashboard" style="display:none"></div>
     <div id="tab-payments" style="display:none"></div>
     <div id="tab-history"  style="display:none"></div>
     <div id="tab-replace"  style="display:none"></div>
@@ -346,7 +348,7 @@ var I18N = {
     youOweMoney: "You owe (money)", bottlesToReplace: "Bottles to replace",
     totalSpentPriced: "Total spent (priced drinks)", totalPaidLbl: "Total paid",
     freeDrinksLogged: "Free drinks logged",
-    welcomeBack: "Welcome back", letsGo: "Let's go 🎾",
+    welcomeBack: "Welcome back", letsGo: "Let's go 🎾🍺",
     yourLogTitle: "'s Log", runningTabTitle: "'s Running Tab",
     languageLabel: "Language",
     deleteConfirm: "Delete:", cannotBeUndone: "This cannot be undone.",
@@ -422,7 +424,7 @@ var I18N = {
     youOweMoney: "Du schuldest (Geld)", bottlesToReplace: "Flaschen zu ersetzen",
     totalSpentPriced: "Ausgegeben (bezahlte Getränke)", totalPaidLbl: "Gesamt bezahlt",
     freeDrinksLogged: "Kostenlose Getränke erfasst",
-    welcomeBack: "Willkommen zurück", letsGo: "Los geht's 🎾",
+    welcomeBack: "Willkommen zurück", letsGo: "Los geht's 🎾🍺",
     yourLogTitle: "s Protokoll", runningTabTitle: "s offene Rechnung",
     languageLabel: "Sprache",
     deleteConfirm: "Löschen:", cannotBeUndone: "Dies kann nicht rückgängig gemacht werden.",
@@ -465,6 +467,7 @@ function updateHeaderLabels(){
   setText('app-h1', t('appTitle'));
   setText('nav-log-label', '📋 '+t('navLog'));
   setText('nav-stats-label', '📊 '+t('navStats'));
+  setText('nav-dashboard-label', '📈 '+(LANG==='de'?'Dashboard':'Dashboard'));
   setText('nav-payments-label', '💶 '+t('navPayments'));
   setText('nav-history-label', '📅 '+t('navHistory'));
   setText('nav-replace-label', '🔄 '+t('navReplace'));
@@ -1045,7 +1048,7 @@ function switchTab(tab, btn){
   }
   document.querySelectorAll('nav button').forEach(function(b){b.classList.remove('active');});
   btn.classList.add('active');
-  ['log','stats','payments','history','replace','audit','people'].forEach(function(t){
+  ['log','stats','dashboard','payments','history','replace','audit','people'].forEach(function(t){
     document.getElementById('tab-'+t).style.display = t===tab?'':'none';
   });
   STATE.tab = tab;
@@ -1055,6 +1058,7 @@ function renderTab(t){
   try {
     if(t==='log')      renderLog();
     if(t==='stats')    renderStats();
+    if(t==='dashboard') renderDashboard();
     if(t==='payments') renderPayments();
     if(t==='history')  renderHistory();
     if(t==='replace')  renderReplace();
@@ -1625,6 +1629,158 @@ async function editDrinkQty(logId, delta, person, date){
 // ══════════════════════════════════════════════════════════════
 // STATS TAB
 // ══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// DASHBOARD TAB — Weekly / Monthly / Yearly visualisations
+// ══════════════════════════════════════════════════════════════
+function renderDashboard(){
+  var el = document.getElementById('tab-dashboard');
+  if (!STATE.logs.length){ el.innerHTML = empty('📈', LANG==='de'?'Noch keine Daten':'No data yet', LANG==='de'?'Erfasse zuerst Getränke!':'Log some drinks first!'); return; }
+  var isDE = LANG === 'de';
+  var html = '';
+
+  // ── Period selector ──────────────────────────────────────
+  var period = STATE.dashPeriod || 'weekly';
+  html += '<div style="display:flex;gap:8px;margin-bottom:14px">';
+  ['weekly','monthly','yearly'].forEach(function(p){
+    var label = isDE ? {weekly:'Wöchentlich',monthly:'Monatlich',yearly:'Jährlich'}[p] : {weekly:'Weekly',monthly:'Monthly',yearly:'Yearly'}[p];
+    html += '<button onclick="STATE.dashPeriod=\''+p+'\';renderTab(\'dashboard\')" style="flex:1;padding:10px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid '+(period===p?'#b5481f':'#e8dccc')+';background:'+(period===p?'#fce4d0':'#fff')+';color:'+(period===p?'#7a2e10':'#5a3a28')+'">'+label+'</button>';
+  });
+  html += '</div>';
+
+  // ── Build buckets ─────────────────────────────────────────
+  var buckets = buildDashBuckets(period);
+  var labels  = buckets.map(function(b){ return b.label; });
+  var drinks  = buckets.map(function(b){ return b.totalDrinks; });
+  var money   = buckets.map(function(b){ return b.totalMoney; });
+  var bottles = buckets.map(function(b){ return b.totalBottles; });
+
+  var totalDrinks  = drinks.reduce(function(s,v){return s+v;},0);
+  var totalMoney   = money.reduce(function(s,v){return s+v;},0);
+  var totalBottles = bottles.reduce(function(s,v){return s+v;},0);
+
+  // ── Summary KPIs ──────────────────────────────────────────
+  html += sg([
+    {v:totalDrinks,  l:isDE?'Getränke':  'Drinks'},
+    {v:'€'+totalMoney.toFixed(2), l:isDE?'Ausgaben':'Spent', c:'g'},
+    {v:totalBottles, l:isDE?'Kostenlos':'Free btl'}
+  ]);
+
+  // ── BAR CHART helper ─────────────────────────────────────
+  function barChart(values, color, unit, title){
+    var max = Math.max.apply(null, values) || 1;
+    var W = 300, H = 120, pad = 30, barW = Math.max(4, Math.floor((W - pad) / values.length) - 3);
+    var svg = '<svg viewBox="0 0 '+W+' '+(H+40)+'" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto">';
+    // Y gridlines
+    [0,0.25,0.5,0.75,1].forEach(function(t){
+      var y = pad + (H - H*t);
+      svg += '<line x1="'+pad+'" y1="'+y+'" x2="'+W+'" y2="'+y+'" stroke="#ece0d4" stroke-width="1"/>';
+      if(t>0) svg += '<text x="'+(pad-4)+'" y="'+(y+4)+'" text-anchor="end" font-size="8" fill="#a8978a">'+(unit==='€'?'€':'')+(max*t).toFixed(unit==='€'?0:0)+(unit!=='€'?unit:'')+'</text>';
+    });
+    // Bars
+    values.forEach(function(v,i){
+      var bh = Math.max(2, (v/max)*H);
+      var x = pad + i * ((W-pad)/values.length) + 2;
+      var y = pad + H - bh;
+      svg += '<rect x="'+x+'" y="'+y+'" width="'+barW+'" height="'+bh+'" rx="3" fill="'+color+'" opacity="0.85"/>';
+      if (v > 0) svg += '<text x="'+(x+barW/2)+'" y="'+(y-3)+'" text-anchor="middle" font-size="8" fill="'+color+'" font-weight="700">'+(unit==='€'?'€'+v.toFixed(0):v)+'</text>';
+      // X label — every nth to avoid clutter
+      var nth = values.length > 12 ? 3 : values.length > 6 ? 2 : 1;
+      if (i % nth === 0) {
+        svg += '<text x="'+(x+barW/2)+'" y="'+(pad+H+14)+'" text-anchor="middle" font-size="7.5" fill="#7a5200" transform="rotate(-35,'+(x+barW/2)+','+(pad+H+14)+')">'+(labels[i]||'')+'</text>';
+      }
+    });
+    svg += '</svg>';
+    return card(title, svg);
+  }
+
+  // ── THREE CHARTS ─────────────────────────────────────────
+  html += barChart(drinks,  '#b5481f', '',  '🍺 '+(isDE?'Getränke gesamt':'Total Drinks'));
+  html += barChart(money,   '#1f8a4f', '€', '💶 '+(isDE?'Ausgaben (€)':'Money Spent (€)'));
+  html += barChart(bottles, '#0e6b8c', '',  '🔄 '+(isDE?'Kostenlose Flaschen':'Free Bottles to Replace'));
+
+  // ── TOP DRINKER per period ──────────────────────────────
+  var topRows = buckets.filter(function(b){return b.topDrinker;}).slice(-10).reverse();
+  if (topRows.length) {
+    html += card(isDE?'🏆 Top-Trinker je Zeitraum':'🏆 Top Drinker per Period',
+      topRows.map(function(b){
+        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #ece0d4">'+
+          '<div style="display:flex;align-items:center;gap:8px">'+
+            '<div style="width:24px;height:24px;border-radius:50%;background:'+colorFor(b.topDrinker)+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff">'+b.topDrinker[0].toUpperCase()+'</div>'+
+            '<div>'+
+              '<div style="font-size:13px;font-weight:700;color:#1a0e08">'+esc(b.topDrinker)+'</div>'+
+              '<div style="font-size:11px;color:#7a5200">'+b.label+'</div>'+
+            '</div>'+
+          '</div>'+
+          '<span style="font-size:14px;font-weight:800;color:#b5481f">'+b.topDrinkerCount+' 🍺</span>'+
+        '</div>';
+      }).join('')
+    );
+  }
+
+  // ── DRINK TYPE BREAKDOWN (all time) ─────────────────────
+  var drinkTotals = {};
+  STATE.logs.forEach(function(l){ drinkTotals[l.drink]=(drinkTotals[l.drink]||0)+(l.quantity||0); });
+  var sortedDrinks = Object.entries(drinkTotals).sort(function(a,b){return b[1]-a[1];});
+  var totalAll = sortedDrinks.reduce(function(s,e){return s+e[1];},0)||1;
+  if (sortedDrinks.length) {
+    html += card(isDE?'🥤 Getränke-Mix (gesamt)':'🥤 Drink Mix (all time)',
+      sortedDrinks.map(function(e){
+        var pct = Math.round(e[1]/totalAll*100);
+        return '<div style="margin-bottom:9px">'+
+          '<div style="display:flex;justify-content:space-between;margin-bottom:3px">'+
+            '<span style="font-size:13px;font-weight:600;color:#1a0e08">'+emoji(e[0])+' '+esc(e[0].replace(/^.+? /,''))+'</span>'+
+            '<span style="font-size:13px;font-weight:800;color:#b5481f">'+e[1]+' <span style="font-size:11px;color:#7a5200">('+pct+'%)</span></span>'+
+          '</div>'+
+          '<div style="height:8px;background:#f5ede4;border-radius:4px;overflow:hidden">'+
+            '<div style="height:8px;background:linear-gradient(to right,#b5481f,#f8d878);border-radius:4px;width:'+pct+'%;transition:width .4s ease"></div>'+
+          '</div>'+
+        '</div>';
+      }).join('')
+    );
+  }
+
+  el.innerHTML = html;
+}
+
+function buildDashBuckets(period){
+  // Group logs by week/month/year bucket
+  var map = {};
+  STATE.logs.forEach(function(l){
+    var d = new Date(l.date+'T00:00:00');
+    var key, label;
+    if (period === 'weekly'){
+      // ISO week
+      var jan4 = new Date(d.getFullYear(), 0, 4);
+      var wk = Math.ceil((((d - jan4) / 86400000) + jan4.getDay() + 1) / 7);
+      key = d.getFullYear()+'-W'+String(wk).padStart(2,'0');
+      label = 'W'+wk;
+    } else if (period === 'monthly'){
+      key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+      var months = LANG==='de'
+        ? ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
+        : ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      label = months[d.getMonth()]+' '+d.getFullYear().toString().slice(2);
+    } else {
+      key = ''+d.getFullYear();
+      label = ''+d.getFullYear();
+    }
+    if (!map[key]) map[key] = {label:label,key:key,totalDrinks:0,totalMoney:0,totalBottles:0,persons:{}};
+    var qty = l.quantity||0;
+    map[key].totalDrinks += qty;
+    map[key].totalMoney  += parseFloat(l.total_price)||0;
+    if ((parseFloat(l.unit_price)||0)===0) map[key].totalBottles += qty;
+    map[key].persons[l.person] = (map[key].persons[l.person]||0) + qty;
+  });
+
+  // Sort by key, find top drinker per bucket
+  return Object.values(map).sort(function(a,b){ return a.key.localeCompare(b.key); }).map(function(b){
+    var top = Object.entries(b.persons).sort(function(a,c){return c[1]-a[1];})[0];
+    b.topDrinker = top ? top[0] : null;
+    b.topDrinkerCount = top ? top[1] : 0;
+    return b;
+  });
+}
+
 function renderStats(){
   var el=document.getElementById('tab-stats');
   if(!STATE.logs.length){el.innerHTML=empty('📊',t('noDataYet'),t('logSomeDrinks'));return;}
