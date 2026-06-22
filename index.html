@@ -211,6 +211,7 @@
       <div class="user-badge">
         <button onclick="setLang(LANG==='en'?'de':'en')" class="btn-logout" id="lang-toggle-btn" title="Switch language" style="margin-right:2px">🌐 EN</button>
         <span class="user-name" id="user-label"></span>
+        <span id="realtime-dot" title="Connecting..." style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#f8d878;margin-right:2px;vertical-align:middle;transition:background .5s;flex-shrink:0"></span>
         <button class="btn-logout" onclick="loadAll().then(function(){notify('Data refreshed ✓')})" title="Refresh data" style="font-size:16px;padding:5px 10px">🔄</button>
         <button class="btn-logout" id="signout-btn" onclick="signOut()">Exit</button>
       </div>
@@ -643,11 +644,86 @@ function enterApp(){
   loadAll().then(function(){
     console.log('[BeerOClock] loadAll complete, showing login joke popup');
     showLoginJokePopup();
+    startRealtime();   // ← kick off live updates after first load
   }).catch(function(e){
     console.error('[BeerOClock] loadAll rejected unexpectedly:', e);
-    // Still show the joke even if data loading had issues
     showLoginJokePopup();
+    startRealtime();
   });
+}
+
+// ── REALTIME + POLLING ───────────────────────────────────────
+var _realtimeChannel = null;
+var _pollTimer = null;
+var _lastRefreshTime = 0;
+var _refreshQueued = false;
+
+function startRealtime(){
+  stopRealtime(); // clear any previous subscriptions
+
+  // 1. Supabase Realtime — instant push whenever any table changes
+  try {
+    _realtimeChannel = SB.channel('boc-realtime')
+      .on('postgres_changes', {event:'*', schema:'public', table:'drink_logs'},    function(){ queueRefresh('drink_logs'); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'payments'},       function(){ queueRefresh('payments'); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'replacements'},   function(){ queueRefresh('replacements'); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'audit_log'},      function(){ queueRefresh('audit_log'); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'people'},         function(){ queueRefresh('people'); })
+      .subscribe(function(status){
+        var dot = document.getElementById('realtime-dot');
+        if (!dot) return;
+        if (status === 'SUBSCRIBED') {
+          dot.style.background = '#4cd471';
+          dot.title = 'Live — receiving real-time updates';
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          dot.style.background = '#f8d878';
+          dot.title = 'Real-time unavailable — using polling';
+        }
+      });
+    console.log('[BeerOClock] Realtime channel subscribed');
+  } catch(e) {
+    console.warn('[BeerOClock] Realtime setup failed, using polling only:', e.message);
+  }
+
+  // 2. Polling fallback every 30s — catches anything realtime misses
+  _pollTimer = setInterval(function(){
+    queueRefresh('poll');
+  }, 30000);
+
+  // Also refresh when the tab becomes visible again (user switches back)
+  document.addEventListener('visibilitychange', onVisibilityChange);
+}
+
+function stopRealtime(){
+  if (_realtimeChannel) {
+    try { SB.removeChannel(_realtimeChannel); } catch(e){}
+    _realtimeChannel = null;
+  }
+  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+  document.removeEventListener('visibilitychange', onVisibilityChange);
+}
+
+function onVisibilityChange(){
+  if (document.visibilityState === 'visible') {
+    // Refresh if it's been more than 30s since last refresh
+    var now = Date.now();
+    if (now - _lastRefreshTime > 30000) queueRefresh('visibility');
+  }
+}
+
+// Debounce: if multiple tables fire at once, only do one loadAll
+function queueRefresh(source){
+  if (_refreshQueued) return;
+  _refreshQueued = true;
+  setTimeout(function(){
+    _refreshQueued = false;
+    _lastRefreshTime = Date.now();
+    console.log('[BeerOClock] Refreshing data (trigger:', source+')');
+    // Don't refresh if a modal is open (would be jarring mid-interaction)
+    var modalRoot = document.getElementById('modal-root');
+    if (modalRoot && modalRoot.innerHTML.trim()) return;
+    loadAll();
+  }, 400); // 400ms debounce
 }
 
 // ── TENNIS JOKES / FUN STATS ON LOGIN ───────────────────────
@@ -842,6 +918,7 @@ async function registerSelfAsPerson(){
 }
 
 async function signOut(){
+  stopRealtime();
   if (IS_ADMIN && SB && SB.auth) { await SB.auth.signOut(); }
   if (IS_GUEST) {
     localStorage.removeItem('guest_name');
