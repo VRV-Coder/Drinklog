@@ -172,20 +172,21 @@
   <div class="header">
     <div class="header-row">
       <span style="font-size:22px">🎾🍺</span>
-      <h1>Beer'O'Clock</h1>
+      <h1 id="app-h1">Beer'O'Clock</h1>
       <div class="user-badge">
+        <button onclick="setLang(LANG==='en'?'de':'en')" class="btn-logout" id="lang-toggle-btn" title="Switch language" style="margin-right:2px">🌐 EN</button>
         <span class="user-name" id="user-label"></span>
-        <button class="btn-logout" onclick="signOut()">Exit</button>
+        <button class="btn-logout" id="signout-btn" onclick="signOut()">Exit</button>
       </div>
     </div>
     <nav id="main-nav">
-      <button class="active" onclick="switchTab('log',this)">📋 Log</button>
-      <button onclick="switchTab('stats',this)">📊 Stats</button>
-      <button onclick="switchTab('payments',this)">💶 Payments</button>
-      <button onclick="switchTab('history',this)" id="nav-history-btn" style="display:none">📅 History</button>
-      <button onclick="switchTab('replace',this)">🔄 Replace</button>
-      <button onclick="switchTab('audit',this)" id="nav-audit-btn" style="display:none">📜 Audit</button>
-      <button onclick="switchTab('people',this)">👥 People</button>
+      <button class="active" onclick="switchTab('log',this)"><span id="nav-log-label">📋 Log</span></button>
+      <button onclick="switchTab('stats',this)"><span id="nav-stats-label">📊 Stats</span></button>
+      <button onclick="switchTab('payments',this)"><span id="nav-payments-label">💶 Payments</span></button>
+      <button onclick="switchTab('history',this)" id="nav-history-btn" style="display:none"><span id="nav-history-label">📅 History</span></button>
+      <button onclick="switchTab('replace',this)"><span id="nav-replace-label">🔄 Replace</span></button>
+      <button onclick="switchTab('audit',this)" id="nav-audit-btn" style="display:none"><span id="nav-audit-label">📜 Audit</span></button>
+      <button onclick="switchTab('people',this)"><span id="nav-people-label">👥 People</span></button>
     </nav>
   </div>
   <div class="content">
@@ -222,6 +223,196 @@ var STATE = {
   payPayers:[], payNonDrinkers:[], payAmount:'', payDate:td(), payNote:'',
   undoStack:[]
 };
+
+// ── LANGUAGE / TRANSLATIONS ──────────────────────────────────
+var LANG = localStorage.getItem('app_lang') || 'en';
+
+var I18N = {
+  en: {
+    appTitle: "Beer'O'Clock",
+    tagline: "Enter your name to join, or sign in if you're the admin.",
+    guestTab: "I'm a Guest", adminTab: "Admin Sign In",
+    yourName: "Your Name", namePlaceholder: "e.g. John",
+    enterApp: "Enter App", guestNote: "No password needed — just enter your name to start logging drinks.",
+    adminEmail: "Admin Email", password: "Password", signIn: "Sign In",
+    pleaseEnterName: "Please enter your name.",
+    navLog: "Log", navStats: "Stats", navPayments: "Payments", navHistory: "History",
+    navReplace: "Replace", navAudit: "Audit", navPeople: "People",
+    signOut: "Exit",
+    myBalanceBtn: "💰 My Balance — what do I owe?",
+    whosDrinking: "Who's Drinking",
+    addNewNamePlaceholder: "Or type a new name…",
+    logADrink: "Log a Drink",
+    date: "Date", person: "Person", drinkType: "Drink Type", drinks: "Drinks",
+    pricePerDrink: "Price per Drink (€)", totalPrice: "Total Price",
+    note: "Note", noteOptional: "optional note…",
+    logDrinkBtn: "+ Log Drink",
+    runningTabsTitle: "🧾 Running Tabs — Not Yet Settled",
+    settledUpTitle: "✅ Settled Up",
+    details: "👁 details",
+    owed: "owed", toReplace: "to replace", settled: "settled",
+    sinceLastSettlement: "since last settlement",
+    close: "Close",
+    drink: "drink", drinksPlural: "drinks",
+    free: "free", loggedBy: "logged by",
+    totalDrinks: "Total Drinks", totalSpend: "Total Spend", peopleLbl: "People", daysLogged: "Days Logged",
+    favourite: "Fav", daily: "Daily",
+    totalCost: "Total Cost", totalPaid: "Total Paid", pending: "Pending",
+    recordPayment: "Record Payment", amount: "Amount (€)", paidBy: "Paid By",
+    didntDrink: "Didn't Drink", recordPaymentBtn: "+ Record Payment",
+    balanceByDay: "Balance by Day", paymentRecords: "Payment Records",
+    due: "due", recordedBy: "Recorded by",
+    bottlesOwed: "Bottles Owed", replaced: "Replaced", stillOwed: "Still Owed",
+    allUnsettledTotals: "All Unsettled — Totals", left: "left", done: "done",
+    bottlesReplaced: "bottles replaced", bottleSettled: "settled",
+    bottlesLeft: "left", allDone: "bottles done", markReplaced: "Mark replaced",
+    allReplaced: "All replaced", undo: "undo", dayTotal: "Day Total",
+    replacementLog: "Replacement Log", forDate: "For",
+    noActions: "No changes yet", actionsInHistory: "action(s) in history",
+    undoBtn: "↩ Undo",
+    allSettledUp: "All settled up!", noUnsettledDays: "No unsettled days to replace.",
+    activityLog: "Activity Log — last 100 actions",
+    addNewPerson: "Add a New Person", addedBy: "Added by",
+    groupMembers: "Group Members", add: "Add",
+    namePlaceholder2: "Name…",
+    youSuffix: "(you)",
+    historyAdminOnly: "Admin Only", historyRestricted: "History is restricted to the club admin.",
+    auditAdminOnly: "Audit log is admin-only 🔒", historyAdminOnlyToast: "History is admin-only 🔒",
+    noDataYet: "No data yet", logSomeDrinks: "Log some drinks first!",
+    noHistory: "No history",
+    drinksBreakdown: "Drinks Breakdown",
+    yourBalance: "💰 Your Balance",
+    youOweMoney: "You owe (money)", bottlesToReplace: "Bottles to replace",
+    totalSpentPriced: "Total spent (priced drinks)", totalPaidLbl: "Total paid",
+    freeDrinksLogged: "Free drinks logged",
+    welcomeBack: "Welcome back", letsGo: "Let's go 🎾",
+    yourLogTitle: "'s Log", runningTabTitle: "'s Running Tab",
+    languageLabel: "Language",
+    deleteConfirm: "Delete:", cannotBeUndone: "This cannot be undone.",
+    onlyOwnEntries: "You can only delete your own entries 🔒",
+    onlyOwnQty: "You can only edit your own entries 🔒",
+    deleted: "Deleted", entryUpdated: "Entry updated ✓",
+    drinkLogged: "Drink logged for", personAdded: "added ✓",
+    paymentRecorded: "Payment recorded ✓", paymentUpdated: "Payment updated ✓",
+    replacementUpdated: "Replacement updated ✓",
+    selectPersonFirst: "Select or type a person",
+    selectPayerFirst: "Select who paid",
+    payQuestion: "😉 Do you really want to <strong>pay</strong>,<br/>or do you wanna <strong>replace</strong>? 😉😉",
+    payBtn: "💸 Pay", replaceBtn: "🤐 Replace", cancel: "Cancel",
+    movedToReplace: "moved to Replace tab 🤐",
+    noPricedDrinksFound: "No priced drinks found for",
+    toConvert: "on", toConvert2: "to convert",
+    isDown: "is down", totalOverall: "drinks overall 🥴",
+  },
+  de: {
+    appTitle: "Bier'O'Uhr",
+    tagline: "Gib deinen Namen ein, um teilzunehmen, oder melde dich als Admin an.",
+    guestTab: "Ich bin Gast", adminTab: "Admin-Anmeldung",
+    yourName: "Dein Name", namePlaceholder: "z.B. Johann",
+    enterApp: "App öffnen", guestNote: "Kein Passwort nötig — gib einfach deinen Namen ein, um loszulegen.",
+    adminEmail: "Admin-E-Mail", password: "Passwort", signIn: "Anmelden",
+    pleaseEnterName: "Bitte gib deinen Namen ein.",
+    navLog: "Erfassen", navStats: "Statistik", navPayments: "Zahlungen", navHistory: "Verlauf",
+    navReplace: "Ersetzen", navAudit: "Protokoll", navPeople: "Personen",
+    signOut: "Verlassen",
+    myBalanceBtn: "💰 Mein Saldo — was schulde ich?",
+    whosDrinking: "Wer trinkt",
+    addNewNamePlaceholder: "Oder neuen Namen eingeben…",
+    logADrink: "Getränk erfassen",
+    date: "Datum", person: "Person", drinkType: "Getränkeart", drinks: "Getränke",
+    pricePerDrink: "Preis pro Getränk (€)", totalPrice: "Gesamtpreis",
+    note: "Notiz", noteOptional: "optionale Notiz…",
+    logDrinkBtn: "+ Getränk erfassen",
+    runningTabsTitle: "🧾 Offene Rechnungen",
+    settledUpTitle: "✅ Beglichen",
+    details: "👁 Details",
+    owed: "offen", toReplace: "zu ersetzen", settled: "beglichen",
+    sinceLastSettlement: "seit letzter Abrechnung",
+    close: "Schließen",
+    drink: "Getränk", drinksPlural: "Getränke",
+    free: "kostenlos", loggedBy: "erfasst von",
+    totalDrinks: "Getränke gesamt", totalSpend: "Ausgaben gesamt", peopleLbl: "Personen", daysLogged: "Erfasste Tage",
+    favourite: "Favorit", daily: "Täglich",
+    totalCost: "Gesamtkosten", totalPaid: "Gesamt bezahlt", pending: "Ausstehend",
+    recordPayment: "Zahlung erfassen", amount: "Betrag (€)", paidBy: "Bezahlt von",
+    didntDrink: "Hat nicht getrunken", recordPaymentBtn: "+ Zahlung erfassen",
+    balanceByDay: "Saldo nach Tag", paymentRecords: "Zahlungsverlauf",
+    due: "fällig", recordedBy: "Erfasst von",
+    bottlesOwed: "Flaschen offen", replaced: "Ersetzt", stillOwed: "Noch offen",
+    allUnsettledTotals: "Alle offenen — Gesamt", left: "übrig", done: "erledigt",
+    bottlesReplaced: "Flaschen ersetzt", bottleSettled: "beglichen",
+    bottlesLeft: "übrig", allDone: "Flaschen erledigt", markReplaced: "Als ersetzt markieren",
+    allReplaced: "Alle ersetzt", undo: "rückgängig", dayTotal: "Tagessumme",
+    replacementLog: "Ersetzungsprotokoll", forDate: "Für",
+    noActions: "Noch keine Änderungen", actionsInHistory: "Aktion(en) im Verlauf",
+    undoBtn: "↩ Rückgängig",
+    allSettledUp: "Alles beglichen!", noUnsettledDays: "Keine offenen Tage zum Ersetzen.",
+    activityLog: "Aktivitätsprotokoll — letzte 100 Aktionen",
+    addNewPerson: "Neue Person hinzufügen", addedBy: "Hinzugefügt von",
+    groupMembers: "Gruppenmitglieder", add: "Hinzufügen",
+    namePlaceholder2: "Name…",
+    youSuffix: "(du)",
+    historyAdminOnly: "Nur für Admin", historyRestricted: "Der Verlauf ist nur für den Club-Admin sichtbar.",
+    auditAdminOnly: "Protokoll ist nur für Admins 🔒", historyAdminOnlyToast: "Verlauf ist nur für Admins 🔒",
+    noDataYet: "Noch keine Daten", logSomeDrinks: "Erfasse zuerst ein paar Getränke!",
+    noHistory: "Kein Verlauf",
+    drinksBreakdown: "Getränkeübersicht",
+    yourBalance: "💰 Dein Saldo",
+    youOweMoney: "Du schuldest (Geld)", bottlesToReplace: "Flaschen zu ersetzen",
+    totalSpentPriced: "Ausgegeben (bezahlte Getränke)", totalPaidLbl: "Gesamt bezahlt",
+    freeDrinksLogged: "Kostenlose Getränke erfasst",
+    welcomeBack: "Willkommen zurück", letsGo: "Los geht's 🎾",
+    yourLogTitle: "s Protokoll", runningTabTitle: "s offene Rechnung",
+    languageLabel: "Sprache",
+    deleteConfirm: "Löschen:", cannotBeUndone: "Dies kann nicht rückgängig gemacht werden.",
+    onlyOwnEntries: "Du kannst nur deine eigenen Einträge löschen 🔒",
+    onlyOwnQty: "Du kannst nur deine eigenen Einträge bearbeiten 🔒",
+    deleted: "Gelöscht", entryUpdated: "Eintrag aktualisiert ✓",
+    drinkLogged: "Getränk erfasst für", personAdded: "hinzugefügt ✓",
+    paymentRecorded: "Zahlung erfasst ✓", paymentUpdated: "Zahlung aktualisiert ✓",
+    replacementUpdated: "Ersetzung aktualisiert ✓",
+    selectPersonFirst: "Bitte Person auswählen oder eingeben",
+    selectPayerFirst: "Bitte auswählen, wer bezahlt hat",
+    payQuestion: "😉 Möchtest du wirklich <strong>bezahlen</strong>,<br/>oder lieber <strong>ersetzen</strong>? 😉😉",
+    payBtn: "💸 Bezahlen", replaceBtn: "🤐 Ersetzen", cancel: "Abbrechen",
+    movedToReplace: "in den Ersetzen-Tab verschoben 🤐",
+    noPricedDrinksFound: "Keine bezahlten Getränke gefunden für",
+    toConvert: "am", toConvert2: "zum Umwandeln",
+    isDown: "hat schon", totalOverall: "Getränke insgesamt 🥴",
+  }
+};
+
+function t(key){
+  return (I18N[LANG] && I18N[LANG][key]) || I18N.en[key] || key;
+}
+
+function setLang(lang){
+  LANG = lang;
+  localStorage.setItem('app_lang', lang);
+  // Re-render whatever is currently visible
+  if (document.getElementById('app') && document.getElementById('app').style.display !== 'none') {
+    renderTab(STATE.tab);
+    updateHeaderLabels();
+  }
+  if (document.getElementById('auth-screen') && document.getElementById('auth-screen').style.display !== 'none') {
+    restoreAuthScreenHtml();
+  }
+}
+
+function updateHeaderLabels(){
+  var setText = function(id, txt){ var el = document.getElementById(id); if (el) el.textContent = txt; };
+  setText('app-h1', t('appTitle'));
+  setText('nav-log-label', '📋 '+t('navLog'));
+  setText('nav-stats-label', '📊 '+t('navStats'));
+  setText('nav-payments-label', '💶 '+t('navPayments'));
+  setText('nav-history-label', '📅 '+t('navHistory'));
+  setText('nav-replace-label', '🔄 '+t('navReplace'));
+  setText('nav-audit-label', '📜 '+t('navAudit'));
+  setText('nav-people-label', '👥 '+t('navPeople'));
+  setText('signout-btn', t('signOut'));
+  var langBtn = document.getElementById('lang-toggle-btn');
+  if (langBtn) langBtn.textContent = LANG==='en' ? '🌐 EN' : '🌐 DE';
+}
 
 // ── INIT ────────────────────────────────────────────────────
 window.addEventListener('load', function(){
@@ -299,21 +490,26 @@ function resetBtn(){
 
 function restoreAuthScreenHtml(){
   document.getElementById('auth-screen').innerHTML =
-    '<div class="auth-card"><h1>🍺 Beer\'O\'Clock</h1>' +
-    '<p>Enter your name to join, or sign in if you\'re the admin.</p>' +
+    '<div class="auth-card">' +
+    '<div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:10px">' +
+      '<button onclick="setLang(\'en\')" style="padding:4px 10px;border-radius:6px;border:1px solid '+(LANG==='en'?'#b5481f':'#e8dccc')+';background:'+(LANG==='en'?'#f3e4d3':'#fff')+';color:'+(LANG==='en'?'#b5481f':'#8a7568')+';font-size:11px;font-weight:700;cursor:pointer">🇬🇧 EN</button>' +
+      '<button onclick="setLang(\'de\')" style="padding:4px 10px;border-radius:6px;border:1px solid '+(LANG==='de'?'#b5481f':'#e8dccc')+';background:'+(LANG==='de'?'#f3e4d3':'#fff')+';color:'+(LANG==='de'?'#b5481f':'#8a7568')+';font-size:11px;font-weight:700;cursor:pointer">🇩🇪 DE</button>' +
+    '</div>' +
+    '<h1>🍺 '+esc(t('appTitle'))+'</h1>' +
+    '<p>'+esc(t('tagline'))+'</p>' +
     '<div class="auth-tabs">' +
-      '<button class="auth-tab active" onclick="authTab(\'guest\',this)">I\'m a Guest</button>' +
-      '<button class="auth-tab" onclick="authTab(\'admin\',this)">Admin Sign In</button>' +
+      '<button class="auth-tab active" onclick="authTab(\'guest\',this)">'+esc(t('guestTab'))+'</button>' +
+      '<button class="auth-tab" onclick="authTab(\'admin\',this)">'+esc(t('adminTab'))+'</button>' +
     '</div>' +
     '<div id="auth-form-guest">' +
-      '<div class="field"><label>Your Name</label><input id="guest-name" type="text" placeholder="e.g. John" onkeydown="if(event.key===\'Enter\')guestEnter()"/></div>' +
-      '<button class="btn-auth" onclick="guestEnter()">Enter App</button>' +
-      '<p class="auth-note">No password needed — just enter your name to start logging drinks.</p>' +
+      '<div class="field"><label>'+esc(t('yourName'))+'</label><input id="guest-name" type="text" placeholder="'+esc(t('namePlaceholder'))+'" onkeydown="if(event.key===\'Enter\')guestEnter()"/></div>' +
+      '<button class="btn-auth" onclick="guestEnter()">'+esc(t('enterApp'))+'</button>' +
+      '<p class="auth-note">'+esc(t('guestNote'))+'</p>' +
     '</div>' +
     '<div id="auth-form-admin" style="display:none">' +
-      '<div class="field"><label>Admin Email</label><input id="li-email" type="email" placeholder="you@email.com"/></div>' +
-      '<div class="field"><label>Password</label><input id="li-pass" type="password" placeholder="••••••••"/></div>' +
-      '<button class="btn-auth" onclick="signIn()">Sign In</button>' +
+      '<div class="field"><label>'+esc(t('adminEmail'))+'</label><input id="li-email" type="email" placeholder="you@email.com"/></div>' +
+      '<div class="field"><label>'+esc(t('password'))+'</label><input id="li-pass" type="password" placeholder="••••••••"/></div>' +
+      '<button class="btn-auth" onclick="signIn()">'+esc(t('signIn'))+'</button>' +
     '</div>' +
     '<div id="auth-error" class="auth-error"></div></div>';
 }
@@ -380,6 +576,7 @@ function enterApp(){
   if (historyBtn) historyBtn.style.display = IS_ADMIN ? '' : 'none';
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
+  updateHeaderLabels();
   registerSelfAsPerson();
   loadAll().then(function(){
     console.log('[BeerOClock] loadAll complete, showing login joke popup');
@@ -392,7 +589,7 @@ function enterApp(){
 }
 
 // ── TENNIS JOKES / FUN STATS ON LOGIN ───────────────────────
-var TENNIS_JOKES = [
+var TENNIS_JOKES_EN = [
   "Why did the tennis player bring string to the bar? In case they needed to serve another round! 🎾🍺",
   "What's a tennis player's favourite drink? Anything on the rocks — they love a good rally with ice! 🧊",
   "Why don't tennis players ever get thirsty? They're always chasing the ball... straight to the bar! 🏃‍♂️🍺",
@@ -410,27 +607,63 @@ var TENNIS_JOKES = [
   "Backhand, forehand, and one more round — the holy trinity of club night. 🎾🍺"
 ];
 
+var TENNIS_JOKES_DE = [
+  "Warum bringt der Tennisspieler Schnur zur Bar? Falls er noch eine Runde servieren muss! 🎾🍺",
+  "Was ist das Lieblingsgetränk eines Tennisspielers? Alles auf Eis — sie lieben einen guten Volley mit Eiswürfeln! 🧊",
+  "Warum haben Tennisspieler nie Durst? Sie jagen immer dem Ball hinterher... direkt zur Bar! 🏃‍♂️🍺",
+  "Love bedeutet nichts im Tennis — aber alles, wenn jemand anderes die Runde bezahlt! 🎾😉",
+  "Warum war der Tennisschläger schlecht beim Bestellen? Er machte immer Doppelfehler an der Bar! 🎾",
+  "Was nennt man einen Tennisspieler, der nie eine Runde kauft? Einen Nettoverlust für alle. 🥲",
+  "Einstand, Vorteil, Ersetzen — die drei Wörter, die man an dieser Bar kennen muss. 🎾🍻",
+  "Tennisellbogen ist real. Bierelllbogen auch. Bleibt hydriert, Meister. 💪🍺",
+  "Warum hat der Spieler die Barrechnung gekillt? Jahre der Übung beim Servieren ohne Doppelfehler! 🎾",
+  "Ein Sandplatz macht Schuhe schmutzig. Eine Barrechnung macht das Portemonnaie leer. Wählt weise. 🧱🍺",
+  "Was ist der Unterschied zwischen einem Tennisspiel und einem Abend hier? Eins hat einen Tiebreak — das andere bricht euch einfach. 😅",
+  "Warum sind Tennisspieler tolle Trinkkumpels? Sie wissen immer, wie man den Punktestand hält! 🎾🍻",
+  "Denkt daran: Love-Love bedeutet, noch nichts passiert. Lasst das nicht euer Getränkestand sein. 🎾",
+  "Der einzige 'Fehler' heute Abend sollte auf dem Platz sein, nicht auf eurer Rechnung. 🎾💸",
+  "Rückhand, Vorhand und noch eine Runde — die heilige Dreifaltigkeit des Clubabends. 🎾🍺"
+];
+
+function getTennisJokes(){
+  return LANG === 'de' ? TENNIS_JOKES_DE : TENNIS_JOKES_EN;
+}
+
+var TENNIS_JOKES = TENNIS_JOKES_EN; // kept for backward compat
+
 var FUN_STAT_TEMPLATES = [
   function(){
     var total = STATE.logs.reduce(function(s,l){return s+(l.quantity||0);},0);
-    return total > 0 ? "🎾 Fun stat: this club has logged <strong>"+total+"</strong> drinks total. That's a lot of changeovers!" : null;
+    if (!total) return null;
+    return LANG === 'de'
+      ? "🎾 Fun-Fakt: Dieser Club hat insgesamt <strong>"+total+"</strong> Getränke erfasst. Das sind viele Seitenwechsel!"
+      : "🎾 Fun stat: this club has logged <strong>"+total+"</strong> drinks total. That's a lot of changeovers!";
   },
   function(){
     if (!STATE.people.length) return null;
     var counts = {};
     STATE.logs.forEach(function(l){ counts[l.person] = (counts[l.person]||0)+(l.quantity||0); });
     var top = Object.entries(counts).sort(function(a,b){return b[1]-a[1];})[0];
-    return top ? "🏆 Current club leader: <strong>"+esc(top[0])+"</strong> with "+top[1]+" drinks logged. Reigning champion!" : null;
+    if (!top) return null;
+    return LANG === 'de'
+      ? "🏆 Aktueller Club-Spitzenreiter: <strong>"+esc(top[0])+"</strong> mit "+top[1]+" erfassten Getränken. Regierender Champion!"
+      : "🏆 Current club leader: <strong>"+esc(top[0])+"</strong> with "+top[1]+" drinks logged. Reigning champion!";
   },
   function(){
     var drinkCounts = {};
     STATE.logs.forEach(function(l){ drinkCounts[l.drink]=(drinkCounts[l.drink]||0)+(l.quantity||0); });
     var top = Object.entries(drinkCounts).sort(function(a,b){return b[1]-a[1];})[0];
-    return top ? "📊 Most popular order at the club: <strong>"+esc(top[0])+"</strong> — "+top[1]+" served so far!" : null;
+    if (!top) return null;
+    return LANG === 'de'
+      ? "📊 Beliebteste Bestellung im Club: <strong>"+esc(top[0])+"</strong> — "+top[1]+" bisher serviert!"
+      : "📊 Most popular order at the club: <strong>"+esc(top[0])+"</strong> — "+top[1]+" served so far!";
   },
   function(){
     var uniqueDays = new Set(STATE.logs.map(function(l){return l.date;})).size;
-    return uniqueDays > 0 ? "📅 The club has logged drinks on <strong>"+uniqueDays+"</strong> different day"+(uniqueDays!==1?'s':'')+". Dedication!" : null;
+    if (!uniqueDays) return null;
+    return LANG === 'de'
+      ? "📅 Der Club hat an <strong>"+uniqueDays+"</strong> verschiedenen Tag"+(uniqueDays!==1?'en':'')+' Getränke erfasst. Dedication!'
+      : "📅 The club has logged drinks on <strong>"+uniqueDays+"</strong> different day"+(uniqueDays!==1?'s':'')+". Dedication!";
   }
 ];
 
@@ -441,7 +674,7 @@ function showLoginJokePopup(){
     var content = null;
 
     if (useJoke) {
-      content = TENNIS_JOKES[Math.floor(Math.random()*TENNIS_JOKES.length)];
+      content = getTennisJokes()[Math.floor(Math.random()*getTennisJokes().length)];
     } else {
       // Try fun stats in random order, use first one that returns something
       var templates = FUN_STAT_TEMPLATES.slice().sort(function(){return Math.random()-0.5;});
@@ -449,15 +682,15 @@ function showLoginJokePopup(){
         var result = templates[i]();
         if (result) { content = result; break; }
       }
-      if (!content) content = TENNIS_JOKES[Math.floor(Math.random()*TENNIS_JOKES.length)];
+      if (!content) content = getTennisJokes()[Math.floor(Math.random()*getTennisJokes().length)];
     }
 
     showModal(
       '<div style="text-align:center">'+
         '<div style="font-size:42px;margin-bottom:10px">🎾</div>'+
-        '<h3 style="margin-bottom:14px">Welcome back, '+esc(CURRENT_NAME)+'!</h3>'+
+        '<h3 style="margin-bottom:14px">'+esc(t('welcomeBack'))+', '+esc(CURRENT_NAME)+'!</h3>'+
         '<div style="font-size:14px;color:#2e1c14;line-height:1.6;margin-bottom:20px">'+content+'</div>'+
-        '<button class="modal-btn modal-btn-pay" style="width:100%" onclick="closeModal()">Let\'s go 🎾</button>'+
+        '<button class="modal-btn modal-btn-pay" style="width:100%" onclick="closeModal()">'+esc(t('letsGo'))+'</button>'+
       '</div>'
     );
   } catch(e) {
@@ -467,9 +700,9 @@ function showLoginJokePopup(){
       showModal(
         '<div style="text-align:center">'+
           '<div style="font-size:42px;margin-bottom:10px">🎾</div>'+
-          '<h3 style="margin-bottom:14px">Welcome back!</h3>'+
+          '<h3 style="margin-bottom:14px">'+esc(t('welcomeBack'))+'!</h3>'+
           '<div style="font-size:14px;color:#2e1c14;line-height:1.6;margin-bottom:20px">'+TENNIS_JOKES[0]+'</div>'+
-          '<button class="modal-btn modal-btn-pay" style="width:100%" onclick="closeModal()">Let\'s go 🎾</button>'+
+          '<button class="modal-btn modal-btn-pay" style="width:100%" onclick="closeModal()">'+esc(t('letsGo'))+'</button>'+
         '</div>'
       );
     } catch(e2) { console.error('[BeerOClock] fallback joke modal also failed:', e2); }
@@ -573,11 +806,11 @@ document.addEventListener('click', function(e){
 // ── TABS ────────────────────────────────────────────────────
 function switchTab(tab, btn){
   if (tab === 'audit' && !IS_ADMIN) {
-    notify('Audit log is admin-only 🔒', true);
+    notify(t('auditAdminOnly'), true);
     return;
   }
   if (tab === 'history' && !IS_ADMIN) {
-    notify('History is admin-only 🔒', true);
+    notify(t('historyAdminOnlyToast'), true);
     return;
   }
   document.querySelectorAll('nav button').forEach(function(b){b.classList.remove('active');});
@@ -611,36 +844,36 @@ function renderLog(){
   var total = ((parseFloat(STATE.logPrice)||0)*STATE.logQty).toFixed(2);
 
   el.innerHTML =
-    '<button class="btn-primary" style="background:linear-gradient(135deg,#b45309,#f8d878);color:#1a0f00;margin-bottom:12px" onclick="showMyBalance()">💰 My Balance — what do I owe?</button>'+
+    '<button class="btn-primary" style="background:linear-gradient(135deg,#b45309,#f8d878);color:#1a0f00;margin-bottom:12px" onclick="showMyBalance()"'+esc(t('myBalanceBtn'))+'</button>'+
 
-    card('Who\'s Drinking',
+    card(t('whosDrinking'),
       '<div class="chips" style="margin-bottom:10px">'+
         STATE.people.map(function(p){
           var on = STATE.logPerson===p.display_name;
           return '<span class="chip'+(on?' cp':'')+'" onclick="STATE.logPerson=\''+esc(p.display_name)+'\';renderTab(\'log\')">'+(p.display_name===CURRENT_NAME?'<span class="mine-dot"></span>':'')+esc(p.display_name)+'</span>';
         }).join('')+
         (STATE.people.find(function(p){return p.display_name===CURRENT_NAME;}) ? '' :
-          '<span class="chip cp" onclick="STATE.logPerson=\''+esc(CURRENT_NAME)+'\';renderTab(\'log\')">'+esc(CURRENT_NAME)+' (you)</span>')+
+          '<span class="chip cp" onclick="STATE.logPerson=\''+esc(CURRENT_NAME)+'\';renderTab(\'log\')">'+esc(CURRENT_NAME)+' '+t('youSuffix')+'</span>')+
       '</div>'+
       '<div style="display:flex;gap:8px">'+
-      '<input id="np" type="text" placeholder="Or type a new name…" style="flex:1" onkeydown="if(event.key===\'Enter\'){addNewPersonFromInput(this)}"/>'+
+      '<input id="np" type="text" placeholder="'+esc(t('addNewNamePlaceholder'))+'" style="flex:1" onkeydown="if(event.key===\'Enter\'){addNewPersonFromInput(this)}"/>'+
       '</div>')+
 
-    card('Log a Drink',
+    card(t('logADrink'),
       '<div class="grid2">'+
-        fld('Date','<input type="date" value="'+STATE.logDate+'" onchange="STATE.logDate=this.value"/>')+
-        fld('Person','<select onchange="STATE.logPerson=this.value">'+pOpts(STATE.logPerson)+'</select>')+
+        fld(t('date'),'<input type="date" value="'+STATE.logDate+'" onchange="STATE.logDate=this.value"/>')+
+        fld(t('person'),'<select onchange="STATE.logPerson=this.value">'+pOpts(STATE.logPerson)+'</select>')+
       '</div>'+
-      fld('Drink Type','<div class="chips" id="drink-chip-row">'+DRINK_TYPES.map(function(d){
+      fld(t('drinkType'),'<div class="chips" id="drink-chip-row">'+DRINK_TYPES.map(function(d){
         return '<span class="chip'+(STATE.logDrink===d?' cp':'')+'" data-drink-select="'+esc(d)+'">' +d+'</span>';
       }).join('')+'</div>')+
       '<div class="grid2">'+
-        fld('Drinks',stepper('logQty',STATE.logQty))+
-        fld('Price per Drink (€)','<div style="position:relative"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#8a7568">€</span><input type="number" min="0" step="0.01" value="'+(STATE.logPrice||'')+'" placeholder="0.00" style="padding-left:24px" oninput="STATE.logPrice=this.value;updTotal()"/></div>')+
+        fld(t('drinks'),stepper('logQty',STATE.logQty))+
+        fld(t('pricePerDrink'),'<div style="position:relative"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#8a7568">€</span><input type="number" min="0" step="0.01" value="'+(STATE.logPrice||'')+'" placeholder="0.00" style="padding-left:24px" oninput="STATE.logPrice=this.value;updTotal()"/></div>')+
       '</div>'+
-      '<div class="total-row" id="trow"><span>Total Price</span><span>€'+total+'</span></div>'+
-      fld('Note','<input type="text" value="'+esc(STATE.logNote)+'" oninput="STATE.logNote=this.value" placeholder="optional note…"/>') +
-      '<button class="btn-primary" onclick="saveLog()">+ Log Drink</button>')+
+      '<div class="total-row" id="trow"><span>'+esc(t('totalPrice'))+'</span><span>€'+total+'</span></div>'+
+      fld(t('note'),'<input type="text" value="'+esc(STATE.logNote)+'" oninput="STATE.logNote=this.value" placeholder="'+esc(t('noteOptional'))+'"/>') +
+      '<button class="btn-primary" onclick="saveLog()"'+esc(t('logDrinkBtn'))+'</button>')+
 
     renderConsolidatedToday();
 }
@@ -723,16 +956,16 @@ function renderConsolidatedToday(){
 
   var rowHtml = function(b){
     var statusBits = [];
-    if (!b.moneySettled) statusBits.push('<span style="font-size:10px;color:#c4392b;font-weight:700">€'+b.moneyPending.toFixed(2)+' owed</span>');
-    if (!b.bottlesSettled) statusBits.push('<span style="font-size:10px;color:#d4a017;font-weight:700">'+b.bottlesRemaining+' to replace</span>');
-    if (b.isSettled) statusBits.push('<span style="font-size:10px;color:#1f8a4f;font-weight:700">✓ settled</span>');
+    if (!b.moneySettled) statusBits.push('<span style="font-size:10px;color:#c4392b;font-weight:700">€'+b.moneyPending.toFixed(2)+' '+t('owed')+'</span>');
+    if (!b.bottlesSettled) statusBits.push('<span style="font-size:10px;color:#d4a017;font-weight:700">'+b.bottlesRemaining+' '+t('toReplace')+'</span>');
+    if (b.isSettled) statusBits.push('<span style="font-size:10px;color:#1f8a4f;font-weight:700">✓ '+t('settled')+'</span>');
     var dateRange = b.earliestDate === b.latestDate ? fmtDate(b.earliestDate) : fmtDate(b.earliestDate)+' → '+fmtDate(b.latestDate);
 
     return '<div class="person-row" style="cursor:pointer" onclick="showPersonRunningTab(\''+esc(b.person)+'\')">'+
       '<div class="person-row-l">'+
         '<div class="avatar" style="background:'+colorFor(b.person)+';width:22px;height:22px;font-size:10px">'+(b.person[0]||'?').toUpperCase()+'</div>'+
         '<div><div style="font-size:12px;font-weight:600;color:#b5481f">'+esc(b.person)+
-          ' <span class="badge">'+b.totalQty+' drink'+(b.totalQty!==1?'s':'')+'</span>'+
+          ' <span class="badge">'+b.totalQty+' '+(b.totalQty!==1?t('drinksPlural'):t('drink'))+'</span>'+
           (b.totalSpend>0?' <span style="font-size:11px;color:#b5481f;font-weight:600">€'+b.totalSpend.toFixed(2)+'</span>':'')+
           '</div>'+
           '<div style="font-size:10px;color:#a8978a;margin-top:1px">'+dateRange+'</div>'+
@@ -740,17 +973,17 @@ function renderConsolidatedToday(){
           '<div style="display:flex;gap:6px;margin-top:3px">'+statusBits.join('')+'</div>'+
         '</div>'+
       '</div>'+
-      '<span style="font-size:11px;color:#a8978a">👁 details</span>'+
+      '<span style="font-size:11px;color:#a8978a">'+esc(t('details'))+'</span>'+
     '</div>';
   };
 
   var html = '';
 
   if (unsettled.length) {
-    html += card('🧾 Running Tabs — Not Yet Settled', unsettled.map(rowHtml).join(''));
+    html += card(t('runningTabsTitle'), unsettled.map(rowHtml).join(''));
   }
   if (settled.length) {
-    html += card('✅ Settled Up', settled.map(rowHtml).join(''));
+    html += card(t('settledUpTitle'), settled.map(rowHtml).join(''));
   }
 
   return html;
@@ -790,13 +1023,13 @@ async function addNewPersonFromInput(inputEl){
   var ok = await addPersonToTable(name);
   if (ok) {
     STATE.logPerson = name;
-    notify(name+' added ✓');
+    notify(esc(name)+' '+t('personAdded'));
     await loadAll();
   }
 }
 
 async function saveLog(){
-  if(!STATE.logPerson){notify('Select or type a person',true);return;}
+  if(!STATE.logPerson){notify(t('selectPersonFirst'),true);return;}
   await addPersonToTable(STATE.logPerson); // ensure they're in the people table
 
   var unit=parseFloat(STATE.logPrice)||0, total=unit*STATE.logQty;
@@ -814,7 +1047,7 @@ async function saveLog(){
   if(error){notify('Error: '+error.message,true);return;}
   await audit('LOG_DRINK','drink_logs',data.id,{person:loggedPerson,drink:loggedDrink,qty:STATE.logQty,total:total});
   STATE.logQty=1;STATE.logPrice='';STATE.logNote='';
-  notify('Drink logged for '+loggedPerson+' ✓');
+  notify(t('drinkLogged')+' '+loggedPerson+' ✓');
   await loadAll();
   showDrinkCountPopup(loggedPerson, loggedDrink);
 }
@@ -837,9 +1070,9 @@ function showDrinkCountPopup(person, drink){
   showModal(
     '<div style="text-align:center">'+
       '<div style="font-size:48px;margin-bottom:10px">🥴</div>'+
-      '<h3 style="margin-bottom:6px">'+esc(person)+' is down</h3>'+
+      '<h3 style="margin-bottom:6px">'+esc(person)+' '+esc(t('isDown'))+'</h3>'+
       '<div style="font-size:34px;font-weight:800;color:#b5481f;margin-bottom:4px">'+drinkCount+' '+icon+'</div>'+
-      '<div style="font-size:13px;color:#8a7568;margin-bottom:18px">'+esc(drinkName)+(drinkCount!==1?'s':'')+' total — '+totalCount+' drinks overall 🥴</div>'+
+      '<div style="font-size:13px;color:#8a7568;margin-bottom:18px">'+esc(drinkName)+(drinkCount!==1?'s':'')+' total — '+totalCount+' '+esc(t('totalOverall'))+'</div>'+
       '<button class="modal-btn modal-btn-pay" style="width:100%" onclick="closeModal()">OK 👍</button>'+
     '</div>'
   );
@@ -872,7 +1105,7 @@ function showPersonRunningTab(person){
         ? new Date(l.logged_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})
         : '—';
       var loggedBy = l.logged_by || l.added_by || '?';
-      var byLine = (loggedBy && loggedBy !== person) ? ' · logged by '+esc(loggedBy) : '';
+      var byLine = (loggedBy && loggedBy !== person) ? ' · '+t('loggedBy')+' '+esc(loggedBy) : '';
       var canEdit = isMine(l);
       var qtyControl = canEdit
         ? '<div class="stepper" style="margin-top:4px">'+
@@ -886,7 +1119,7 @@ function showPersonRunningTab(person){
           '<span class="ej">'+emoji(l.drink)+'</span>'+
           '<div>'+
             '<div class="en">'+esc(l.drink.replace(/^.+? /,''))+(!canEdit&&l.quantity>1?' ×'+l.quantity:'')+'</div>'+
-            '<div class="es">🕐 '+timeStr+(l.total_price>0?' · €'+parseFloat(l.total_price).toFixed(2):' · free')+byLine+'</div>'+
+            '<div class="es">🕐 '+timeStr+(l.total_price>0?' · €'+parseFloat(l.total_price).toFixed(2):' · '+t('free'))+byLine+'</div>'+
             (l.note?'<div class="es" style="font-style:italic">"'+esc(l.note)+'"</div>':'')+
             qtyControl+
           '</div>'+
@@ -900,12 +1133,12 @@ function showPersonRunningTab(person){
   }).join('');
 
   showModal(
-    '<h3>🧾 '+esc(person)+'\'s Running Tab</h3>'+
+    '<h3>🧾 '+esc(person)+esc(t('runningTabTitle'))+'</h3>'+
     '<div style="text-align:center;margin-bottom:14px">'+
-      '<span style="font-size:12px;color:#8a7568">'+totalQty+' drink'+(totalQty!==1?'s':'')+(totalCost>0?' · €'+totalCost.toFixed(2):'')+' since last settlement</span>'+
+      '<span style="font-size:12px;color:#8a7568">'+totalQty+' '+(totalQty!==1?t('drinksPlural'):t('drink'))+(totalCost>0?' · €'+totalCost.toFixed(2):'')+' '+t('sinceLastSettlement')+'</span>'+
     '</div>'+
     '<div style="max-height:380px;overflow-y:auto;margin-bottom:10px">'+(sections||'<div class="empty">No entries found.</div>')+'</div>'+
-    '<button class="modal-close" onclick="closeModal()">Close</button>'
+    '<button class="modal-close" onclick="closeModal()">'+esc(t('close'))+'</button>'
   );
 }
 
@@ -929,7 +1162,7 @@ function showPersonDayDetail(person, date){
       : '—';
     var loggedBy = l.logged_by || l.added_by || '?';
     var byLine = (loggedBy && loggedBy !== person)
-      ? ' · logged by '+esc(loggedBy)
+      ? ' · '+t('loggedBy')+' '+esc(loggedBy)
       : '';
     var canEdit = isMine(l);
     var qtyControl = canEdit
@@ -944,7 +1177,7 @@ function showPersonDayDetail(person, date){
         '<span class="ej">'+emoji(l.drink)+'</span>'+
         '<div>'+
           '<div class="en">'+esc(l.drink.replace(/^.+? /,''))+(!canEdit&&l.quantity>1?' ×'+l.quantity:'')+'</div>'+
-          '<div class="es">🕐 '+timeStr+(l.total_price>0?' · €'+parseFloat(l.total_price).toFixed(2):' · free')+byLine+'</div>'+
+          '<div class="es">🕐 '+timeStr+(l.total_price>0?' · €'+parseFloat(l.total_price).toFixed(2):' · '+t('free'))+byLine+'</div>'+
           (l.note?'<div class="es" style="font-style:italic">"'+esc(l.note)+'"</div>':'')+
           qtyControl+
         '</div>'+
@@ -953,12 +1186,12 @@ function showPersonDayDetail(person, date){
   }).join('');
 
   showModal(
-    '<h3>🕐 '+esc(person)+'\'s Log</h3>'+
+    '<h3>🕐 '+esc(person)+esc(t('yourLogTitle'))+'</h3>'+
     '<div style="text-align:center;margin-bottom:14px">'+
-      '<span style="font-size:12px;color:#8a7568">'+fmtDate(date)+' · '+totalQty+' drink'+(totalQty!==1?'s':'')+(totalCost>0?' · €'+totalCost.toFixed(2):'')+'</span>'+
+      '<span style="font-size:12px;color:#8a7568">'+fmtDate(date)+' · '+totalQty+' '+(totalQty!==1?t('drinksPlural'):t('drink'))+(totalCost>0?' · €'+totalCost.toFixed(2):'')+'</span>'+
     '</div>'+
     '<div style="max-height:340px;overflow-y:auto;margin-bottom:10px">'+(rows||'<div class="empty">No entries found.</div>')+'</div>'+
-    '<button class="modal-close" onclick="closeModal()">Close</button>'
+    '<button class="modal-close" onclick="closeModal()">'+esc(t('close'))+'</button>'
   );
 }
 
@@ -966,7 +1199,7 @@ function showPersonDayDetail(person, date){
 async function editDrinkQty(logId, delta, person, date){
   var entry = STATE.logs.find(function(l){ return l.id === logId; });
   if (!entry) return;
-  if (!isMine(entry)) { notify('You can only edit your own entries 🔒', true); return; }
+  if (!isMine(entry)) { notify(t('onlyOwnQty'), true); return; }
 
   var newQty = (entry.quantity||1) + delta;
   if (newQty <= 0) {
@@ -998,15 +1231,15 @@ async function editDrinkQty(logId, delta, person, date){
 // ══════════════════════════════════════════════════════════════
 function renderStats(){
   var el=document.getElementById('tab-stats');
-  if(!STATE.logs.length){el.innerHTML=empty('📊','No data yet','Log some drinks first!');return;}
+  if(!STATE.logs.length){el.innerHTML=empty('📊',t('noDataYet'),t('logSomeDrinks'));return;}
   var totalDrinks=STATE.logs.reduce(function(s,l){return s+(l.quantity||0);},0);
   var totalSpend=STATE.logs.reduce(function(s,l){return s+(parseFloat(l.total_price)||0);},0);
   var uniqueDays=new Set(STATE.logs.map(function(l){return l.date;})).size;
   var html=sg([
-    {v:totalDrinks,l:'Total Drinks'},
-    {v:'€'+totalSpend.toFixed(2),l:'Total Spend',c:'g'},
-    {v:STATE.people.length,l:'People'},
-    {v:uniqueDays,l:'Days Logged'}
+    {v:totalDrinks,l:t('totalDrinks')},
+    {v:'€'+totalSpend.toFixed(2),l:t('totalSpend'),c:'g'},
+    {v:STATE.people.length,l:t('peopleLbl')},
+    {v:uniqueDays,l:t('daysLogged')}
   ]);
   STATE.people.forEach(function(p){
     var pl=STATE.logs.filter(function(l){return l.person===p.display_name;});
@@ -1030,14 +1263,14 @@ function renderStats(){
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
         '<div style="display:flex;align-items:center;gap:9px">'+
           '<div class="avatar" style="background:'+colorFor(p.display_name)+'">'+(p.display_name[0]||'?').toUpperCase()+'</div>'+
-          '<span style="font-weight:700;font-size:15px;color:#2e1c14">'+esc(p.display_name)+(isMe?' <span style="font-size:10px;color:#b5481f">(you)</span>':'')+'</span>'+
+          '<span style="font-weight:700;font-size:15px;color:#2e1c14">'+esc(p.display_name)+(isMe?' <span style="font-size:10px;color:#b5481f">'+t('youSuffix')+'</span>':'')+'</span>'+
         '</div>'+
         '<div style="text-align:right"><div style="font-size:20px;font-weight:800;color:#b5481f">'+pt+'</div>'+
         (ps>0?'<div style="font-size:12px;color:#b5481f;font-weight:700">€'+ps.toFixed(2)+'</div>':'')+
         '</div></div>'+
-        '<div style="font-size:11px;color:#a8978a;margin-bottom:5px;text-transform:uppercase;letter-spacing:.6px">Drinks Breakdown</div>'+
+        '<div style="font-size:11px;color:#a8978a;margin-bottom:5px;text-transform:uppercase;letter-spacing:.6px">'+esc(t('drinksBreakdown'))+'</div>'+
         '<div class="drink-tags" style="margin-bottom:10px">'+allDrinkTags+'</div>'+
-        (bars?'<div style="font-size:11px;color:#a8978a;margin-bottom:5px;text-transform:uppercase;letter-spacing:.6px">Daily</div><div style="display:flex;flex-wrap:wrap;gap:4px;align-items:flex-end">'+bars+'</div>':''));
+        (bars?'<div style="font-size:11px;color:#a8978a;margin-bottom:5px;text-transform:uppercase;letter-spacing:.6px"'+esc(t('daily'))+'</div><div style="display:flex;flex-wrap:wrap;gap:4px;align-items:flex-end">'+bars+'</div>':''));
   });
   el.innerHTML=html;
 }
@@ -1054,57 +1287,57 @@ function renderPayments(){
   var tp=Object.values(pbd).reduce(function(s,v){return s+v;},0);
   var pend=tc-tp;
   var html=sg([
-    {v:'€'+tc.toFixed(2),l:'Total Cost'},
-    {v:'€'+tp.toFixed(2),l:'Total Paid',c:'g'},
-    {v:(pend>0.005?'€'+pend.toFixed(2):pend<-0.005?'+€'+Math.abs(pend).toFixed(2):'€0.00'),l:'Pending',c:pend>0.005?'r':pend<-0.005?'g':''}
+    {v:'€'+tc.toFixed(2),l:t('totalCost')},
+    {v:'€'+tp.toFixed(2),l:t('totalPaid'),c:'g'},
+    {v:(pend>0.005?'€'+pend.toFixed(2):pend<-0.005?'+€'+Math.abs(pend).toFixed(2):'€0.00'),l:t('pending'),c:pend>0.005?'r':pend<-0.005?'g':''}
   ]);
-  html+=card('Record Payment',
+  html+=card(t('recordPayment'),
     '<div class="grid2">'+
-      fld('Date','<input type="date" value="'+STATE.payDate+'" onchange="STATE.payDate=this.value"/>') +
-      fld('Amount (€)','<div style="position:relative"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#8a7568">€</span><input type="number" min="0" step="0.01" value="'+(STATE.payAmount||'')+'" placeholder="0.00" style="padding-left:24px" oninput="STATE.payAmount=this.value"/></div>')+
+      fld(t('date'),'<input type="date" value="'+STATE.payDate+'" onchange="STATE.payDate=this.value"/>') +
+      fld(t('amount'),'<div style="position:relative"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#8a7568">€</span><input type="number" min="0" step="0.01" value="'+(STATE.payAmount||'')+'" placeholder="0.00" style="padding-left:24px" oninput="STATE.payAmount=this.value"/></div>')+
     '</div>'+
-    fld('Paid By','<div class="chips">'+STATE.people.map(function(p){
+    fld(t('paidBy'),'<div class="chips">'+STATE.people.map(function(p){
       var on=STATE.payPayers.indexOf(p.display_name)!==-1;
       return '<span class="chip'+(on?' cg':'')+'" onclick="tog(\'payPayers\',\''+esc(p.display_name)+'\')">'+esc(p.display_name)+'</span>';
     }).join('')+'</div>')+
-    fld('Didn\'t Drink','<div class="chips">'+STATE.people.map(function(p){
+    fld(t('didntDrink'),'<div class="chips">'+STATE.people.map(function(p){
       var on=STATE.payNonDrinkers.indexOf(p.display_name)!==-1;
       return '<span class="chip'+(on?' cy':'')+'" onclick="tog(\'payNonDrinkers\',\''+esc(p.display_name)+'\')">'+esc(p.display_name)+'</span>';
     }).join('')+'</div>')+
-    fld('Note','<input type="text" value="'+esc(STATE.payNote)+'" oninput="STATE.payNote=this.value" placeholder="optional…"/>') +
-    '<button class="btn-green" onclick="confirmPaymentChoice()">+ Record Payment</button>');
+    fld(t('note'),'<input type="text" value="'+esc(STATE.payNote)+'" oninput="STATE.payNote=this.value" placeholder="optional…"/>') +
+    '<button class="btn-green" onclick="confirmPaymentChoice()">'+esc(t('recordPaymentBtn'))+'</button>');
 
   var allDates=[...new Set([...Object.keys(cbd),...Object.keys(pbd)])].sort().reverse();
-  if(allDates.length) html+=card('Balance by Day',allDates.map(function(d){
+  if(allDates.length) html+=card(t('balanceByDay'),allDates.map(function(d){
     var c=cbd[d]||0,p=pbd[d]||0,pn=c-p;
     return '<div class="brow"><div><div style="font-size:13px;color:#6b5a4d;font-weight:600">'+fmtDate(d)+'</div>'+
-      '<div style="font-size:11px;color:#a8978a">Cost €'+c.toFixed(2)+' · Paid €'+p.toFixed(2)+'</div></div>'+
+      '<div style="font-size:11px;color:#a8978a">'+t('totalCost')+' €'+c.toFixed(2)+' · '+t('totalPaid')+' €'+p.toFixed(2)+'</div></div>'+
       '<span style="font-size:13px;font-weight:700;color:'+(pn>0.005?'#c4392b':pn<-0.005?'#1f8a4f':'#8a7568')+'">'+
-      (pn>0.005?'€'+pn.toFixed(2)+' due':pn<-0.005?'+€'+Math.abs(pn).toFixed(2):'Settled')+'</span></div>';
+      (pn>0.005?'€'+pn.toFixed(2)+' '+t('due'):pn<-0.005?'+€'+Math.abs(pn).toFixed(2):t('settled'))+'</span></div>';
   }).join(''));
 
-  if(STATE.payments.length) html+=card('Payment Records',STATE.payments.map(function(p){
+  if(STATE.payments.length) html+=card(t('paymentRecords'),STATE.payments.map(function(p){
     var canDel=isMine(p);
     return '<div class="entry"><div class="entry-l"><div>'+
       '<div class="en" style="color:#b5481f">'+esc(p.payers)+(p.amount>0?' <span style="color:#8a7568;font-weight:400">· €'+parseFloat(p.amount).toFixed(2)+'</span>':'')+'</div>'+
       (p.non_drinkers?'<div class="es" style="color:#a87a00">Didn\'t drink: '+esc(p.non_drinkers)+'</div>':'')+
       '<div class="es">'+fmtDate(p.date)+(p.note?' · '+esc(p.note):'')+'</div>'+
-      '<div class="es" style="color:#a8978a">Recorded by '+esc(p.added_by||'unknown')+'</div>'+
+      '<div class="es" style="color:#a8978a">'+t('recordedBy')+' '+esc(p.added_by||'unknown')+'</div>'+
       '</div></div>'+delEditBtns('payments',p.id,'Payment by '+esc(p.payers),canDel,p)+'</div>';
   }).join(''));
   el.innerHTML=html;
 }
 
 function confirmPaymentChoice(){
-  if(!STATE.payPayers.length){notify('Select who paid',true);return;}
+  if(!STATE.payPayers.length){notify(t('selectPayerFirst'),true);return;}
   var amt = parseFloat(STATE.payAmount)||0;
   showModal(
-    '<div class="modal-question">😉 Do you really want to <strong>pay</strong>,<br/>or do you wanna <strong>replace</strong>? 😉😉</div>'+
+    '<div class="modal-question">'+t('payQuestion')+'</div>'+
     '<div class="modal-btn-row">'+
-      '<button class="modal-btn modal-btn-pay" onclick="confirmPay()">💸 Pay</button>'+
-      '<button class="modal-btn modal-btn-replace" onclick="confirmReplaceInstead()">🤐 Replace</button>'+
+      '<button class="modal-btn modal-btn-pay" onclick="confirmPay()">'+esc(t('payBtn'))+'</button>'+
+      '<button class="modal-btn modal-btn-replace" onclick="confirmReplaceInstead()">'+esc(t('replaceBtn'))+'</button>'+
     '</div>'+
-    '<button class="modal-close" onclick="closeModal()">Cancel</button>'
+    '<button class="modal-close" onclick="closeModal()">'+esc(t('cancel'))+'</button>'
   );
 }
 
@@ -1131,7 +1364,7 @@ async function savePayment(){
   if(error){notify('Error: '+error.message,true);return;}
   await audit('RECORD_PAYMENT','payments',data.id,{payers:STATE.payPayers.join(', '),amount:STATE.payAmount});
   STATE.payPayers=[];STATE.payNonDrinkers=[];STATE.payAmount='';STATE.payNote='';
-  notify('Payment recorded ✓');
+  notify(t('paymentRecorded'));
   await loadAll();
 }
 
@@ -1180,8 +1413,8 @@ function switchTabByName(tab){
 // ══════════════════════════════════════════════════════════════
 function renderHistory(){
   var el=document.getElementById('tab-history');
-  if (!IS_ADMIN) { el.innerHTML = empty('🔒','Admin Only','History is restricted to the club admin.'); return; }
-  if(!STATE.logs.length){el.innerHTML=empty('📅','No history','Log some drinks first!');return;}
+  if (!IS_ADMIN) { el.innerHTML = empty('🔒',t('historyAdminOnly'),t('historyRestricted')); return; }
+  if(!STATE.logs.length){el.innerHTML=empty('📅',t('noHistory'),t('logSomeDrinks'));return;}
   var bd={};
   STATE.logs.forEach(function(l){(bd[l.date]=bd[l.date]||[]).push(l);});
   el.innerHTML=Object.keys(bd).sort().reverse().map(function(d){
@@ -1195,8 +1428,8 @@ function renderHistory(){
         var canDel=isMine(l);
         var loggedBy = l.logged_by || l.added_by || '?';
         var loggedByLine = (loggedBy && loggedBy !== l.person)
-          ? 'Logged by <strong style="color:#6b5a4d">'+esc(loggedBy)+'</strong> for '+esc(l.person)
-          : 'Logged by '+esc(loggedBy);
+          ? t('loggedBy')+' <strong style="color:#6b5a4d">'+esc(loggedBy)+'</strong> for '+esc(l.person)
+          : t('loggedBy')+' '+esc(loggedBy);
         return '<div class="entry"><div class="entry-l"><span class="ej">'+emoji(l.drink)+'</span><div>'+
           '<div class="en">'+esc(l.person)+(l.quantity>1?' <span class="badge">×'+l.quantity+'</span>':'')+'</div>'+
           '<div class="es">'+esc(l.drink.replace(/^.+? /,''))+(l.total_price>0?' · €'+parseFloat(l.unit_price).toFixed(2)+' ea · €'+parseFloat(l.total_price).toFixed(2):'')+(l.note?' · '+esc(l.note):'')+'</div>'+
@@ -1249,27 +1482,27 @@ function renderReplace(){
   var tot_r=Object.values(ob).reduce(function(s,v){return s+v.replaced;},0);
   var tot_rem=Object.values(ob).reduce(function(s,v){return s+v.remaining;},0);
 
-  if(!days.length){el.innerHTML=empty('✅','All settled!','No unsettled days to replace.');return;}
+  if(!days.length){el.innerHTML=empty('✅',t('allSettledUp'),t('noUnsettledDays'));return;}
 
   var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
-    '<span style="font-size:12px;color:#8a7568">'+(STATE.undoStack.length?STATE.undoStack.length+' action(s) in history':'No changes yet')+'</span>'+
-    '<button onclick="undoReplace()" '+(STATE.undoStack.length?'':'disabled')+' style="background:'+(STATE.undoStack.length?'#3a261c':'#f5ede4')+';border:1px solid '+(STATE.undoStack.length?'#c75a2a':'#e8dccc')+';border-radius:8px;padding:6px 13px;cursor:pointer;color:'+(STATE.undoStack.length?'#e8c9a0':'#8a7568')+';font-size:12px;font-weight:600">↩ Undo'+(STATE.undoStack.length?' ('+STATE.undoStack.length+')':'')+'</button></div>';
+    '<span style="font-size:12px;color:#8a7568">'+(STATE.undoStack.length?STATE.undoStack.length+' '+t('actionsInHistory'):t('noActions'))+'</span>'+
+    '<button onclick="undoReplace()" '+(STATE.undoStack.length?'':'disabled')+' style="background:'+(STATE.undoStack.length?'#3a261c':'#f5ede4')+';border:1px solid '+(STATE.undoStack.length?'#c75a2a':'#e8dccc')+';border-radius:8px;padding:6px 13px;cursor:pointer;color:'+(STATE.undoStack.length?'#e8c9a0':'#8a7568')+';font-size:12px;font-weight:600">'+esc(t('undoBtn'))+(STATE.undoStack.length?' ('+STATE.undoStack.length+')':'')+'</button></div>';
 
-  html+=sg([{v:tot_o,l:'Bottles Owed'},{v:tot_r,l:'Replaced',c:'g'},{v:tot_rem,l:'Still Owed',c:tot_rem>0?'r':'g'}]);
+  html+=sg([{v:tot_o,l:t('bottlesOwed')},{v:tot_r,l:t('replaced'),c:'g'},{v:tot_rem,l:t('stillOwed'),c:tot_rem>0?'r':'g'}]);
 
-  if(Object.keys(ob).length) html+=card('All Unsettled — Totals',Object.entries(ob).map(function(e){
+  if(Object.keys(ob).length) html+=card(t('allUnsettledTotals'),Object.entries(ob).map(function(e){
     var drink=e[0],v=e[1],pct=v.owed>0?Math.round(v.replaced/v.owed*100):100;
     return '<div style="margin-bottom:9px"><div style="display:flex;justify-content:space-between;margin-bottom:3px">'+
       '<span style="font-size:13px;font-weight:600">'+esc(drink)+'</span>'+
-      '<span style="font-size:12px;font-weight:700;color:'+(v.remaining>0?'#a87a00':'#1f8a4f')+'">'+v.replaced+'/'+v.owed+(v.remaining>0?' · '+v.remaining+' left':' ✓')+'</span></div>'+
+      '<span style="font-size:12px;font-weight:700;color:'+(v.remaining>0?'#a87a00':'#1f8a4f')+'">'+v.replaced+'/'+v.owed+(v.remaining>0?' · '+v.remaining+' '+t('left'):' ✓')+'</span></div>'+
       '<div class="prog"><div class="prog-fill'+(v.remaining===0?' done':'')+'" style="width:'+pct+'%"></div></div></div>';
   }).join(''));
 
   days.forEach(function(day){
     html+='<div class="card" style="padding:0;overflow:hidden;margin-bottom:12px">'+
       '<div class="dh"><div><h4>'+fmtDate(day.date)+'</h4><p>'+day.tr+'/'+day.to+' replaced</p></div>'+
-      '<div style="text-align:right">'+(!day.ms?'<div style="font-size:13px;color:#c4392b;font-weight:700">€'+day.pm.toFixed(2)+' due</div>':'<div style="font-size:12px;color:#b5481f">💶 settled</div>')+
-      (day.bs?'<div style="font-size:11px;color:#b5481f">🍾 done ✓</div>':'<div style="font-size:11px;color:#a87a00">'+day.trem+' left</div>')+'</div></div>'+
+      '<div style="text-align:right">'+(!day.ms?'<div style="font-size:13px;color:#c4392b;font-weight:700">€'+day.pm.toFixed(2)+' due</div>':'<div style="font-size:12px;color:#b5481f">'+esc(t('settled'))+'</div>')+
+      (day.bs?'<div style="font-size:11px;color:#b5481f">🍾 done ✓</div>':'<div style="font-size:11px;color:#a87a00">'+day.trem+' '+t('left')+'</div>')+'</div></div>'+
       '<div style="padding:11px 14px">'+
       day.breakdown.map(function(b){
         var bottles='';
@@ -1282,25 +1515,25 @@ function renderReplace(){
           (b.remaining>0?
             '<div class="repl-ctrl">'+
               '<button class="btn-icon" onclick="replBottle(\''+day.date+'\',\''+b.drink+'\',-1)" '+(b.replaced<=0?'disabled':'')+'>−</button>'+
-              '<span>'+b.remaining+' to replace</span>'+
+              '<span>'+b.remaining+' '+esc(t('toReplace'))+'</span>'+
               '<button class="btn-icon" style="border-color:#c75a2a;background:#f3e4d3;color:#b5481f" onclick="replBottle(\''+day.date+'\',\''+b.drink+'\',1)">+</button>'+
-              '<span style="color:#b5481f;font-size:11px">Mark replaced</span></div>' :
-            '<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px;color:#b5481f">All replaced ✓</span>'+
-            '<button onclick="replBottle(\''+day.date+'\',\''+b.drink+'\',-1)" style="background:none;border:none;cursor:pointer;color:#8a7568;font-size:12px">undo</button></div>')+
+              '<span style="color:#b5481f;font-size:11px">'+esc(t('markReplaced'))+'</span></div>' :
+            '<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px;color:#b5481f">'+esc(t('allReplaced'))+' ✓</span>'+
+            '<button onclick="replBottle(\''+day.date+'\',\''+b.drink+'\',-1)" style="background:none;border:none;cursor:pointer;color:#8a7568;font-size:12px">'+esc(t('undo'))+'</button></div>')+
         '</div>';
       }).join('')+
       (day.breakdown.length?'<div style="display:flex;justify-content:space-between;padding-top:7px;border-top:1px solid #ece0d4">'+
-        '<span style="font-size:11px;font-weight:700;color:#8a7568;text-transform:uppercase;letter-spacing:.7px">Day Total</span>'+
-        '<span style="font-size:12px;font-weight:700;color:'+(day.trem>0?'#c4392b':'#1f8a4f')+'">'+day.tr+'/'+day.to+(day.trem>0?' · '+day.trem+' left':' · all done ✓')+'</span></div>':'')+
+        '<span style="font-size:11px;font-weight:700;color:#8a7568;text-transform:uppercase;letter-spacing:.7px">'+esc(t('dayTotal'))+'</span>'+
+        '<span style="font-size:12px;font-weight:700;color:'+(day.trem>0?'#c4392b':'#1f8a4f')+'">'+day.tr+'/'+day.to+(day.trem>0?' · '+day.trem+' '+t('left'):' · '+t('allDone')+' ✓')+'</span></div>':'')+
       '</div></div>';
   });
 
-  if(STATE.replacements.length) html+=card('Replacement Log',STATE.replacements.map(function(r){
+  if(STATE.replacements.length) html+=card(t('replacementLog'),STATE.replacements.map(function(r){
     var canDel=isMine(r);
     return '<div class="entry"><div class="entry-l"><span class="ej">'+emoji(r.drink)+'</span><div>'+
       '<div class="en">'+r.quantity+'× '+esc(r.drink.replace(/^.+? /,''))+'</div>'+
-      '<div class="es">For '+fmtDate(r.for_date)+(r.replaced_by?' · by '+esc(r.replaced_by):'')+(r.note?' · '+esc(r.note):'')+'</div>'+
-      '<div class="es" style="color:#a8978a">Logged by '+esc(r.added_by||'unknown')+'</div>'+
+      '<div class="es">'+esc(t('forDate'))+' '+fmtDate(r.for_date)+(r.replaced_by?' · by '+esc(r.replaced_by):'')+(r.note?' · '+esc(r.note):'')+'</div>'+
+      '<div class="es" style="color:#a8978a">'+t('loggedBy')+' '+esc(r.added_by||'unknown')+'</div>'+
       '</div></div>'+delEditBtns('replacements',r.id,'Replacement for '+fmtDate(r.for_date),canDel,r)+'</div>';
   }).join(''));
 
@@ -1349,7 +1582,7 @@ async function undoReplace(){
 // ══════════════════════════════════════════════════════════════
 function renderAudit(){
   var el=document.getElementById('tab-audit');
-  if(!STATE.auditLog.length){el.innerHTML=empty('📜','No activity yet','Actions will appear here as they happen.');return;}
+  if(!STATE.auditLog.length){el.innerHTML=empty('📜',t('noDataYet'),t('logSomeDrinks'));return;}
   var actionColors={
     'LOG_DRINK':'#b5481f','DELETE_DRINK_LOGS':'#c4392b',
     'RECORD_PAYMENT':'#1f8a4f','DELETE_PAYMENTS':'#c4392b',
@@ -1364,7 +1597,7 @@ function renderAudit(){
     'UNDO_REPLACE':'undid replacement changes','ADMIN_EDIT_DRINK':'edited an entry (admin)','DELETE_PERSON':'removed a person',
     'EDIT_DRINK_QTY':'edited a drink quantity','ADMIN_EDIT_PAYMENT':'edited a payment (admin)','ADMIN_EDIT_REPLACEMENT':'edited a replacement (admin)'
   };
-  var html=card('Activity Log — last 100 actions',
+  var html=card(t('activityLog'),
     STATE.auditLog.map(function(a){
       var col=actionColors[a.action]||'#5a5c7a';
       var label=actionLabels[a.action]||a.action.toLowerCase().replace(/_/g,' ');
@@ -1381,7 +1614,7 @@ function renderAudit(){
       return '<div class="audit-entry">'+
         '<div class="audit-dot" style="background:'+col+'"></div>'+
         '<div class="audit-body">'+
-          '<div class="audit-who">'+esc(a.performed_by)+(isMe?' <span style="font-size:10px;color:#b5481f">(you)</span>':'')+'</div>'+
+          '<div class="audit-who">'+esc(a.performed_by)+(isMe?' <span style="font-size:10px;color:#b5481f">'+t('youSuffix')+'</span>':'')+'</div>'+
           '<div class="audit-what">'+label+det+'</div>'+
           '<div class="audit-when">'+fmtDateTime(a.performed_at)+'</div>'+
         '</div></div>';
@@ -1394,14 +1627,22 @@ function renderAudit(){
 // ══════════════════════════════════════════════════════════════
 function renderPeople(){
   var el=document.getElementById('tab-people');
-  var html=card('Add a New Person',
-    '<div style="display:flex;gap:8px">'+
-      '<input id="people-tab-new-name" type="text" placeholder="Name…" style="flex:1" onkeydown="if(event.key===\'Enter\')addPersonFromPeopleTab()"/>'+
-      '<button class="btn-primary" style="width:auto;padding:9px 16px" onclick="addPersonFromPeopleTab()">Add</button>'+
-    '</div>'+
-    '<p style="font-size:11px;color:#a8978a;margin-top:8px">Anyone can add a new person — guests included. We\'ll remember who added them.</p>');
 
-  html+=card('Group Members',
+  // Language selector card
+  var html=card(t('languageLabel'),
+    '<div style="display:flex;gap:10px">'+
+      '<button onclick="setLang(\'en\')" style="flex:1;padding:12px;border-radius:10px;border:2px solid '+(LANG==='en'?'#b5481f':'#e8dccc')+';background:'+(LANG==='en'?'#f3e4d3':'#fff')+';color:'+(LANG==='en'?'#b5481f':'#8a7568')+';font-size:14px;font-weight:700;cursor:pointer">🇬🇧 English</button>'+
+      '<button onclick="setLang(\'de\')" style="flex:1;padding:12px;border-radius:10px;border:2px solid '+(LANG==='de'?'#b5481f':'#e8dccc')+';background:'+(LANG==='de'?'#f3e4d3':'#fff')+';color:'+(LANG==='de'?'#b5481f':'#8a7568')+';font-size:14px;font-weight:700;cursor:pointer">🇩🇪 Deutsch</button>'+
+    '</div>');
+
+  html+=card(t('addNewPerson'),
+    '<div style="display:flex;gap:8px">'+
+      '<input id="people-tab-new-name" type="text" placeholder="'+esc(t('namePlaceholder2'))+'" style="flex:1" onkeydown="if(event.key===\'Enter\')addPersonFromPeopleTab()"/>'+
+      '<button class="btn-primary" style="width:auto;padding:9px 16px" onclick="addPersonFromPeopleTab()">'+esc(t('add'))+'</button>'+
+    '</div>'+
+    '<p style="font-size:11px;color:#a8978a;margin-top:8px">'+esc(LANG==='de'?'Jeder kann eine neue Person hinzufügen — auch Gäste.':'Anyone can add a new person — guests included.')+'</p>');
+
+  html+=card(t('groupMembers'),
     (STATE.people.length?STATE.people.map(function(p){
       var pl = STATE.logs.filter(function(l){return l.person===p.display_name;});
       var total = pl.reduce(function(s,l){return s+(l.quantity||0);},0);
@@ -1409,9 +1650,9 @@ function renderPeople(){
       var isMe=p.display_name===CURRENT_NAME;
       return '<div class="entry"><div class="entry-l">'+
         '<div class="avatar" style="background:'+colorFor(p.display_name)+'">'+(p.display_name[0]||'?').toUpperCase()+'</div>'+
-        '<div><div class="en">'+esc(p.display_name)+(isMe?' <span style="font-size:10px;color:#b5481f">(you)</span>':'')+'</div>'+
+        '<div><div class="en">'+esc(p.display_name)+(isMe?' <span style="font-size:10px;color:#b5481f">'+t('youSuffix')+'</span>':'')+'</div>'+
         '<div class="es">'+total+' drink'+(total!==1?'s':'')+' · €'+spend.toFixed(2)+'</div>'+
-        (p.created_by?'<div class="es" style="color:#a8978a">Added by '+esc(p.created_by)+'</div>':'')+
+        (p.created_by?'<div class="es" style="color:#a8978a">'+t('addedBy')+' '+esc(p.created_by)+'</div>':'')+
         '</div></div></div>';
     }).join(''):'<div style="color:#a8978a;font-size:13px">No members yet.</div>'));
   el.innerHTML=html;
@@ -1431,12 +1672,12 @@ async function addPersonFromPeopleTab(){
 
 // ── GENERIC DELETE ──────────────────────────────────────────
 async function delEntry(table,id,label){
-  if(!confirm('Delete: '+label+'?\n\nThis cannot be undone.'))return;
+  if(!confirm(t('deleteConfirm')+' '+label+'?\n\n'+t('cannotBeUndone')))return;
   var {error}=await SB.from(table).delete().eq('id',id);
   if(error){notify('Error: '+error.message,true);return;}
   var actionMap={'drink_logs':'DELETE_DRINK_LOGS','payments':'DELETE_PAYMENTS','replacements':'DELETE_REPLACEMENTS'};
   await audit(actionMap[table]||'DELETE',table,id,{label:label});
-  notify('Deleted ✓');
+  notify(t('deleted'));
   await loadAll();
 }
 
@@ -1468,7 +1709,7 @@ async function adminEditDrink(id){
   var {error} = await SB.from('drink_logs').update({person:person,quantity:qty,unit_price:price,total_price:total,note:newNote}).eq('id',id);
   if(error){notify('Error: '+error.message,true);return;}
   await audit('ADMIN_EDIT_DRINK','drink_logs',id,{qty:qty,price:price,total:total,note:newNote,person:person,original_person:entry.person});
-  notify('Entry updated ✓');
+  notify(t('entryUpdated'));
   await loadAll();
 }
 
@@ -1488,7 +1729,7 @@ async function adminEditPayment(id){
   }).eq('id', id);
   if(error){notify('Error: '+error.message,true);return;}
   await audit('ADMIN_EDIT_PAYMENT','payments',id,{payers:newPayers,amount:newAmount,date:newDate});
-  notify('Payment updated ✓');
+  notify(t('paymentUpdated'));
   await loadAll();
 }
 
@@ -1506,7 +1747,7 @@ async function adminEditReplacement(id){
   }).eq('id', id);
   if(error){notify('Error: '+error.message,true);return;}
   await audit('ADMIN_EDIT_REPLACEMENT','replacements',id,{qty:newQty,drink:newDrink,date:newDate});
-  notify('Replacement updated ✓');
+  notify(t('replacementUpdated'));
   await loadAll();
 }
 
@@ -1517,7 +1758,7 @@ function sg(items){return '<div class="sg">'+items.map(function(s){return '<div 
 function stepper(k,v){return '<div class="stepper"><button class="btn-icon" onclick="STATE.'+k+'=Math.max(1,STATE.'+k+'-1);renderTab(STATE.tab)">−</button><input type="number" min="1" value="'+v+'" oninput="STATE.'+k+'=parseInt(this.value)||1;updTotal()" style="width:56px;text-align:center;font-weight:700;font-size:15px"/><button class="btn-icon" onclick="STATE.'+k+'++;renderTab(STATE.tab)">+</button></div>';}
 function pOpts(sel){return '<option value="">— select —</option>'+STATE.people.map(function(p){return '<option value="'+esc(p.display_name)+'"'+(p.display_name===sel?' selected':'')+'>'+esc(p.display_name)+'</option>';}).join('');}
 function tog(k,v){var i=STATE[k].indexOf(v);if(i===-1)STATE[k].push(v);else STATE[k].splice(i,1);renderTab(STATE.tab);}
-function empty(icon,t,s){return '<div class="empty"><div class="big">'+icon+'</div><strong style="color:#2e1c14">'+t+'</strong><p>'+s+'</p></div>';}
+function empty(icon,title,sub){return '<div class="empty"><div class="big">'+icon+'</div><strong style="color:#2e1c14">'+title+'</strong><p>'+sub+'</p></div>';}
 function notify(msg,err){var el=document.getElementById('notif');var p=document.createElement('div');p.className='np'+(err?' err':'');p.textContent=msg;el.appendChild(p);setTimeout(function(){p.remove();},2600);}
 function td(){return new Date().toISOString().split('T')[0];}
 function fmtDate(d){if(!d)return '';var dt=new Date(String(d).includes('T')?d:d+'T00:00:00');return dt.toLocaleDateString('en-GB',{weekday:'short',month:'short',day:'numeric'});}
@@ -1573,13 +1814,13 @@ function showMyBalance(){
   var bottleColor = stillOwedBottles > 0 ? '#d4a017' : '#1f8a4f';
 
   showModal(
-    '<h3>💰 Your Balance</h3>'+
-    '<div class="modal-stat"><span class="modal-stat-label">You owe (money)</span><span class="modal-stat-val" style="color:'+moneyColor+'">'+(myPending>0.005?'€'+myPending.toFixed(2):'€0.00 ✓')+'</span></div>'+
-    '<div class="modal-stat"><span class="modal-stat-label">Bottles to replace</span><span class="modal-stat-val" style="color:'+bottleColor+'">'+(stillOwedBottles>0?stillOwedBottles+' left':'All done ✓')+'</span></div>'+
-    '<div class="modal-stat"><span class="modal-stat-label">Total spent (priced drinks)</span><span class="modal-stat-val" style="color:#6b5a4d;font-size:14px">€'+myCost.toFixed(2)+'</span></div>'+
-    '<div class="modal-stat"><span class="modal-stat-label">Total paid</span><span class="modal-stat-val" style="color:#6b5a4d;font-size:14px">€'+myPaid.toFixed(2)+'</span></div>'+
-    '<div class="modal-stat"><span class="modal-stat-label">Free drinks logged</span><span class="modal-stat-val" style="color:#6b5a4d;font-size:14px">'+totalOwedBottles+'</span></div>'+
-    '<button class="modal-close" onclick="closeModal()">Close</button>'
+    '<h3>'+esc(t('yourBalance'))+'</h3>'+
+    '<div class="modal-stat"><span class="modal-stat-label">'+esc(t('youOweMoney'))+'</span><span class="modal-stat-val" style="color:'+moneyColor+'">'+(myPending>0.005?'€'+myPending.toFixed(2):'€0.00 ✓')+'</span></div>'+
+    '<div class="modal-stat"><span class="modal-stat-label">'+esc(t('bottlesToReplace'))+'</span><span class="modal-stat-val" style="color:'+bottleColor+'">'+(stillOwedBottles>0?stillOwedBottles+' '+esc(t('left')):esc(t('done'))+' ✓')+'</span></div>'+
+    '<div class="modal-stat"><span class="modal-stat-label">'+esc(t('totalSpentPriced'))+'</span><span class="modal-stat-val" style="color:#6b5a4d;font-size:14px">€'+myCost.toFixed(2)+'</span></div>'+
+    '<div class="modal-stat"><span class="modal-stat-label">'+esc(t('totalPaidLbl'))+'</span><span class="modal-stat-val" style="color:#6b5a4d;font-size:14px">€'+myPaid.toFixed(2)+'</span></div>'+
+    '<div class="modal-stat"><span class="modal-stat-label">'+esc(t('freeDrinksLogged'))+'</span><span class="modal-stat-val" style="color:#6b5a4d;font-size:14px">'+totalOwedBottles+'</span></div>'+
+    '<button class="modal-close" onclick="closeModal()">'+esc(t('close'))+'</button>'
   );
 }
 </script>
