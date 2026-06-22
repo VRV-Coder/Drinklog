@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+  <meta http-equiv="Pragma" content="no-cache"/>
+  <meta http-equiv="Expires" content="0"/>
   <title>🍺 Beer'O'Clock</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%23d4f521'/%3E%3Cpath d='M50 2 C30 20 30 80 50 98' stroke='white' stroke-width='5' fill='none'/%3E%3Cpath d='M50 2 C70 20 70 80 50 98' stroke='white' stroke-width='5' fill='none'/%3E%3C/svg%3E"/>
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
@@ -2011,7 +2014,7 @@ function renderReplace(){
 
   // ── UNDO + SUMMARY STATS ──────────────────────────────────
   var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'+
-    '<span style="font-size:12px;color:#5a3a28">'+(STATE.undoStack.length?STATE.undoStack.length+' '+t('actionsInHistory'):t('noActions'))+'</span>'+
+    '<span style="font-size:13px;font-weight:600;color:#1a0e08">'+(STATE.undoStack.length?STATE.undoStack.length+' '+t('actionsInHistory'):t('noActions'))+'</span>'+
     '<button onclick="undoReplace()" '+(STATE.undoStack.length?'':'disabled')+
     ' style="background:'+(STATE.undoStack.length?'#3a261c':'#f5ede4')+';border:1px solid '+(STATE.undoStack.length?'#c75a2a':'#e8dccc')+
     ';border-radius:8px;padding:6px 13px;cursor:pointer;color:'+(STATE.undoStack.length?'#e8c9a0':'#8a7568')+';font-size:12px;font-weight:600">'+
@@ -2019,7 +2022,7 @@ function renderReplace(){
 
   // Crate price settings (editable inline)
   html += '<div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap">'+
-    '<span style="font-size:12px;font-weight:700;color:#5a3a28;white-space:nowrap">📦 '+(isDE?'Kisten-Preis:':'Crate prices:')+'</span>'+
+    '<span style="font-size:13px;font-weight:800;color:#1a0e08;white-space:nowrap">📦 '+(isDE?'Kisten-Preis:':'Crate prices:')+'</span>'+
     '<div style="display:flex;align-items:center;gap:5px;background:#fff;border:1.5px solid #e8dccc;border-radius:8px;padding:5px 10px">'+
       '<span style="font-size:12px;color:#7a2e10">🍺 €</span>'+
       '<input type="number" min="0" step="0.5" value="'+CRATE_PRICE_BEER+'" style="width:50px;border:none;outline:none;font-size:14px;font-weight:700;color:#b5481f;text-align:center" '+
