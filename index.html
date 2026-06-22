@@ -217,7 +217,7 @@
       <button onclick="switchTab('history',this)" id="nav-history-btn" style="display:none"><span id="nav-history-label">📅 History</span></button>
       <button onclick="switchTab('replace',this)"><span id="nav-replace-label">🔄 Replace</span></button>
       <button onclick="switchTab('audit',this)" id="nav-audit-btn" style="display:none"><span id="nav-audit-label">📜 Audit</span></button>
-      <button onclick="switchTab('people',this)"><span id="nav-people-label">👥 People</span></button>
+      <button onclick="switchTab('people',this)" id="nav-people-btn"><span id="nav-people-label">👥 People</span></button>
     </nav>
   </div>
   <div class="team-banner-wrap" id="team-banner-wrap">
@@ -616,6 +616,8 @@ function enterApp(){
   if (auditBtn) auditBtn.style.display = IS_ADMIN ? '' : 'none';
   var historyBtn = document.getElementById('nav-history-btn');
   if (historyBtn) historyBtn.style.display = IS_ADMIN ? '' : 'none';
+  var peopleBtn = document.getElementById('nav-people-btn');
+  if (peopleBtn) peopleBtn.style.display = IS_ADMIN ? '' : 'none';
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   updateHeaderLabels();
@@ -907,7 +909,21 @@ document.addEventListener('click', function(e){
   // If it's a bar-drink-btn (quick tap grid) AND a person is selected → log instantly
   if (target.classList.contains('bar-drink-btn')) {
     if (!STATE.logPerson) {
-      notify(LANG==='de'?'Bitte zuerst Person auswählen':'Select a person first', true);
+      var isDE = LANG === 'de';
+      showModal(
+        '<div style="text-align:center">'+
+          '<div style="font-size:56px;margin-bottom:10px">🥴</div>'+
+          '<h3 style="margin-bottom:10px;font-size:20px">'+
+            (isDE ? 'Sieht aus als wärst du schon besoffen, Champ!' : 'Seems like you\'re already drunk, champ!')+
+          '</h3>'+
+          '<p style="font-size:15px;color:#5a3a28;line-height:1.6;margin-bottom:20px">'+
+            (isDE ? 'Bitte wähle zuerst aus, wer trinkt 👇' : 'Please select who is drinking first 👇')+
+          '</p>'+
+          '<button class="modal-btn modal-btn-pay" style="width:100%" onclick="closeModal()">'+
+            (isDE ? 'OK, ich bin noch nüchtern 😅' : 'OK I\'m still sober 😅')+
+          '</button>'+
+        '</div>'
+      );
       return;
     }
     quickAddDrink(STATE.logPerson, drink, e);
@@ -926,6 +942,10 @@ function switchTab(tab, btn){
   }
   if (tab === 'history' && !IS_ADMIN) {
     notify(t('historyAdminOnlyToast'), true);
+    return;
+  }
+  if (tab === 'people' && !IS_ADMIN) {
+    notify(LANG==='de'?'Personen-Tab ist nur für Admins 🔒':'People tab is admin-only 🔒', true);
     return;
   }
   document.querySelectorAll('nav button').forEach(function(b){b.classList.remove('active');});
@@ -995,7 +1015,7 @@ function renderLog(){
   if (STATE.logPerson) {
     html += '<div style="font-size:17px;font-weight:800;color:#7a2e10">'+esc(STATE.logPerson)+' 😉?</div>';
   } else {
-    html += '<div style="font-size:14px;color:#a8978a;font-style:italic">'+(isDE?'← Erst eine Person auswählen':'← Pick someone first')+'</div>';
+    html += '<div style="font-size:14px;color:#b5481f;font-weight:700;font-style:italic">🥴 '+(isDE?'Hey! Wer trinkt das??':'Hey! Who\'s drinking?? 👆')+'</div>';
   }
   html += '</div>';
   html += '<div class="bar-drink-grid">';
