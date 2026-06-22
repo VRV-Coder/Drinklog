@@ -146,14 +146,15 @@
     .team-banner-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 50%,rgba(110,40,20,.7));pointer-events:none}
     .team-banner-label{position:absolute;bottom:12px;left:0;right:0;text-align:center;color:#fff;font-size:16px;font-weight:800;letter-spacing:.8px;text-shadow:0 2px 8px rgba(0,0,0,.7)}
     /* QUICK-TAP BAR */
-    .bar-drink-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:4px}
-    .bar-drink-btn{background:#faf5f0;border:2px solid #e8dccc;border-radius:14px;padding:10px 6px;text-align:center;cursor:pointer;transition:all .14s;position:relative;user-select:none;-webkit-tap-highlight-color:transparent}
+    .bar-drink-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:4px}
+    .bar-drink-btn{background:#faf5f0;border:2px solid #e8dccc;border-radius:14px;padding:12px 6px;text-align:center;cursor:pointer;transition:all .14s;position:relative;user-select:none;-webkit-tap-highlight-color:transparent}
     .bar-drink-btn:active{transform:scale(.93);background:#f3e4d3}
     .bar-drink-btn.selected{border-color:#b5481f;background:#fce4d0}
-    .bar-drink-btn .bdb-emoji{font-size:28px;display:block;margin-bottom:3px;line-height:1}
-    .bar-drink-btn .bdb-name{font-size:11px;font-weight:700;color:#5a3a28;display:block}
-    .bar-drink-btn .bdb-price{font-size:11px;color:#b5481f;font-weight:700;display:block}
-    .bar-drink-btn .bdb-price input{width:44px;border:none;background:transparent;color:#b5481f;font-weight:700;font-size:11px;text-align:center;outline:none;padding:0}
+    .bar-drink-btn .bdb-emoji{font-size:30px;display:block;margin-bottom:4px;line-height:1}
+    .bar-drink-btn .bdb-name{font-size:12px;font-weight:700;color:#3a2010;display:block;margin-bottom:4px}
+    .bar-drink-btn .bdb-price{display:flex;align-items:center;justify-content:center;gap:1px;background:#fff;border:1.5px solid #e8dccc;border-radius:8px;padding:4px 6px;margin:0 2px}
+    .bar-drink-btn .bdb-price span{font-size:13px;font-weight:800;color:#b5481f}
+    .bar-drink-btn .bdb-price input{width:46px;border:none;background:transparent;color:#b5481f;font-weight:800;font-size:14px;text-align:center;outline:none;padding:0}
     .running-tab-row{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#faf5f0;border-radius:10px;margin-bottom:7px;border:1.5px solid #f0dece}
     .running-tab-row.mine{border-color:#b5481f;background:#fce8da}
     .rtab-name{font-size:15px;font-weight:700;color:#1a0e08}
@@ -164,9 +165,11 @@
     .rtab-total{font-size:16px;font-weight:800;color:#b5481f;white-space:nowrap}
     .rtab-free{font-size:11px;color:#7a5200;font-weight:600}
     .person-bar-select{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}
-    .pbs-btn{padding:8px 16px;border-radius:24px;border:2px solid #e8dccc;background:#faf5f0;font-size:14px;font-weight:700;color:#5a3a28;cursor:pointer;transition:all .14s;display:flex;align-items:center;gap:6px}
+    .pbs-btn{padding:9px 18px;border-radius:24px;border:2px solid #e8dccc;background:#faf5f0;font-size:15px;font-weight:700;color:#3a2010;cursor:pointer;transition:all .14s;display:flex;align-items:center;gap:7px}
     .pbs-btn.active{border-color:#b5481f;background:#fce4d0;color:#7a2e10}
-    .pbs-btn .pbs-avatar{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+    .pbs-btn .pbs-avatar{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}
+    .btn-advanced-toggle{width:100%;background:#faf5f0;border:2px solid #b5481f;border-radius:12px;padding:13px 16px;color:#7a2e10;font-size:15px;font-weight:800;cursor:pointer;margin-bottom:12px;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:.2px}
+    .btn-advanced-toggle:hover{background:#fce4d0}
     @media(max-width:480px){.grid2{grid-template-columns:1fr}.sg{grid-template-columns:repeat(2,1fr)}.bar-drink-grid{grid-template-columns:repeat(4,1fr)}}
   </style>
 </head>
@@ -977,18 +980,22 @@ function renderLog(){
     '</button>';
   });
   html += '</div>';
-  // Add new person input
-  html += '<div style="display:flex;gap:8px;margin-top:4px">'+
+  // Add new person input — WITH an Add button this time
+  html += '<div style="display:flex;gap:8px;margin-top:8px">'+
     '<input id="np" type="text" placeholder="'+esc(t('addNewNamePlaceholder'))+'" style="flex:1" onkeydown="if(event.key===\'Enter\'){addNewPersonFromInput(this)}"/>'+
+    '<button onclick="addNewPersonFromInput(document.getElementById(\'np\'))" style="background:linear-gradient(135deg,#7a2e1a,#b5481f);border:none;border-radius:9px;padding:0 16px;color:#fff;font-size:15px;font-weight:800;cursor:pointer;white-space:nowrap">'+esc(isDE?'+ Hinzu':'+ Add')+'</button>'+
   '</div>';
   html += '</div>';
 
   // ── SECTION 3: Quick-tap drink grid ──
   html += '<div class="card" style="margin-bottom:14px">';
-  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">';
-  html += '<div class="card-title" style="margin-bottom:0">'+(isDE?'GETRÄNK TIPPEN':'TAP A DRINK')+'</div>';
+  // Header: "What do you Fancy" with selected person name + 😉?
+  html += '<div style="margin-bottom:12px">';
+  html += '<div class="card-title" style="margin-bottom:4px">'+(isDE?'WAS HÄTTEST DU GERNE?':'WHAT DO YOU FANCY?')+'</div>';
   if (STATE.logPerson) {
-    html += '<span style="font-size:13px;font-weight:700;color:#b5481f">'+esc(STATE.logPerson)+'</span>';
+    html += '<div style="font-size:17px;font-weight:800;color:#7a2e10">'+esc(STATE.logPerson)+' 😉?</div>';
+  } else {
+    html += '<div style="font-size:14px;color:#a8978a;font-style:italic">'+(isDE?'← Erst eine Person auswählen':'← Pick someone first')+'</div>';
   }
   html += '</div>';
   html += '<div class="bar-drink-grid">';
@@ -998,25 +1005,28 @@ function renderLog(){
     html += '<div class="bar-drink-btn'+(isSelected?' selected':'')+'" data-drink-select="'+esc(d)+'">'+
       '<span class="bdb-emoji">'+emoji(d)+'</span>'+
       '<span class="bdb-name">'+esc(d.replace(/^.+? /,''))+'</span>'+
-      '<span class="bdb-price">'+
-        '<span style="font-size:10px">€</span>'+
-        '<input type="number" min="0" step="0.1" value="'+(price||'')+'" placeholder="0" '+
+      '<div class="bdb-price">'+
+        '<span>€</span>'+
+        '<input type="number" min="0" step="0.5" value="'+(price||'')+'" placeholder="0" '+
           'onclick="event.stopPropagation()" '+
           'onchange="setDrinkPrice(\''+esc(d)+'\',this.value)" '+
-          'style="width:38px;border:none;background:transparent;color:#b5481f;font-weight:700;font-size:12px;text-align:center;outline:none;padding:0"/>'+
-      '</span>'+
+          'style="width:46px;border:none;background:transparent;color:#b5481f;font-weight:800;font-size:14px;text-align:center;outline:none;padding:0"/>'+
+      '</div>'+
     '</div>';
   });
   html += '</div>';
-  html += '<div style="font-size:11px;color:#7a5200;margin-top:6px;text-align:center">'+(isDE?'Preis pro Getränk tippen um zu speichern':'Tap a drink to log it instantly — edit price below emoji')+'</div>';
+  html += '<div style="font-size:12px;color:#7a5200;margin-top:8px;text-align:center">'+(isDE?'Preis eingeben · Getränk antippen zum Erfassen':'Set price above · tap drink to log instantly')+'</div>';
   html += '</div>';
 
   // ── SECTION 4: Today's running tab ──
   html += renderRunningTodayTab();
 
-  // ── SECTION 5: Advanced log toggle ──
-  html += '<button onclick="STATE.showAdvancedLog=!STATE.showAdvancedLog;renderTab(\'log\')" style="width:100%;background:none;border:1.5px solid #e8dccc;border-radius:10px;padding:10px;color:#5a3a28;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:12px">'+
-    (STATE.showAdvancedLog ? '▲ ' : '▼ ')+(isDE?'Erweiterte Eingabe':'Advanced Log')+'</button>';
+  // ── SECTION 5: Advanced log toggle — high-contrast so it's always visible ──
+  html += '<button class="btn-advanced-toggle" onclick="STATE.showAdvancedLog=!STATE.showAdvancedLog;renderTab(\'log\')">'+
+    (STATE.showAdvancedLog ? '▲' : '▼')+
+    '<span>'+(isDE ? (STATE.showAdvancedLog?'Erweiterte Eingabe schließen':'📋 Erweiterte Eingabe') : (STATE.showAdvancedLog?'Close Advanced Log':'📋 Advanced Log'))+'</span>'+
+    (STATE.showAdvancedLog ? '' : '<span style="font-size:12px;font-weight:600;opacity:.7">'+(isDE?'Datum · Menge · Notiz':'Date · Qty · Note')+'</span>')+
+  '</button>';
 
   if (STATE.showAdvancedLog){
     var total = ((parseFloat(STATE.logPrice)||0)*STATE.logQty).toFixed(2);
