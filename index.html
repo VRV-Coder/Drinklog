@@ -1200,23 +1200,81 @@ function renderRunningTodayTab(){
     var pd = byPerson[person];
     var isMe = person === CURRENT_NAME;
 
-    // Consolidate drink counts per type
+    // ── Compute today's settlement state for this person ──
+    // Money: how much they owe today vs what they've paid (all-time payments)
+    var todayPriced = pd.entries.reduce(function(s,l){
+      return s + (parseFloat(l.unit_price)||0 > 0 ? parseFloat(l.total_price)||0 : 0);
+    }, 0);
+    var totalPaid = STATE.payments.reduce(function(s,p){
+      var payers = (p.payers||'').split(',').map(function(x){return x.trim();});
+      return payers.indexOf(person) !== -1 ? s + (parseFloat(p.amount)||0) : s;
+    }, 0);
+    var moneySettled = todayPriced > 0 && totalPaid >= todayPriced - 0.005;
+
+    // Bottles: which free drinks have been replaced today
+    var replacedDrinksToday = {};
+    STATE.replacements.forEach(function(r){
+      if (r.for_date === today && (r.replaced_by === person || r.logged_by === person)){
+        replacedDrinksToday[r.drink] = (replacedDrinksToday[r.drink]||0) + (r.quantity||0);
+      }
+    });
+
+    // Consolidate drink counts per type + track free vs priced
     var drinkTotals = {};
-    pd.entries.forEach(function(l){ drinkTotals[l.drink]=(drinkTotals[l.drink]||0)+(l.quantity||0); });
+    pd.entries.forEach(function(l){
+      if (!drinkTotals[l.drink]) drinkTotals[l.drink] = {qty:0, freeQty:0, pricedQty:0, entries:[]};
+      drinkTotals[l.drink].qty += (l.quantity||0);
+      if ((parseFloat(l.unit_price)||0) === 0) drinkTotals[l.drink].freeQty += (l.quantity||0);
+      else drinkTotals[l.drink].pricedQty += (l.quantity||0);
+      drinkTotals[l.drink].entries.push(l);
+    });
 
     var drinkItems = Object.entries(drinkTotals).map(function(e){
-      var d=e[0], qty=e[1];
-      // Find the most recent entry for this drink (for editing)
-      var latestId = pd.entries.filter(function(l){return l.drink===d;}).sort(function(a,b){
-        return new Date(b.logged_at)-new Date(a.logged_at);
-      })[0];
-      var canEdit = latestId && isMine(latestId);
-      return '<span class="rtab-drink-item">'+
-        (canEdit?'<button class="plus" onclick="quickAddDrink(\''+esc(person)+'\',\''+esc(d)+'\',event)">+</button>':'')+
-        emoji(d)+' ×'+qty+
-        (canEdit?'<button onclick="quickRemoveDrink(\''+esc(person)+'\',\''+esc(d)+'\',event)">−</button>':'')+
+      var d=e[0], info=e[1];
+      var canEdit = info.entries.some(function(l){ return isMine(l); });
+
+      // Settlement badge for this drink
+      var badge = '';
+      if (info.pricedQty > 0 && moneySettled){
+        badge = '<span style="font-size:10px;background:#d4f5e2;color:#1f8a4f;border-radius:5px;padding:1px 5px;font-weight:700">✅ '+(isDE?'bezahlt':'paid')+'</span>';
+      }
+      if (info.freeQty > 0){
+        var replaced = replacedDrinksToday[d]||0;
+        if (replaced >= info.freeQty){
+          badge += '<span style="font-size:10px;background:#d4f5e2;color:#1f8a4f;border-radius:5px;padding:1px 5px;font-weight:700">✅ '+(isDE?'ersetzt':'replaced')+'</span>';
+        } else {
+          badge += '<span style="font-size:10px;background:#fef3cd;color:#7a5200;border-radius:5px;padding:1px 5px;font-weight:700">🍾 '+(isDE?'offen':'to replace')+'</span>';
+        }
+      }
+
+      // "Add price" button for my own free drinks
+      var addPriceBtn = '';
+      if (isMe && info.freeQty > 0 && info.entries.some(function(l){ return isMine(l) && (parseFloat(l.unit_price)||0)===0; })){
+        addPriceBtn = '<button class="plus" style="font-size:10px;padding:1px 5px;background:#fff;border:1.5px solid #b5481f;color:#b5481f;border-radius:5px;font-weight:700" '+
+          'onclick="event.stopPropagation();addPriceToFreeDrink(\''+esc(person)+'\',\''+esc(d)+'\',\''+today+'\')" '+
+          'title="'+(isDE?'Preis nachträglich eingeben':'Add price later')+'">€+</button>';
+      }
+
+      return '<span class="rtab-drink-item" style="flex-direction:column;align-items:flex-start;gap:2px;padding:4px 7px">'+
+        '<span style="display:flex;align-items:center;gap:3px">'+
+          (canEdit?'<button class="plus" onclick="quickAddDrink(\''+esc(person)+'\',\''+esc(d)+'\',event)">+</button>':'')+
+          emoji(d)+' ×'+info.qty+
+          (canEdit?'<button onclick="quickRemoveDrink(\''+esc(person)+'\',\''+esc(d)+'\',event)">−</button>':'')+
+          addPriceBtn+
+        '</span>'+
+        (badge?'<span style="display:flex;gap:3px;flex-wrap:wrap">'+badge+'</span>':'')+
       '</span>';
     }).join('');
+
+    // Settlement summary line
+    var settleLine = '';
+    if (pd.total > 0){
+      if (moneySettled){
+        settleLine = '<div style="font-size:11px;color:#1f8a4f;font-weight:700;margin-top:4px">✅ '+(isDE?'Betrag beglichen':'Amount settled')+'</div>';
+      } else {
+        settleLine = '<div style="font-size:11px;color:#c4392b;font-weight:700;margin-top:4px">⏳ €'+(todayPriced-totalPaid).toFixed(2)+' '+(isDE?'noch offen':'still owed')+'</div>';
+      }
+    }
 
     return '<div class="running-tab-row'+(isMe?' mine':'')+'" onclick="showPersonDayDetail(\''+esc(person)+'\',\''+today+'\')">'+
       '<div style="flex:1;min-width:0">'+
@@ -1224,8 +1282,8 @@ function renderRunningTodayTab(){
           '<div class="pbs-avatar" style="background:'+colorFor(person)+';width:28px;height:28px;font-size:13px">'+person[0].toUpperCase()+'</div>'+
           '<span class="rtab-name">'+esc(person)+(isMe?' <span style="font-size:12px;color:#b5481f">'+t('youSuffix')+'</span>':'')+'</span>'+
         '</div>'+
-        '<div class="rtab-drinks" style="margin-top:6px">'+drinkItems+'</div>'+
-        (pd.freeCount>0?'<div class="rtab-free" style="margin-top:4px">🍾 '+pd.freeCount+' '+(isDE?'kostenlos':'free')+'</div>':'')+
+        '<div class="rtab-drinks" style="margin-top:6px;align-items:flex-start">'+drinkItems+'</div>'+
+        settleLine+
       '</div>'+
       '<div style="text-align:right;padding-left:10px;display:flex;flex-direction:column;align-items:flex-end;gap:4px">'+
         (pd.total>0
@@ -1285,6 +1343,77 @@ async function quickRemoveDrink(person, drink, event){
     if(error){notify('Error: '+error.message,true);return;}
     await audit('EDIT_DRINK_QTY','drink_logs',match.id,{person:person,drink:drink,new_qty:newQty});
   }
+  await loadAll();
+}
+
+// Add price retroactively to a free drink in today's running tab
+function addPriceToFreeDrink(person, drink, date){
+  var isDE = LANG === 'de';
+  // Find all free entries for this person+drink today that the user can edit
+  var freeEntries = STATE.logs.filter(function(l){
+    return l.person===person && l.drink===drink && l.date===date && isMine(l) && (parseFloat(l.unit_price)||0)===0;
+  });
+  if (!freeEntries.length){ notify(isDE?'Keine kostenlosen Einträge gefunden':'No free entries found',true); return; }
+
+  var totalQty = freeEntries.reduce(function(s,l){return s+(l.quantity||0);},0);
+  var suggestedPrice = getDrinkPrice(drink) || '';
+
+  showModal(
+    '<h3 style="margin-bottom:4px">€+ '+(isDE?'Preis hinzufügen':'Add Price')+'</h3>'+
+    '<div style="font-size:13px;color:#5a3a28;margin-bottom:14px">'+emoji(drink)+' '+esc(drink.replace(/^.+? /,''))+' · ×'+totalQty+' '+(isDE?'kostenlos':'free')+'</div>'+
+    '<div style="background:#fce4d0;border-radius:10px;padding:14px;margin-bottom:14px">'+
+      '<div style="font-size:12px;color:#7a5200;margin-bottom:8px">'+(isDE?'Preis pro Stück:':'Unit price per drink:')+'</div>'+
+      '<div style="display:flex;align-items:center;gap:6px">'+
+        '<span style="font-size:20px;font-weight:800;color:#5a3a28">€</span>'+
+        '<input id="free-price-input" type="number" min="0" step="0.01" value="'+suggestedPrice+'" placeholder="0.00" '+
+          'style="flex:1;font-size:22px;font-weight:800;color:#b5481f;border:none;background:transparent;outline:none;text-align:center"/>'+
+        '<span style="font-size:13px;color:#7a5200">/'+esc(isDE?'Stk':'ea')+'</span>'+
+      '</div>'+
+      (totalQty>1?'<div style="font-size:12px;color:#7a5200;margin-top:8px;text-align:center" id="free-price-total">'+
+        (isDE?'Gesamt':'Total')+': €'+(suggestedPrice?((parseFloat(suggestedPrice)||0)*totalQty).toFixed(2):'—')+
+      '</div>':'') +
+    '</div>'+
+    '<div style="font-size:11px;color:#9c4a22;margin-bottom:12px;text-align:center">'+
+      (isDE?'Gilt für alle '+totalQty+' kostenlosen Einträge':'Applies to all '+totalQty+' free entries')+
+    '</div>'+
+    '<button class="modal-primary" onclick="savePriceToFreeDrink(\''+esc(person)+'\',\''+esc(drink)+'\',\''+date+'\')" style="width:100%">'+
+      (isDE?'💾 Preis speichern':'💾 Save Price')+'</button>'+
+    '<button class="modal-close" onclick="closeModal()" style="margin-top:8px;width:100%">'+esc(t('cancel'))+'</button>'
+  );
+
+  // Live total update
+  setTimeout(function(){
+    var inp = document.getElementById('free-price-input');
+    var tot = document.getElementById('free-price-total');
+    if (inp && tot) inp.addEventListener('input', function(){
+      tot.textContent=(isDE?'Gesamt':'Total')+': €'+((parseFloat(inp.value)||0)*totalQty).toFixed(2);
+    });
+    if (inp) inp.focus();
+  }, 80);
+}
+
+async function savePriceToFreeDrink(person, drink, date){
+  var isDE = LANG === 'de';
+  var inp = document.getElementById('free-price-input');
+  var newUnit = inp ? parseFloat(inp.value)||0 : 0;
+  if (newUnit <= 0){ notify(isDE?'Bitte einen Preis eingeben':'Please enter a price',true); return; }
+
+  var freeEntries = STATE.logs.filter(function(l){
+    return l.person===person && l.drink===drink && l.date===date && isMine(l) && (parseFloat(l.unit_price)||0)===0;
+  });
+
+  var errors = [];
+  for (var i=0;i<freeEntries.length;i++){
+    var l = freeEntries[i];
+    var newTotal = newUnit * (l.quantity||1);
+    var res = await SB.from('drink_logs').update({unit_price:newUnit, total_price:newTotal}).eq('id',l.id);
+    if (res.error) errors.push(res.error.message);
+  }
+
+  setDrinkPrice(drink, newUnit); // save as default for future
+  closeModal();
+  if (errors.length){ notify('Error: '+errors[0],true); return; }
+  notify((isDE?'Preis gespeichert':'Price saved')+' · '+emoji(drink)+' €'+newUnit.toFixed(2)+' ✓');
   await loadAll();
 }
 
