@@ -276,9 +276,11 @@ var DRINK_TYPES = [
 var AVATAR_COLORS = ["#b5481f","#c5a000","#0e6b8c","#b4502a","#9c4a22","#8c3a1f","#1f5a7a","#7a8c1f"];
 
 // Default prices per drink — persisted in localStorage, editable inline
-var DRINK_PRICES = JSON.parse(localStorage.getItem('drink_prices')||'{}');
+var DRINK_PRICES = {};
+function _priceKey(){ return 'drink_prices_' + (CURRENT_NAME || '_default'); }
+function loadDrinkPrices(){ DRINK_PRICES = JSON.parse(localStorage.getItem(_priceKey())||'{}'); }
 function getDrinkPrice(drink){ return parseFloat(DRINK_PRICES[drink])||0; }
-function setDrinkPrice(drink, price){ DRINK_PRICES[drink]=parseFloat(price)||0; localStorage.setItem('drink_prices',JSON.stringify(DRINK_PRICES)); }
+function setDrinkPrice(drink, price){ DRINK_PRICES[drink]=parseFloat(price)||0; localStorage.setItem(_priceKey(),JSON.stringify(DRINK_PRICES)); }
 
 var STATE = {
   tab:'log', people:[], logs:[], payments:[], replacements:[], auditLog:[],
@@ -642,6 +644,7 @@ function enterApp(){
   if (peopleBtn) peopleBtn.style.display = IS_ADMIN ? '' : 'none';
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
+  loadDrinkPrices(); // load this user's saved prices
   updateHeaderLabels();
   registerSelfAsPerson();
   loadAll().then(function(){
@@ -923,6 +926,7 @@ async function registerSelfAsPerson(){
 
 async function signOut(){
   stopRealtime();
+  DRINK_PRICES = {}; // clear prices so next user starts fresh
   if (IS_ADMIN && SB && SB.auth) { await SB.auth.signOut(); }
   if (IS_GUEST) {
     localStorage.removeItem('guest_name');
@@ -1125,7 +1129,7 @@ function renderLog(){
     html += '<div class="bar-drink-btn'+(isSelected?' selected':'')+'" data-drink-select="'+esc(d)+'">'+
       '<span class="bdb-emoji">'+emoji(d)+'</span>'+
       '<span class="bdb-name">'+esc(d.replace(/^.+? /,''))+'</span>'+
-      '<div class="bdb-price">'+
+      '<div class="bdb-price" title="'+(isDE?'Dein persönlicher Preis':'Your personal price')+'">'+
         '<span>€</span>'+
         '<input type="number" min="0" step="0.5" value="'+(price||'')+'" placeholder="0" '+
           'onclick="event.stopPropagation()" '+
@@ -1135,7 +1139,9 @@ function renderLog(){
     '</div>';
   });
   html += '</div>';
-  html += '<div style="font-size:12px;color:#7a5200;margin-top:8px;text-align:center">'+(isDE?'Preis eingeben · Getränk antippen zum Erfassen':'Set price above · tap drink to log instantly')+'</div>';
+  html += '<div style="font-size:12px;color:#7a5200;margin-top:8px;text-align:center">'+
+    '<span style="background:#fce4d0;border-radius:6px;padding:2px 8px">🔒 '+(isDE?'Deine Preise — nur für dich sichtbar':'Your prices — private to you')+'</span>'+
+  '</div>';
   html += '</div>';
 
   // ── SECTION 4: Today's running tab ──
@@ -1221,9 +1227,15 @@ function renderRunningTodayTab(){
         '<div class="rtab-drinks" style="margin-top:6px">'+drinkItems+'</div>'+
         (pd.freeCount>0?'<div class="rtab-free" style="margin-top:4px">🍾 '+pd.freeCount+' '+(isDE?'kostenlos':'free')+'</div>':'')+
       '</div>'+
-      '<div style="text-align:right;padding-left:10px">'+
-        (pd.total>0?'<div class="rtab-total">€'+pd.total.toFixed(2)+'</div>':'')+
-        '<div style="font-size:11px;color:#7a5200;margin-top:2px">👁 '+esc(t('details'))+'</div>'+
+      '<div style="text-align:right;padding-left:10px;display:flex;flex-direction:column;align-items:flex-end;gap:4px">'+
+        (pd.total>0
+          ? (isMe
+              ? '<button onclick="event.stopPropagation();editRunningAmount(\''+esc(person)+'\',\''+today+'\')" '+
+                'style="background:#fce4d0;border:1.5px solid #b5481f;border-radius:9px;padding:4px 10px;cursor:pointer;font-weight:800;font-size:16px;color:#b5481f">'+
+                '€'+pd.total.toFixed(2)+' ✏️</button>'
+              : '<div class="rtab-total">€'+pd.total.toFixed(2)+'</div>')
+          : '')+
+        '<div style="font-size:11px;color:#7a5200">👁 '+esc(t('details'))+'</div>'+
       '</div>'+
     '</div>';
   }).join('');
@@ -1273,6 +1285,97 @@ async function quickRemoveDrink(person, drink, event){
     if(error){notify('Error: '+error.message,true);return;}
     await audit('EDIT_DRINK_QTY','drink_logs',match.id,{person:person,drink:drink,new_qty:newQty});
   }
+  await loadAll();
+}
+
+// Edit money amount for today's running tab — opens modal to split/edit prices for today's drinks
+function editRunningAmount(person, date){
+  var isDE = LANG === 'de';
+  // Get today's priced drink entries for this person
+  var myEntries = STATE.logs.filter(function(l){
+    return l.person === person && l.date === date && isMine(l) && (parseFloat(l.unit_price)||0) > 0;
+  });
+
+  if (!myEntries.length){
+    // All drinks are free — offer to add a price to one
+    notify(isDE?'Keine bezahlten Getränke heute':'No priced drinks today');
+    return;
+  }
+
+  // Group by drink, show editable unit price per drink type
+  var byDrink = {};
+  myEntries.forEach(function(l){
+    var key = l.drink;
+    if (!byDrink[key]) byDrink[key] = {drink:l.drink, qty:0, unitPrice:parseFloat(l.unit_price)||0, ids:[]};
+    byDrink[key].qty += (l.quantity||0);
+    byDrink[key].ids.push(l.id);
+    byDrink[key].unitPrice = parseFloat(l.unit_price)||0; // use latest
+  });
+
+  var rows = Object.values(byDrink).map(function(g){
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f5ede4">'+
+      '<div style="flex:1">'+
+        '<div style="font-size:14px;font-weight:700;color:#1a0e08">'+emoji(g.drink)+' '+esc(g.drink.replace(/^.+? /,''))+'</div>'+
+        '<div style="font-size:12px;color:#7a5200">'+g.qty+' × '+esc(isDE?'Stück':'items')+'</div>'+
+      '</div>'+
+      '<div style="display:flex;align-items:center;gap:4px;background:#fce4d0;border-radius:8px;padding:6px 10px">'+
+        '<span style="font-size:14px;font-weight:700;color:#5a3a28">€</span>'+
+        '<input id="ep-'+esc(g.drink.replace(/\s/g,'_'))+'" type="number" min="0" step="0.01" '+
+          'value="'+g.unitPrice.toFixed(2)+'" '+
+          'style="width:60px;border:none;background:transparent;font-size:16px;font-weight:800;color:#b5481f;text-align:center;outline:none"/>'+
+        '<span style="font-size:11px;color:#7a5200">/'+esc(isDE?'Stk':'ea')+'</span>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+
+  var totalDiv = '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;font-weight:800;font-size:16px;color:#b5481f">'+
+    '<span>'+(isDE?'Gesamt':'Total')+'</span>'+
+    '<span id="ep-total">€'+myEntries.reduce(function(s,l){return s+(parseFloat(l.total_price)||0);},0).toFixed(2)+'</span>'+
+  '</div>';
+
+  showModal(
+    '<h3 style="margin-bottom:4px">✏️ '+(isDE?'Betrag bearbeiten':'Edit Amount')+'</h3>'+
+    '<div style="font-size:12px;color:#7a5200;margin-bottom:14px">'+esc(person)+' · '+date+'</div>'+
+    rows+
+    totalDiv+
+    '<button class="modal-primary" style="margin-top:8px" onclick="saveRunningAmountEdit(\''+esc(person)+'\',\''+date+'\')">'+
+      (isDE?'💾 Speichern':'💾 Save')+'</button>'+
+    '<button class="modal-close" style="margin-top:8px" onclick="closeModal()">'+esc(t('cancel'))+'</button>'
+  );
+
+  // Store the entries data for save
+  window._editRunningEntries = byDrink;
+}
+
+async function saveRunningAmountEdit(person, date){
+  var isDE = LANG === 'de';
+  var byDrink = window._editRunningEntries;
+  if (!byDrink){ closeModal(); return; }
+
+  var errors = [];
+  for (var drink of Object.keys(byDrink)){
+    var g = byDrink[drink];
+    var inputId = 'ep-'+drink.replace(/\s/g,'_');
+    var inputEl = document.getElementById(inputId);
+    var newUnit = inputEl ? parseFloat(inputEl.value)||0 : g.unitPrice;
+    var newTotal = newUnit * g.qty;
+
+    // Update each entry for this drink (by id)
+    for (var id of g.ids){
+      // Find this entry to get its quantity
+      var entry = STATE.logs.find(function(l){return l.id===id;});
+      if (!entry) continue;
+      var entryTotal = newUnit * (entry.quantity||1);
+      var {error} = await SB.from('drink_logs').update({unit_price:newUnit, total_price:entryTotal}).eq('id',id);
+      if (error) errors.push(error.message);
+    }
+    // Also update DRINK_PRICES for this user so future quick-adds use the new price
+    setDrinkPrice(drink, newUnit);
+  }
+
+  closeModal();
+  if (errors.length){ notify('Some updates failed: '+errors[0], true); }
+  else { notify(isDE?'Betrag aktualisiert ✓':'Amount updated ✓'); }
   await loadAll();
 }
 
