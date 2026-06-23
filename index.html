@@ -2564,6 +2564,7 @@ async function confirmReplaceWho(drink, targetDate){
   if (val > 0) msg += ' · €'+val.toFixed(2);
   notify(msg+' ✓');
   showCrateAnimation(drink, function(){ loadAll(); });
+}
 
 // Show day-wise breakdown for a specific drink in a modal
 function showReplaceByDate(drink){
