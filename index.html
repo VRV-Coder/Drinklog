@@ -1622,43 +1622,43 @@ function renderConsolidatedToday(){
             var indivRows = myEntries.map(function(l){
               var entryId = 'ep-'+l.id;
               var timeLabel = l.date + (l.logged_at ? ' '+new Date(l.logged_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) : '');
-              return '<div style="display:flex;align-items:center;gap:5px;padding:4px 0;border-bottom:1px solid #f5ede4" onclick="event.stopPropagation()">'+
-                '<span style="font-size:11px;color:#7a5200;flex:1">'+timeLabel+(l.quantity>1?' ×'+l.quantity:'')+'</span>'+
-                '<span style="font-size:11px;color:#5a3a28;font-weight:700">€</span>'+
+              return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f5ede4" onclick="event.stopPropagation()">'+
+                '<span style="font-size:12px;color:#7a5200;flex:1">'+timeLabel+(l.quantity>1?' ×'+l.quantity:'')+'</span>'+
+                '<span style="font-size:13px;color:#5a3a28;font-weight:700">€</span>'+
                 '<input id="'+entryId+'" type="number" min="0" step="0.01" value="'+(parseFloat(l.unit_price)||0).toFixed(2)+'" '+
-                  'style="width:55px;border:1px solid #e8dccc;border-radius:6px;padding:3px 4px;font-size:12px;font-weight:700;color:#b5481f;text-align:center" '+
+                  'style="width:70px;border:1.5px solid #e8b870;border-radius:8px;padding:6px 4px;font-size:15px;font-weight:700;color:#b5481f;text-align:center" '+
                   'onclick="event.stopPropagation()" />'+
                 '<button onclick="event.stopPropagation();saveSingleEntryPrice(\''+l.id+'\',\''+entryId+'\',\''+esc(drink)+'\')" '+
-                  'style="background:#1f8a4f;border:none;border-radius:6px;color:#fff;font-size:11px;font-weight:700;padding:3px 7px;cursor:pointer;white-space:nowrap">'+
+                  'style="background:#1f8a4f;border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;padding:8px 14px;cursor:pointer;min-height:40px;white-space:nowrap">'+
                   (isDE?'Ok':'OK')+'</button>'+
               '</div>';
             }).join('');
 
             return '<div style="width:100%;background:#fce4d0;border:1.5px solid #e8b870;border-radius:11px;overflow:hidden" onclick="event.stopPropagation()">'+
               // Group price row
-              '<div style="display:flex;align-items:center;gap:6px;padding:8px 10px;flex-wrap:wrap">'+
-                '<span style="font-size:15px">'+emoji(drink)+'</span>'+
-                '<span style="font-size:12px;font-weight:700;color:#5a3a28">'+esc(drink.replace(/^.+? /,''))+'</span>'+
-                '<span style="font-size:11px;color:#9c4a22;margin-right:4px">×'+info.qty+'</span>'+
-                '<span style="font-size:13px;color:#5a3a28;font-weight:700">€</span>'+
+              '<div style="display:flex;align-items:center;gap:6px;padding:10px 12px;flex-wrap:wrap">'+
+                '<span style="font-size:17px">'+emoji(drink)+'</span>'+
+                '<span style="font-size:13px;font-weight:700;color:#5a3a28">'+esc(drink.replace(/^.+? /,''))+'</span>'+
+                '<span style="font-size:12px;color:#9c4a22;margin-right:4px">×'+info.qty+'</span>'+
+                '<span style="font-size:14px;color:#5a3a28;font-weight:700">€</span>'+
                 '<input id="'+safeId+'" type="number" min="0" step="0.01" value="'+info.unitPrice.toFixed(2)+'" '+
-                  'style="width:60px;border:1px solid #e8dccc;border-radius:6px;padding:3px 4px;font-size:14px;font-weight:800;color:#b5481f;text-align:center;background:#fff" '+
+                  'style="width:72px;border:1.5px solid #e8b870;border-radius:8px;padding:5px 6px;font-size:16px;font-weight:800;color:#b5481f;text-align:center;background:#fff" '+
                   'onclick="event.stopPropagation()" />'+
               '</div>'+
-              '<div style="display:flex;gap:8px;padding:0 10px 10px 10px">'+
+              '<div style="display:flex;gap:10px;padding:0 12px 12px 12px">'+
                 '<button onclick="event.stopPropagation();saveConsolidatedPrice(\''+esc(b.person)+'\',\''+esc(drink)+'\',\''+safeId+'\')" '+
-                  'style="flex:1;background:#b5481f;border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:800;padding:8px 0;cursor:pointer;min-height:40px">'+
-                  (isDE?'Alle':'All')+'</button>'+
+                  'style="flex:1;background:#b5481f;border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:800;padding:12px 0;cursor:pointer;min-height:48px;letter-spacing:.3px">'+
+                  (isDE?'✓ Alle':'✓ All')+'</button>'+
                 (myEntries.length > 1
-                  ? '<button onclick="event.stopPropagation();var el=document.getElementById(\''+indivId+'\');var open=el.style.display!==\'none\';el.style.display=open?\'none\':\'\';this.textContent=open?\''+(isDE?'↕ Einzeln':'↕ Per entry')+'\':\'▲ '+(isDE?'Einklappen':'Close')+'\'" '+
-                    'style="flex:1;background:#fff;border:2px solid #b5481f;border-radius:8px;color:#b5481f;font-size:13px;font-weight:800;padding:8px 0;cursor:pointer;min-height:40px">'+
-                    (isDE?'↕ Einzeln':'↕ Per entry')+'</button>'
+                  ? '<button id="tog-'+safeId+'" onclick="event.stopPropagation();(function(btn){var el=document.getElementById(\''+indivId+'\');var open=el.style.display!==\'none\';el.style.display=open?\'none\':\'\';btn.textContent=open?\''+(isDE?'↕ Einzeln':'↕ Entries')+'\':\'▲ '+(isDE?'Schließen':'Close')+'\';})(this)" '+
+                    'style="flex:1;background:#fff;border:2px solid #b5481f;border-radius:10px;color:#b5481f;font-size:15px;font-weight:800;padding:12px 0;cursor:pointer;min-height:48px;white-space:nowrap">'+
+                    (isDE?'↕ Einzeln':'↕ Entries')+'</button>'
                   : '')+
               '</div>'+
               // Individual entries (hidden by default)
-              '<div id="'+indivId+'" style="display:none;padding:4px 10px 8px 10px;background:#fff8f2;border-top:1px solid #e8dccc">'+
-                '<div style="font-size:10px;color:#7a5200;font-weight:700;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">'+
-                  (isDE?'Einzelne Einträge bearbeiten':'Edit individual entries')+'</div>'+
+              '<div id="'+indivId+'" style="display:none;padding:6px 12px 12px 12px;background:#fff8f2;border-top:1px solid #e8dccc">'+
+                '<div style="font-size:11px;color:#7a5200;font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px">'+
+                  (isDE?'Einzelne Einträge':'Individual entries')+'</div>'+
                 indivRows+
               '</div>'+
             '</div>';
@@ -3420,149 +3420,460 @@ function showIntroAnimation(cb){
         ctx.beginPath(); ctx.moveTo(nx,H*0.53); ctx.lineTo(nx,H*0.62); ctx.stroke();
       }
 
-      // Bar building (right)
-      ctx.fillStyle='#2a1a0e'; ctx.fillRect(W*0.72,H*0.18,W*0.26,H*0.44);
-      // Roof (manual triangle — no roundRect)
-      ctx.fillStyle='#1a0e06';
-      ctx.beginPath();
-      ctx.moveTo(W*0.70,H*0.18); ctx.lineTo(W*0.99,H*0.18);
-      ctx.lineTo(W*0.95,H*0.08); ctx.lineTo(W*0.74,H*0.08);
-      ctx.closePath(); ctx.fill();
-      // Bar sign
-      ctx.fillStyle='#f8d878'; ctx.font='bold 9px sans-serif'; ctx.textAlign='center';
-      ctx.fillText('🍺 BAR', W*0.85, H*0.15);
+      // ── BAR BUILDING (right side) ──
+      var bx0=W*0.67, byt=H*0.12, bw=W*0.32, bh=H*0.52;
 
-      // Window
-      var wxl=W*0.76, wyt=H*0.25, ww=W*0.14, wh=H*0.18;
+      // Wall
+      var wallGrd = ctx.createLinearGradient(bx0,0,bx0+bw,0);
+      wallGrd.addColorStop(0,'#3a1f0a'); wallGrd.addColorStop(1,'#2a1408');
+      ctx.fillStyle=wallGrd; ctx.fillRect(bx0,byt,bw,bh);
+
+      // Roof ridge
+      ctx.fillStyle='#1a0a04';
+      ctx.beginPath();
+      ctx.moveTo(bx0-8,byt); ctx.lineTo(bx0+bw+4,byt);
+      ctx.lineTo(bx0+bw,byt-H*0.11); ctx.lineTo(bx0+6,byt-H*0.11);
+      ctx.closePath(); ctx.fill();
+      // Roof tiles
+      ctx.strokeStyle='rgba(0,0,0,0.3)'; ctx.lineWidth=1;
+      for(var ri=0;ri<6;ri++){
+        var ry=byt-H*0.11+ri*8;
+        ctx.beginPath(); ctx.moveTo(bx0+ri*6,ry); ctx.lineTo(bx0+bw-ri*4,ry); ctx.stroke();
+      }
+
+      // Neon sign "BAR"
+      var signX=bx0+bw*0.5, signY=byt+10;
+      ctx.save();
+      ctx.shadowColor='rgba(255,100,20,0.9)'; ctx.shadowBlur=12;
+      ctx.fillStyle='#ff6414'; ctx.font='bold 11px monospace'; ctx.textAlign='center';
+      ctx.fillText('🍺 B·A·R', signX, signY);
+      ctx.restore();
+      // Neon underglow
+      var neonGlow=ctx.createRadialGradient(signX,signY,2,signX,signY,22);
+      neonGlow.addColorStop(0,'rgba(255,100,20,0.25)'); neonGlow.addColorStop(1,'rgba(255,100,20,0)');
+      ctx.fillStyle=neonGlow; ctx.fillRect(signX-22,signY-12,44,18);
+
+      // Door (dark wood)
+      ctx.fillStyle='#3a1a06';
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx0+bw*0.38,byt+bh*0.58,bw*0.24,bh*0.37,3) : ctx.rect(bx0+bw*0.38,byt+bh*0.58,bw*0.24,bh*0.37);
+      ctx.fill();
+      ctx.strokeStyle='#6a3a14'; ctx.lineWidth=1.5; ctx.strokeRect(bx0+bw*0.38,byt+bh*0.58,bw*0.24,bh*0.37);
+      // Door knob
+      ctx.fillStyle='#c8a020'; ctx.beginPath(); ctx.arc(bx0+bw*0.56,byt+bh*0.77,2.5,0,Math.PI*2); ctx.fill();
+
+      // ── LARGE WINDOW — shows bar interior ──
+      var wxl=bx0+bw*0.06, wyt=byt+bh*0.12, ww=bw*0.36, wh=bh*0.44;
+      var wcx=wxl+ww*0.5, wcy=wyt+wh*0.5;
       var broken = progress > 0.82;
+      var shardProg = broken ? Math.min(1,(progress-0.82)/0.18) : 0;
+
+      // Clip to window for interior drawing
+      ctx.save();
+      ctx.beginPath(); ctx.rect(wxl,wyt,ww,wh); ctx.clip();
+
+      // Interior warm background
+      var intGrd=ctx.createLinearGradient(wxl,wyt,wxl,wyt+wh);
+      intGrd.addColorStop(0,'#3a1a06'); intGrd.addColorStop(1,'#1a0a02');
+      ctx.fillStyle=intGrd; ctx.fillRect(wxl,wyt,ww,wh);
+
+      // Ambient warm light from ceiling
+      var ambGlow=ctx.createRadialGradient(wcx,wyt+wh*0.12,4,wcx,wyt+wh*0.25,ww*0.6);
+      ambGlow.addColorStop(0,'rgba(255,200,80,0.38)'); ambGlow.addColorStop(1,'rgba(255,100,20,0)');
+      ctx.fillStyle=ambGlow; ctx.fillRect(wxl,wyt,ww,wh);
+
+      // Pendant lamp
+      ctx.fillStyle='#f8e060';
+      ctx.beginPath(); ctx.moveTo(wcx-8,wyt+5); ctx.lineTo(wcx+8,wyt+5); ctx.lineTo(wcx+5,wyt+14); ctx.lineTo(wcx-5,wyt+14); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle='rgba(0,0,0,0.3)'; ctx.lineWidth=0.7; ctx.beginPath(); ctx.moveTo(wcx,wyt); ctx.lineTo(wcx,wyt+5); ctx.stroke();
+      var lampGlow=ctx.createRadialGradient(wcx,wyt+14,2,wcx,wyt+18,28);
+      lampGlow.addColorStop(0,'rgba(255,230,100,0.55)'); lampGlow.addColorStop(1,'rgba(255,180,60,0)');
+      ctx.fillStyle=lampGlow; ctx.fillRect(wxl,wyt,ww,wh);
+
+      // Back wall — wooden shelves with bottles
+      ctx.fillStyle='#2a1206'; ctx.fillRect(wxl, wyt+wh*0.08, ww, wh*0.72);
+      // Shelf plank
+      ctx.fillStyle='#5a2e0a';
+      ctx.fillRect(wxl, wyt+wh*0.22, ww, 4);
+      ctx.fillRect(wxl, wyt+wh*0.42, ww, 4);
+
+      // Bottles on shelves — top shelf
+      var bottleColors=['#1a6a2a','#8a4a10','#c89020','#2a4a8a','#3a8a1a','#6a1a1a'];
+      for(var bi=0;bi<6;bi++){
+        var bpx=wxl+ww*0.08+bi*ww*0.145, bpyt=wyt+wh*0.09;
+        // Bottle body
+        ctx.fillStyle=bottleColors[bi];
+        ctx.beginPath();
+        ctx.roundRect ? ctx.roundRect(bpx-4,bpyt,8,wh*0.12,2) : ctx.rect(bpx-4,bpyt,8,wh*0.12);
+        ctx.fill();
+        // Bottle neck
+        ctx.fillStyle=bottleColors[bi];
+        ctx.fillRect(bpx-2,bpyt-wh*0.05,4,wh*0.06);
+        // Label
+        ctx.fillStyle='rgba(255,255,255,0.25)'; ctx.fillRect(bpx-3,bpyt+2,6,5);
+        // Bottle shine
+        ctx.strokeStyle='rgba(255,255,255,0.3)'; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.moveTo(bpx+2,bpyt+2); ctx.lineTo(bpx+2,bpyt+wh*0.08); ctx.stroke();
+      }
+
+      // Beer taps on bar counter
+      var counterY=wyt+wh*0.68;
+      ctx.fillStyle='#3a1a06'; ctx.fillRect(wxl,counterY,ww,wh*0.32);
+      // Counter edge with brass strip
+      var brassGrd=ctx.createLinearGradient(0,counterY,0,counterY+5);
+      brassGrd.addColorStop(0,'#d4a020'); brassGrd.addColorStop(1,'#8a6010');
+      ctx.fillStyle=brassGrd; ctx.fillRect(wxl,counterY,ww,5);
+
+      // Beer taps (3 taps)
+      [0.22,0.5,0.78].forEach(function(tx){
+        var tapX=wxl+ww*tx, tapY=counterY-18;
+        // Tap base
+        ctx.fillStyle='#8a8a8a'; ctx.fillRect(tapX-4,counterY-4,8,8);
+        // Tap pole
+        ctx.strokeStyle='#c0c0c0'; ctx.lineWidth=3;
+        ctx.beginPath(); ctx.moveTo(tapX,counterY); ctx.lineTo(tapX,tapY); ctx.stroke();
+        // Tap handle
+        ctx.fillStyle='#c0c0c0';
+        ctx.beginPath(); ctx.ellipse(tapX+4,tapY,4,8,0.4,0,Math.PI*2); ctx.fill();
+        ctx.strokeStyle='#909090'; ctx.lineWidth=1; ctx.stroke();
+        // Brand label on handle
+        ctx.fillStyle='#f8d878'; ctx.font='5px sans-serif'; ctx.textAlign='center';
+        ctx.fillText('🍺',tapX+4,tapY+2);
+      });
+
+      // Beer glass on counter
+      var glx=wxl+ww*0.65, gly=counterY-22;
+      ctx.fillStyle='rgba(255,200,80,0.7)';
+      ctx.beginPath();
+      ctx.moveTo(glx-7,gly); ctx.lineTo(glx-9,gly+20); ctx.lineTo(glx+9,gly+20); ctx.lineTo(glx+7,gly); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle='rgba(255,255,255,0.4)'; ctx.lineWidth=1; ctx.stroke();
+      // Foam top
+      ctx.fillStyle='rgba(255,255,255,0.85)';
+      ctx.beginPath(); ctx.ellipse(glx,gly,7,4,0,0,Math.PI*2); ctx.fill();
+      // Glass shine
+      ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(glx-4,gly+4); ctx.lineTo(glx-5,gly+15); ctx.stroke();
+
+      // Bar stool silhouette
+      var stX=wxl+ww*0.18, stY=wyt+wh*0.9;
+      ctx.fillStyle='#1a0a02'; ctx.fillRect(stX-10,stY-8,20,4);
+      ctx.fillStyle='#2a1206'; ctx.fillRect(stX-2,stY-4,4,12);
+      ctx.fillStyle='#1a0a02'; ctx.fillRect(stX-8,stY+8,16,3);
+
+      ctx.restore(); // end interior clip
+
+      // ── WINDOW FRAME ──
+      ctx.strokeStyle='#5a2e0a'; ctx.lineWidth=3; ctx.strokeRect(wxl,wyt,ww,wh);
+      // Cross frame dividers
       if (!broken) {
-        // Intact window
-        ctx.fillStyle='rgba(120,200,255,0.2)'; ctx.fillRect(wxl,wyt,ww,wh);
-        ctx.strokeStyle='#5a3a1a'; ctx.lineWidth=2; ctx.strokeRect(wxl,wyt,ww,wh);
-        ctx.beginPath(); ctx.moveTo(wxl+ww/2,wyt); ctx.lineTo(wxl+ww/2,wyt+wh); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(wxl,wyt+wh/2); ctx.lineTo(wxl+ww,wyt+wh/2); ctx.stroke();
-        // Warm glow inside
-        var glow=ctx.createRadialGradient(wxl+ww/2,wyt+wh/2,2,wxl+ww/2,wyt+wh/2,ww);
-        glow.addColorStop(0,'rgba(255,180,60,0.5)'); glow.addColorStop(1,'rgba(255,120,20,0)');
-        ctx.fillStyle=glow; ctx.fillRect(wxl,wyt,ww,wh);
-      } else {
-        // Shattered
-        var shardProg = Math.min(1,(progress-0.82)/0.18);
-        ctx.fillStyle='rgba(120,200,255,0.08)'; ctx.fillRect(wxl,wyt,ww,wh);
-        ctx.strokeStyle='rgba(200,230,255,0.6)'; ctx.lineWidth=1.5;
-        var cx2=wxl+ww/2, cy2=wyt+wh/2;
-        [[wxl+2,wyt+2],[wxl+ww-2,wyt+2],[wxl+2,wyt+wh-2],[wxl+ww-2,wyt+wh-2],
-         [wxl,wyt+wh/2],[wxl+ww,wyt+wh/2],[wxl+ww/2,wyt],[wxl+ww/2,wyt+wh]].forEach(function(pt){
-          ctx.beginPath(); ctx.moveTo(cx2,cy2); ctx.lineTo(pt[0],pt[1]); ctx.stroke();
-        });
-        // Falling shards
-        for(var sh=0;sh<6;sh++){
-          var sx=wxl+ww*0.15+sh*(ww*0.12);
-          var sy=cy2+shardProg*(H*0.3+sh*5);
-          ctx.fillStyle='rgba(180,230,255,'+(0.7-shardProg*0.5)+')';
-          ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(sx+5,sy+9); ctx.lineTo(sx+9,sy+2); ctx.closePath(); ctx.fill();
-        }
-        // CRASH text
-        if(shardProg>0.1){
+        ctx.strokeStyle='#5a2e0a'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.moveTo(wcx,wyt); ctx.lineTo(wcx,wyt+wh); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(wxl,wyt+wh*0.45); ctx.lineTo(wxl+ww,wyt+wh*0.45); ctx.stroke();
+
+        // Window glass tint overlay
+        ctx.fillStyle='rgba(120,200,255,0.12)'; ctx.fillRect(wxl,wyt,ww,wh);
+        // Reflection streak
+        ctx.fillStyle='rgba(255,255,255,0.08)';
+        ctx.beginPath(); ctx.moveTo(wxl+4,wyt+4); ctx.lineTo(wxl+ww*0.3,wyt+4); ctx.lineTo(wxl+ww*0.22,wyt+wh*0.35); ctx.lineTo(wxl+2,wyt+wh*0.35); ctx.closePath(); ctx.fill();
+      }
+
+      // ── NIKE-STYLE WINDOW SHATTER ──
+      if (broken) {
+        var sp = shardProg;
+        var impX = wcx - ww*0.05, impY = wyt + wh * 0.42; // ball impact point
+
+        // Phase 1 (0→0.15): White flash ring expanding from impact
+        if (sp < 0.15) {
+          var flashR = sp / 0.15;
           ctx.save();
-          ctx.font='bold '+(16+shardProg*8)+'px sans-serif'; ctx.textAlign='center';
-          ctx.fillStyle='rgba(255,80,20,'+(0.5+shardProg*0.5)+')';
-          ctx.fillText('💥 CRASH!', W*0.83, H*0.22);
+          ctx.globalAlpha = 1 - flashR;
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath(); ctx.arc(impX, impY, flashR * ww * 0.8, 0, Math.PI*2); ctx.fill();
           ctx.restore();
         }
-        // Beer emoji bounce
-        if(Math.floor(t/8)%2===0){
-          ctx.font='18px sans-serif'; ctx.textAlign='center';
-          ctx.fillText('🍺', W*0.83, H*0.3);
+
+        // Phase 2 (0.05+): Radial crack lines burst outward from impact — primary
+        var numCracks = 14;
+        for (var ci=0; ci<numCracks; ci++) {
+          var angle = (ci/numCracks)*Math.PI*2 + ci*0.13;
+          var crackLen = Math.min(sp * 2.5, 1) * (ww*0.48 + (ci%3)*ww*0.1);
+          var ex = impX + Math.cos(angle)*crackLen;
+          var ey = impY + Math.sin(angle)*crackLen;
+          // Primary crack
+          ctx.strokeStyle = 'rgba(220,240,255,'+(0.85-sp*0.3)+')';
+          ctx.lineWidth = 1.2 + (ci%3)*0.4;
+          ctx.beginPath(); ctx.moveTo(impX, impY); ctx.lineTo(ex, ey); ctx.stroke();
+          // Secondary branch crack at ~60% length
+          if (sp > 0.1) {
+            var branchAngle = angle + (ci%2===0 ? 0.45 : -0.4) + (ci%3)*0.15;
+            var brLen = crackLen * 0.45;
+            var bx2 = impX+Math.cos(angle)*crackLen*0.55 + Math.cos(branchAngle)*brLen;
+            var by2 = impY+Math.sin(angle)*crackLen*0.55 + Math.sin(branchAngle)*brLen;
+            ctx.strokeStyle = 'rgba(200,230,255,'+(0.6-sp*0.25)+')';
+            ctx.lineWidth = 0.7;
+            ctx.beginPath();
+            ctx.moveTo(impX+Math.cos(angle)*crackLen*0.55, impY+Math.sin(angle)*crackLen*0.55);
+            ctx.lineTo(bx2, by2); ctx.stroke();
+          }
+        }
+
+        // Phase 3 (0.18+): Irregular polygon shards flying outward with rotation
+        if (sp > 0.18) {
+          var shardSp = Math.min(1, (sp-0.18)/0.82);
+          // Define shard shapes relative to impact — like Voronoi cells
+          var shards = [
+            {pts:[[-18,-14],[-6,-8],[-12,-2],[-22,4]], vx:-3.5, vy:-2.5, rot:0.15},
+            {pts:[[0,-18],[14,-10],[8,-2],[0,-4]], vx:2.5, vy:-4, rot:-0.2},
+            {pts:[[16,-8],[22,2],[14,8],[10,-2]], vx:4, vy:-1.5, rot:0.25},
+            {pts:[[-4,2],[8,6],[4,18],[-10,12]], vx:-2, vy:3.5, rot:-0.18},
+            {pts:[[10,8],[20,12],[18,22],[8,16]], vx:3.5, vy:4, rot:0.3},
+            {pts:[[-22,-2],[-14,6],[-20,14],[-28,6]], vx:-4.5, vy:2, rot:-0.22},
+            {pts:[[-8,14],[2,18],[-2,28],[-14,22]], vx:-1.5, vy:5, rot:0.12},
+            {pts:[[6,-6],[18,-2],[14,8],[4,4]], vx:3, vy:1, rot:-0.28},
+            {pts:[[-14,-8],[-4,-12],[0,-4],[-10,0]], vx:-2.5, vy:-3, rot:0.2},
+            {pts:[[0,4],[10,2],[12,14],[2,16]], vx:2, vy:3, rot:-0.15},
+            {pts:[[-20,6],[-10,10],[-12,20],[-24,14]], vx:-3, vy:3.5, rot:0.28},
+            {pts:[[18,-14],[26,-6],[22,4],[12,-4]], vx:5, vy:-3, rot:-0.32}
+          ];
+
+          shards.forEach(function(s){
+            var dx = s.vx * shardSp * ww * 0.32;
+            var dy = s.vy * shardSp * wh * 0.32 + shardSp * shardSp * wh * 0.15; // gravity
+            var rot = s.rot * shardSp * Math.PI * 1.8;
+
+            ctx.save();
+            ctx.translate(impX + dx, impY + dy);
+            ctx.rotate(rot);
+
+            // Shard fill — glass color with interior visible behind
+            var alpha = Math.max(0, 0.82 - shardSp * 0.75);
+            ctx.fillStyle = 'rgba(160,220,255,'+alpha+')';
+            ctx.beginPath();
+            ctx.moveTo(s.pts[0][0], s.pts[0][1]);
+            for (var pi=1; pi<s.pts.length; pi++) ctx.lineTo(s.pts[pi][0], s.pts[pi][1]);
+            ctx.closePath(); ctx.fill();
+
+            // Shard edge highlight (catches light)
+            ctx.strokeStyle = 'rgba(255,255,255,'+(alpha*0.9)+')';
+            ctx.lineWidth = 1.2;
+            ctx.stroke();
+
+            // Inner shine line on each shard
+            ctx.strokeStyle = 'rgba(220,240,255,'+(alpha*0.6)+')';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(s.pts[0][0]+2, s.pts[0][1]+2);
+            ctx.lineTo(s.pts[1][0]-2, s.pts[1][1]+2);
+            ctx.stroke();
+
+            ctx.restore();
+          });
+
+          // Tiny glass particle debris cloud
+          for (var dp=0; dp<22; dp++) {
+            var da = (dp/22)*Math.PI*2 + dp*0.28;
+            var dr = shardSp * (ww*0.22 + dp*ww*0.02) + Math.sin(dp*2.1)*8;
+            var dpx = impX + Math.cos(da)*dr;
+            var dpy = impY + Math.sin(da)*dr + shardSp*shardSp*wh*0.08;
+            var dalpha = Math.max(0, 0.6-shardSp*0.6);
+            ctx.fillStyle = 'rgba(200,235,255,'+dalpha+')';
+            ctx.beginPath(); ctx.arc(dpx, dpy, 1.2+dp%3*0.5, 0, Math.PI*2); ctx.fill();
+          }
+        }
+
+        // Phase 4 (0.35+): Impact shockwave ring
+        if (sp > 0.35 && sp < 0.65) {
+          var wvProg = (sp-0.35)/0.3;
+          ctx.save();
+          ctx.globalAlpha = (1-wvProg)*0.5;
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2*(1-wvProg);
+          ctx.beginPath(); ctx.arc(impX,impY, wvProg*ww*0.55, 0, Math.PI*2); ctx.stroke();
+          ctx.restore();
+        }
+
+        // Phase 5 (0.55+): CRASH! text with impact styling + beer emoji
+        if (sp > 0.55) {
+          var txtSp = Math.min(1,(sp-0.55)/0.45);
+          ctx.save();
+          ctx.translate(impX, impY - wh*0.15 - txtSp*10);
+          ctx.rotate((1-txtSp)*0.3);
+          ctx.scale(0.6+txtSp*0.6, 0.6+txtSp*0.6);
+          ctx.textAlign='center';
+          // Shadow
+          ctx.shadowColor='rgba(255,60,0,0.9)'; ctx.shadowBlur=15;
+          ctx.fillStyle='#ff3200';
+          ctx.font='bold '+(18)+'px sans-serif';
+          ctx.fillText('💥 CRASH!', 0, 0);
+          ctx.restore();
+
+          if(sp > 0.75 && Math.floor(t/6)%2===0){
+            ctx.font='22px sans-serif'; ctx.textAlign='center';
+            ctx.fillText('🍺', impX, impY+wh*0.3);
+          }
         }
       }
 
-      // Tennis player (left side of court) — stick figure that swings racket
-      var playerX = W*0.12, playerY = H*0.62;
-      var swingPhase = Math.min(1, progress * 2); // 0→1 over first half
+      // ── TENNIS PLAYER — detailed athletic figure (left side) ──
+      var playerX = W*0.13, playerY = H*0.62;
+      var swingPhase = Math.min(1, progress * 2.2); // 0→1 over first half+
 
       ctx.save();
       ctx.translate(playerX, playerY);
 
-      // Shadow
-      ctx.fillStyle='rgba(0,0,0,0.18)';
-      ctx.beginPath(); ctx.ellipse(0,2,10,3,0,0,Math.PI*2); ctx.fill();
+      // Player shadow
+      ctx.fillStyle='rgba(0,0,0,0.22)';
+      ctx.beginPath(); ctx.ellipse(0, 3, 13, 4, 0, 0, Math.PI*2); ctx.fill();
 
-      // Legs
-      var legSpread = swingPhase < 0.5 ? swingPhase * 0.4 : (1-swingPhase)*0.2+0.1; // step forward
-      ctx.strokeStyle='#e8c090'; ctx.lineWidth=2.5; ctx.lineCap='round';
-      ctx.beginPath(); ctx.moveTo(0,-4); ctx.lineTo(-5+legSpread*8, 14); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0,-4); ctx.lineTo(5-legSpread*4, 14); ctx.stroke();
+      // ── Legs (dynamic stride) ──
+      var stride = Math.sin(swingPhase * Math.PI * 2) * 0.35;
+      var frontLegAngle = 0.25 + stride;
+      var backLegAngle  = -0.18 - stride * 0.5;
+      var legLen = 18;
 
-      // Body
-      ctx.strokeStyle='#3a8a3a'; ctx.lineWidth=3;
-      ctx.beginPath(); ctx.moveTo(0,-4); ctx.lineTo(0,-20); ctx.stroke();
+      // Back leg
+      var blKx = Math.sin(backLegAngle) * legLen * 0.55;
+      var blKy = Math.cos(backLegAngle) * legLen * 0.55;
+      var blFx = blKx + Math.sin(backLegAngle - 0.4) * legLen * 0.55;
+      var blFy = blKy + Math.cos(backLegAngle - 0.4) * legLen * 0.55;
+      ctx.strokeStyle='#c8a070'; ctx.lineWidth=3.5; ctx.lineCap='round'; ctx.lineJoin='round';
+      ctx.beginPath(); ctx.moveTo(0, -4); ctx.lineTo(blKx, blKy); ctx.lineTo(blFx, blFy); ctx.stroke();
+      // Back shoe
+      ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.ellipse(blFx+2, blFy+2, 6, 2.5, backLegAngle-0.2, 0, Math.PI*2); ctx.fill();
 
-      // Head
+      // Front leg
+      var flKx = Math.sin(frontLegAngle) * legLen * 0.6;
+      var flKy = Math.cos(frontLegAngle) * legLen * 0.6;
+      var flFx = flKx + Math.sin(frontLegAngle + 0.2) * legLen * 0.55;
+      var flFy = flKy + Math.cos(frontLegAngle + 0.2) * legLen * 0.55;
+      ctx.beginPath(); ctx.moveTo(0, -4); ctx.lineTo(flKx, flKy); ctx.lineTo(flFx, flFy); ctx.stroke();
+      // Front shoe
+      ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.ellipse(flFx+2, flFy+2, 6, 2.5, frontLegAngle+0.1, 0, Math.PI*2); ctx.fill();
+
+      // ── Shorts ──
+      ctx.fillStyle='#1a6a8a';
+      ctx.beginPath();
+      ctx.moveTo(-8, -4); ctx.quadraticCurveTo(0, 2, 8, -4);
+      ctx.lineTo(4, 4); ctx.quadraticCurveTo(0, 7, -4, 4);
+      ctx.closePath(); ctx.fill();
+
+      // ── Torso / shirt ──
+      ctx.fillStyle='#f0f0f0';
+      ctx.beginPath();
+      ctx.moveTo(-7, -5); ctx.lineTo(-6, -20); ctx.lineTo(6, -20); ctx.lineTo(7, -5);
+      ctx.quadraticCurveTo(0, -2, -7, -5);
+      ctx.closePath(); ctx.fill();
+      // Shirt stripe
+      ctx.strokeStyle='#3a8a3a'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(-5,-20); ctx.lineTo(-5,-5); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(5,-20); ctx.lineTo(5,-5); ctx.stroke();
+
+      // ── Head ──
       ctx.fillStyle='#f5c090';
-      ctx.beginPath(); ctx.arc(0,-25,6,0,Math.PI*2); ctx.fill();
-      // Wristband / hair
-      ctx.fillStyle='#ffffff';
-      ctx.beginPath(); ctx.arc(0,-27,3,Math.PI,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(0, -26, 7, 0, Math.PI*2); ctx.fill();
+      // Tennis cap
+      ctx.fillStyle='#3a8a3a';
+      ctx.beginPath(); ctx.arc(0, -28, 7.5, Math.PI, Math.PI*2); ctx.fill();
+      ctx.fillStyle='#3a8a3a';
+      ctx.beginPath(); ctx.moveTo(-7.5,-28); ctx.lineTo(10,-28); ctx.lineTo(9,-25); ctx.lineTo(-7.5,-26); ctx.closePath(); ctx.fill();
+      // Face
+      ctx.fillStyle='#c08060'; ctx.beginPath(); ctx.arc(2, -25, 1.2, 0, Math.PI*2); ctx.fill(); // eye
+      ctx.fillStyle='#8a5030'; ctx.beginPath(); ctx.arc(-2, -25, 1.2, 0, Math.PI*2); ctx.fill(); // eye
+      // Sweatband
+      ctx.strokeStyle='#ffffff'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(0,-28,7.5,Math.PI*1.1,Math.PI*1.9); ctx.stroke();
 
-      // Racket arm — swings from back to forward
-      var armAngle = -0.6 + swingPhase * 2.2; // backswing → followthrough
-      var armLen = 15, racketLen = 12;
-      var elbowX = Math.cos(armAngle-0.3)*armLen;
-      var elbowY = -18 + Math.sin(armAngle-0.3)*armLen;
-      var handX = elbowX + Math.cos(armAngle)*armLen*0.7;
-      var handY = elbowY + Math.sin(armAngle)*armLen*0.7;
-      var racketTipX = handX + Math.cos(armAngle-0.2)*racketLen;
-      var racketTipY = handY + Math.sin(armAngle-0.2)*racketLen;
+      // ── Racket arm — full swing arc ──
+      var armAngle = -1.1 + swingPhase * 2.8; // big backswing → full followthrough
+      var armLen1 = 16, armLen2 = 14, racketLen = 14;
 
-      // Arm
-      ctx.strokeStyle='#e8c090'; ctx.lineWidth=2.5;
-      ctx.beginPath(); ctx.moveTo(0,-18); ctx.lineTo(elbowX,elbowY); ctx.lineTo(handX,handY); ctx.stroke();
+      // Shoulder → elbow
+      var elbX = Math.cos(armAngle - 0.5) * armLen1;
+      var elbY = -18 + Math.sin(armAngle - 0.5) * armLen1;
+      // Elbow → wrist
+      var wristX = elbX + Math.cos(armAngle + 0.1) * armLen2;
+      var wristY = elbY + Math.sin(armAngle + 0.1) * armLen2;
+      // Racket tip
+      var racTipX = wristX + Math.cos(armAngle - 0.15) * racketLen;
+      var racTipY = wristY + Math.sin(armAngle - 0.15) * racketLen;
 
-      // Other arm (non-racket) — toss/balance
-      var arm2angle = armAngle*0.3 - 1.8;
-      ctx.beginPath(); ctx.moveTo(0,-18);
-      ctx.lineTo(Math.cos(arm2angle)*12, -18+Math.sin(arm2angle)*12); ctx.stroke();
+      ctx.strokeStyle='#d4a060'; ctx.lineWidth=3; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(0, -18); ctx.lineTo(elbX, elbY); ctx.lineTo(wristX, wristY); ctx.stroke();
 
-      // Racket
-      ctx.strokeStyle='#c8a040'; ctx.lineWidth=2;
-      ctx.beginPath(); ctx.moveTo(handX,handY); ctx.lineTo(racketTipX,racketTipY); ctx.stroke();
-      // Racket head (oval)
+      // Non-racket arm (balance / toss arm)
+      var arm2a = armAngle * 0.25 - 2.0;
+      var a2x = Math.cos(arm2a) * 14, a2y = -18 + Math.sin(arm2a) * 14;
+      ctx.strokeStyle='#d4a060';
+      ctx.beginPath(); ctx.moveTo(0, -18); ctx.lineTo(a2x, a2y); ctx.stroke();
+      // Wristband non-racket
+      ctx.strokeStyle='#ffffff'; ctx.lineWidth=2.5;
+      ctx.beginPath(); ctx.arc(a2x, a2y, 2.5, 0, Math.PI*2); ctx.stroke();
+
+      // Racket handle
+      ctx.strokeStyle='#8a6020'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.moveTo(wristX, wristY); ctx.lineTo(racTipX, racTipY); ctx.stroke();
+
+      // Racket head
       ctx.save();
-      ctx.translate(racketTipX,racketTipY);
-      ctx.rotate(armAngle-0.2);
-      ctx.strokeStyle='#d4b060'; ctx.lineWidth=1.5;
-      ctx.beginPath(); ctx.ellipse(0,-6,5,8,0,0,Math.PI*2); ctx.stroke();
-      // Strings
-      ctx.strokeStyle='rgba(220,220,180,0.6)'; ctx.lineWidth=0.8;
-      for(var si=-4;si<=4;si+=2){ ctx.beginPath(); ctx.moveTo(si,-14); ctx.lineTo(si,2); ctx.stroke(); }
-      for(var sj=-7;sj<=1;sj+=2){ ctx.beginPath(); ctx.moveTo(-5,sj); ctx.lineTo(5,sj); ctx.stroke(); }
+      ctx.translate(racTipX, racTipY);
+      ctx.rotate(armAngle - 0.15);
+      // Frame
+      ctx.strokeStyle='#d4b060'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.ellipse(0, -8, 6, 10, 0, 0, Math.PI*2); ctx.stroke();
+      ctx.strokeStyle='#c09040'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.ellipse(0, -8, 4.5, 8.5, 0, 0, Math.PI*2); ctx.stroke();
+      // Strings vertical
+      ctx.strokeStyle='rgba(230,230,200,0.7)'; ctx.lineWidth=0.7;
+      for(var si=-5;si<=5;si+=2){
+        ctx.beginPath(); ctx.moveTo(si,-18); ctx.lineTo(si,2); ctx.stroke();
+      }
+      // Strings horizontal
+      for(var sj=-16;sj<=0;sj+=2.5){
+        ctx.beginPath(); ctx.moveTo(-6,sj); ctx.lineTo(6,sj); ctx.stroke();
+      }
+      // Grip tape
+      ctx.strokeStyle='rgba(0,0,0,0.4)'; ctx.lineWidth=1.5;
+      for(var gi=0;gi<4;gi++){
+        ctx.beginPath(); ctx.moveTo(-3,2+gi*2); ctx.lineTo(3,2+gi*2); ctx.stroke();
+      }
       ctx.restore();
 
-      ctx.restore(); // player transform
+      // Wristband on racket arm
+      ctx.strokeStyle='#ffffff'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.arc(wristX, wristY, 2.5, 0, Math.PI*2); ctx.stroke();
+
+      ctx.restore(); // end player transform
+
+      // Ball trajectory — curves toward window impact point (wcx-ww*0.05, wyt+wh*0.42)
       var nt = Math.min(progress, 1);
-      var p1x=0, p1y=H*0.7, p2x=W*0.4, p2y=H*0.5, p3x=W*0.83, p3y=H*0.34;
-      var bx, by;
+      var p1x=W*0.14, p1y=H*0.68;
+      var p2x=W*0.42, p2y=H*0.48;
+      var p3x=W*0.79, p3y=H*0.37;  // aimed at window center
+      var bbx, bby;
       if(nt < 0.5){
-        var u=nt*2; bx=p1x+(p2x-p1x)*u; by=p1y+(p2y-p1y)*u-Math.sin(u*Math.PI)*25;
+        var u=nt*2; bbx=p1x+(p2x-p1x)*u; bby=p1y+(p2y-p1y)*u-Math.sin(u*Math.PI)*28;
       } else {
-        var u=(nt-0.5)*2; bx=p2x+(p3x-p2x)*u; by=p2y+(p3y-p2y)*u-Math.sin((1-u)*Math.PI)*18;
+        var u=(nt-0.5)*2; bbx=p2x+(p3x-p2x)*u; bby=p2y+(p3y-p2y)*u-Math.sin((1-u)*Math.PI)*20;
       }
 
-      // Trail
+      // Screen shake on impact (frame 98-110)
+      var shakeAmt = 0;
+      if (t>98 && t<112) shakeAmt = Math.sin(t*1.8)*(112-t)*0.55;
+      if (shakeAmt) { ctx.save(); ctx.translate(shakeAmt, shakeAmt*0.6); }
+
+      // Motion trail
       if(nt>0.05 && nt<0.86){
-        for(var tr=5;tr>0;tr--){
-          var trp=Math.max(0,nt-tr*0.04), tu, tbx, tby;
-          if(trp<0.5){tu=trp*2;tbx=p1x+(p2x-p1x)*tu;tby=p1y+(p2y-p1y)*tu-Math.sin(tu*Math.PI)*25;}
-          else{tu=(trp-0.5)*2;tbx=p2x+(p3x-p2x)*tu;tby=p2y+(p3y-p2y)*tu-Math.sin((1-tu)*Math.PI)*18;}
-          ctx.beginPath(); ctx.arc(tbx,tby,6-tr*0.8,0,Math.PI*2);
-          ctx.fillStyle='rgba(200,230,80,'+(0.12-tr*0.02)+')'; ctx.fill();
+        for(var tr=6;tr>0;tr--){
+          var trp=Math.max(0,nt-tr*0.038), tu, tbx, tby;
+          if(trp<0.5){tu=trp*2;tbx=p1x+(p2x-p1x)*tu;tby=p1y+(p2y-p1y)*tu-Math.sin(tu*Math.PI)*28;}
+          else{tu=(trp-0.5)*2;tbx=p2x+(p3x-p2x)*tu;tby=p2y+(p3y-p2y)*tu-Math.sin((1-tu)*Math.PI)*20;}
+          ctx.beginPath(); ctx.arc(tbx,tby,7-tr,0,Math.PI*2);
+          ctx.fillStyle='rgba(200,230,80,'+(0.14-tr*0.018)+')'; ctx.fill();
         }
       }
 
-      // Ball (disappears after crash)
+      // Ball (disappears on impact)
       if(nt < 0.84){
-        ctx.save(); ctx.translate(bx,by); ctx.rotate(nt*Math.PI*6);
+        ctx.save(); ctx.translate(bbx,bby); ctx.rotate(nt*Math.PI*7);
         ctx.beginPath(); ctx.arc(0,0,8,0,Math.PI*2);
         var bg2=ctx.createRadialGradient(-2,-3,1,-2,-3,9);
         bg2.addColorStop(0,'#f0f840'); bg2.addColorStop(0.6,'#c8e020'); bg2.addColorStop(1,'#8aac00');
@@ -3572,6 +3883,8 @@ function showIntroAnimation(cb){
         ctx.beginPath(); ctx.arc(0,0,8,Math.PI+0.2,Math.PI+2.5); ctx.stroke();
         ctx.restore();
       }
+
+      if (shakeAmt) ctx.restore(); // end screen shake
     } catch(e) { /* safe — never crash the app */ }
   }
 
@@ -3717,58 +4030,125 @@ function showCrateAnimation(drinkName, cb){
     }
   }
 
-  // Tennis player stick figure for crate animation
+  // Tennis player stick figure for crate animation — detailed athletic figure
   function drawCratePerson(x, y, action, frame){
-    // action: 'carry'=walking with crate, 'lift'=lifting, 'cheer'=celebrate
+    // action: 'carry'=walking with crate, 'lift'=lifting overhead, 'cheer'=victory arms up
     ctx.save();
     ctx.translate(x, y);
 
     // Shadow
-    ctx.fillStyle='rgba(0,0,0,0.15)';
-    ctx.beginPath(); ctx.ellipse(0,2,9,2.5,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,0.18)';
+    ctx.beginPath(); ctx.ellipse(0, 3, 12, 3.5, 0, 0, Math.PI*2); ctx.fill();
 
-    // Walking cycle
-    var walk = Math.sin(frame * 0.25) * 0.3;
-    var legF = action==='carry' ? walk : 0;
-
-    // Legs
-    ctx.strokeStyle='#c8a070'; ctx.lineWidth=2.5; ctx.lineCap='round';
-    ctx.beginPath(); ctx.moveTo(0,-3); ctx.lineTo(-5+legF*8,13); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0,-3); ctx.lineTo(4-legF*8,13); ctx.stroke();
-
-    // Body / shirt
-    ctx.strokeStyle='#2a6a3a'; ctx.lineWidth=3;
-    ctx.beginPath(); ctx.moveTo(0,-3); ctx.lineTo(0,-18); ctx.stroke();
-
-    // Head
-    ctx.fillStyle='#f5c090';
-    ctx.beginPath(); ctx.arc(0,-23,5.5,0,Math.PI*2); ctx.fill();
-    // Tennis cap brim
-    ctx.fillStyle='#ffffff';
-    ctx.beginPath(); ctx.ellipse(0,-27,7,2.5,0,0,Math.PI); ctx.fill();
-    ctx.fillStyle='#3a8a3a';
-    ctx.beginPath(); ctx.arc(0,-24,5,Math.PI,Math.PI*2); ctx.fill();
+    // ── Legs ──
+    var walk = Math.sin(frame * 0.22) * 0.4;
+    ctx.strokeStyle='#c8a070'; ctx.lineWidth=3; ctx.lineCap='round'; ctx.lineJoin='round';
 
     if(action==='carry'){
-      // Arms stretched out holding crate
-      ctx.strokeStyle='#c8a070'; ctx.lineWidth=2.5;
-      ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(-13,-10); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(13,-10); ctx.stroke();
+      // Dynamic walking stride
+      var fLeg = walk * 18, bLeg = -walk * 12;
+      // Back leg
+      var bKx = Math.sin(-0.15+bLeg*0.04)*14, bKy = Math.cos(-0.15+bLeg*0.04)*14;
+      ctx.beginPath(); ctx.moveTo(0,-3); ctx.lineTo(bKx,bKy); ctx.lineTo(bKx+Math.sin(-0.3)*12, bKy+Math.cos(-0.3)*12); ctx.stroke();
+      // Front leg
+      var fKx = Math.sin(0.2+fLeg*0.04)*14, fKy = Math.cos(0.2+fLeg*0.04)*14;
+      ctx.beginPath(); ctx.moveTo(0,-3); ctx.lineTo(fKx,fKy); ctx.lineTo(fKx+Math.sin(0.1)*12, fKy+Math.cos(0.1)*12); ctx.stroke();
+      // Shoes
+      ctx.fillStyle='#ffffff';
+      ctx.beginPath(); ctx.ellipse(bKx+Math.sin(-0.3)*12+2,bKy+Math.cos(-0.3)*12+2,5,2,0,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(fKx+Math.sin(0.1)*12+2,fKy+Math.cos(0.1)*12+2,5,2,0,0,Math.PI*2); ctx.fill();
+    } else {
+      // Stable wide stance
+      ctx.beginPath(); ctx.moveTo(0,-3); ctx.lineTo(-8,14); ctx.lineTo(-10,26); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,-3); ctx.lineTo(8,14); ctx.lineTo(10,26); ctx.stroke();
+      ctx.fillStyle='#ffffff';
+      ctx.beginPath(); ctx.ellipse(-8,28,6,2.5,0,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(10,28,6,2.5,0,0,Math.PI*2); ctx.fill();
+    }
+
+    // ── Shorts ──
+    ctx.fillStyle='#1a6a8a';
+    ctx.beginPath();
+    ctx.moveTo(-8,-3); ctx.quadraticCurveTo(0,3,8,-3);
+    ctx.lineTo(5,5); ctx.quadraticCurveTo(0,8,-5,5);
+    ctx.closePath(); ctx.fill();
+
+    // ── Torso / shirt ──
+    ctx.fillStyle='#f0f0f0';
+    ctx.beginPath();
+    ctx.moveTo(-7,-4); ctx.lineTo(-6,-20); ctx.lineTo(6,-20); ctx.lineTo(7,-4);
+    ctx.quadraticCurveTo(0,-1,-7,-4);
+    ctx.closePath(); ctx.fill();
+    // Green stripes
+    ctx.strokeStyle='#3a8a3a'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(-5,-20); ctx.lineTo(-5,-4); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(5,-20); ctx.lineTo(5,-4); ctx.stroke();
+
+    // ── Head ──
+    ctx.fillStyle='#f5c090';
+    ctx.beginPath(); ctx.arc(0,-26,7,0,Math.PI*2); ctx.fill();
+    // Tennis cap
+    ctx.fillStyle='#3a8a3a';
+    ctx.beginPath(); ctx.arc(0,-28,7.5,Math.PI,Math.PI*2); ctx.fill();
+    // Cap brim
+    ctx.beginPath(); ctx.moveTo(-7.5,-28); ctx.lineTo(10.5,-28); ctx.lineTo(9.5,-25); ctx.lineTo(-7.5,-26); ctx.closePath(); ctx.fill();
+    // Eyes
+    ctx.fillStyle='#5a3010';
+    ctx.beginPath(); ctx.arc(2.5,-25,1.2,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(-2,-25,1.2,0,Math.PI*2); ctx.fill();
+    // Sweatband
+    ctx.strokeStyle='#ffffff'; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.arc(0,-28,7.5,Math.PI*1.1,Math.PI*1.9); ctx.stroke();
+
+    // ── Arms by action ──
+    ctx.strokeStyle='#c8a070'; ctx.lineWidth=3; ctx.lineCap='round';
+
+    if(action==='carry'){
+      // Arms out holding crate — wristbands visible
+      ctx.beginPath(); ctx.moveTo(0,-17); ctx.lineTo(-14,-9); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,-17); ctx.lineTo(14,-9); ctx.stroke();
+      // Wristbands
+      ctx.strokeStyle='#ffffff'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.arc(-14,-9,2.5,0,Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(14,-9,2.5,0,Math.PI*2); ctx.stroke();
       // Crate in hands
-      drawCrate(0,-7, false, 0.85);
+      drawCrate(0,-4, false, 0.9);
+
     } else if(action==='lift'){
-      // Arms raised, straining
-      var liftWave = Math.sin(frame*0.4)*0.15;
-      ctx.strokeStyle='#c8a070'; ctx.lineWidth=2.5;
-      ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(-12,-24+liftWave*3); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(12,-24+liftWave*3); ctx.stroke();
-      drawCrate(0,-32, false, 0.75);
+      var lw = Math.sin(frame*0.35)*0.12;
+      ctx.strokeStyle='#c8a070'; ctx.lineWidth=3;
+      // Bent arms lifting
+      ctx.beginPath(); ctx.moveTo(0,-17); ctx.lineTo(-14,-22+lw*3); ctx.lineTo(-12,-32+lw*4); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,-17); ctx.lineTo(14,-22-lw*3); ctx.lineTo(12,-32-lw*4); ctx.stroke();
+      // Wristbands
+      ctx.strokeStyle='#ffffff'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.arc(-12,-32+lw*4,2.5,0,Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(12,-32-lw*4,2.5,0,Math.PI*2); ctx.stroke();
+      // Crate overhead — tilting with strain
+      ctx.save(); ctx.translate(0,-40); ctx.rotate(lw*0.3);
+      drawCrate(0,0,false,0.8);
+      ctx.restore();
+      // Strain expression — sweat drop
+      ctx.fillStyle='rgba(100,180,255,0.7)';
+      ctx.beginPath(); ctx.arc(9,-23,2,0,Math.PI*2); ctx.fill();
+
     } else if(action==='cheer'){
-      // Arms up in V for victory
-      var wave = Math.sin(frame*0.5)*0.4;
-      ctx.strokeStyle='#c8a070'; ctx.lineWidth=2.5;
-      ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(-14,-26+wave); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(14,-26-wave); ctx.stroke();
+      var wave = Math.sin(frame*0.45)*0.4;
+      ctx.strokeStyle='#c8a070'; ctx.lineWidth=3;
+      // Arms up in V
+      ctx.beginPath(); ctx.moveTo(0,-17); ctx.lineTo(-16,-30+wave*3); ctx.lineTo(-14,-40+wave*4); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,-17); ctx.lineTo(16,-30-wave*3); ctx.lineTo(14,-40-wave*4); ctx.stroke();
+      // Wristbands raised
+      ctx.strokeStyle='#ffffff'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.arc(-14,-40+wave*4,2.5,0,Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(14,-40-wave*4,2.5,0,Math.PI*2); ctx.stroke();
+      // Stars / sparkles
+      if(Math.floor(frame*0.15)%2===0){
+        ctx.fillStyle='rgba(255,220,50,'+(0.5+wave*0.3)+')';
+        ctx.font='10px sans-serif'; ctx.textAlign='center';
+        ctx.fillText('⭐',18+wave*2,-44);
+        ctx.fillText('✨',-18-wave*2,-44+wave);
+      }
     }
 
     ctx.restore();
