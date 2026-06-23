@@ -1455,25 +1455,102 @@ function renderConsolidatedToday(){
   var settled = blocks.filter(function(b){ return b.isSettled; });
 
   var rowHtml = function(b){
+    var isDE = LANG === 'de';
     var statusBits = [];
     if (!b.moneySettled) statusBits.push('<span style="font-size:10px;color:#c4392b;font-weight:700">€'+b.moneyPending.toFixed(2)+' '+t('owed')+'</span>');
     if (!b.bottlesSettled) statusBits.push('<span style="font-size:10px;color:#d4a017;font-weight:700">'+b.bottlesRemaining+' '+t('toReplace')+'</span>');
     if (b.isSettled) statusBits.push('<span style="font-size:10px;color:#1f8a4f;font-weight:700">✓ '+t('settled')+'</span>');
     var dateRange = b.earliestDate === b.latestDate ? fmtDate(b.earliestDate) : fmtDate(b.earliestDate)+' → '+fmtDate(b.latestDate);
 
+    // Per-drink price edit — only shown for the current user's own row
+    var isMe = b.person === CURRENT_NAME;
+    var priceEditHtml = '';
+    if (isMe && !b.moneySettled) {
+      // Get all priced drink entries for this person
+      var pricedByDrink = {};
+      STATE.logs.filter(function(l){
+        return l.person === b.person && isMine(l) && (parseFloat(l.unit_price)||0) > 0;
+      }).forEach(function(l){
+        if (!pricedByDrink[l.drink]) pricedByDrink[l.drink] = {qty:0, unitPrice:parseFloat(l.unit_price)||0};
+        pricedByDrink[l.drink].qty += (l.quantity||0);
+        pricedByDrink[l.drink].unitPrice = parseFloat(l.unit_price)||0;
+      });
+      if (Object.keys(pricedByDrink).length) {
+        priceEditHtml = '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #e8dccc">' +
+          '<div style="font-size:10px;color:#7a5200;font-weight:700;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px">'+
+            '✏️ '+(isDE?'Preis je Getränk bearbeiten':'Edit price per drink')+'</div>'+
+          '<div style="display:flex;flex-wrap:wrap;gap:6px">'+
+          Object.entries(pricedByDrink).map(function(e){
+            var drink = e[0], info = e[1];
+            var safeId = 'crt-'+b.person.replace(/\W/g,'_')+'-'+drink.replace(/\W/g,'_');
+            var indivId = 'indiv-'+safeId;
+
+            // Build individual entry rows (one price field per log entry)
+            var myEntries = STATE.logs.filter(function(l){
+              return l.person === b.person && l.drink === drink && isMine(l) && (parseFloat(l.unit_price)||0) > 0;
+            }).sort(function(a,b){ return (a.date > b.date ? -1 : 1); });
+
+            var indivRows = myEntries.map(function(l){
+              var entryId = 'ep-'+l.id;
+              var timeLabel = l.date + (l.logged_at ? ' '+new Date(l.logged_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) : '');
+              return '<div style="display:flex;align-items:center;gap:5px;padding:4px 0;border-bottom:1px solid #f5ede4" onclick="event.stopPropagation()">'+
+                '<span style="font-size:11px;color:#7a5200;flex:1">'+timeLabel+(l.quantity>1?' ×'+l.quantity:'')+'</span>'+
+                '<span style="font-size:11px;color:#5a3a28;font-weight:700">€</span>'+
+                '<input id="'+entryId+'" type="number" min="0" step="0.01" value="'+(parseFloat(l.unit_price)||0).toFixed(2)+'" '+
+                  'style="width:55px;border:1px solid #e8dccc;border-radius:6px;padding:3px 4px;font-size:12px;font-weight:700;color:#b5481f;text-align:center" '+
+                  'onclick="event.stopPropagation()" />'+
+                '<button onclick="event.stopPropagation();saveSingleEntryPrice(\''+l.id+'\',\''+entryId+'\',\''+esc(drink)+'\')" '+
+                  'style="background:#1f8a4f;border:none;border-radius:6px;color:#fff;font-size:11px;font-weight:700;padding:3px 7px;cursor:pointer;white-space:nowrap">'+
+                  (isDE?'Ok':'OK')+'</button>'+
+              '</div>';
+            }).join('');
+
+            return '<div style="width:100%;background:#fce4d0;border:1.5px solid #e8b870;border-radius:11px;overflow:hidden" onclick="event.stopPropagation()">'+
+              // Group price row
+              '<div style="display:flex;align-items:center;gap:4px;padding:5px 8px">'+
+                '<span style="font-size:13px">'+emoji(drink)+'</span>'+
+                '<span style="font-size:11px;font-weight:700;color:#5a3a28">'+esc(drink.replace(/^.+? /,''))+'</span>'+
+                '<span style="font-size:10px;color:#9c4a22;margin-right:2px">×'+info.qty+'</span>'+
+                '<span style="font-size:12px;color:#5a3a28;font-weight:700">€</span>'+
+                '<input id="'+safeId+'" type="number" min="0" step="0.01" value="'+info.unitPrice.toFixed(2)+'" '+
+                  'style="width:52px;border:none;background:transparent;font-size:13px;font-weight:800;color:#b5481f;text-align:center;outline:none;padding:0" '+
+                  'onclick="event.stopPropagation()" />'+
+                '<button onclick="event.stopPropagation();saveConsolidatedPrice(\''+esc(b.person)+'\',\''+esc(drink)+'\',\''+safeId+'\')" '+
+                  'style="background:#b5481f;border:none;border-radius:6px;color:#fff;font-size:11px;font-weight:700;padding:3px 7px;cursor:pointer">'+
+                  (isDE?'Alle':'All')+'</button>'+
+                (myEntries.length > 1
+                  ? '<button onclick="event.stopPropagation();var el=document.getElementById(\''+indivId+'\');el.style.display=el.style.display===\'none\'?\'\':\'none\'" '+
+                    'style="background:transparent;border:1.5px solid #b5481f;border-radius:6px;color:#b5481f;font-size:10px;font-weight:700;padding:2px 6px;cursor:pointer;white-space:nowrap">'+
+                    (isDE?'Einzeln ↕':'Per entry ↕')+'</button>'
+                  : '')+
+              '</div>'+
+              // Individual entries (hidden by default)
+              '<div id="'+indivId+'" style="display:none;padding:4px 10px 8px 10px;background:#fff8f2;border-top:1px solid #e8dccc">'+
+                '<div style="font-size:10px;color:#7a5200;font-weight:700;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">'+
+                  (isDE?'Einzelne Einträge bearbeiten':'Edit individual entries')+'</div>'+
+                indivRows+
+              '</div>'+
+            '</div>';
+          }).join('')+
+          '</div></div>';
+      }
+    }
+
     return '<div class="person-row" style="cursor:pointer" onclick="showPersonRunningTab(\''+esc(b.person)+'\')">'+
-      '<div class="person-row-l">'+
-        '<div class="avatar" style="background:'+colorFor(b.person)+';width:22px;height:22px;font-size:10px">'+(b.person[0]||'?').toUpperCase()+'</div>'+
-        '<div><div style="font-size:12px;font-weight:600;color:#b5481f">'+esc(b.person)+
-          ' <span class="badge">'+b.totalQty+' '+(b.totalQty!==1?t('drinksPlural'):t('drink'))+'</span>'+
-          (b.totalSpend>0?' <span style="font-size:11px;color:#b5481f;font-weight:600">€'+b.totalSpend.toFixed(2)+'</span>':'')+
+      '<div class="person-row-l" style="flex:1;min-width:0">'+
+        '<div class="avatar" style="background:'+colorFor(b.person)+';width:22px;height:22px;font-size:10px;flex-shrink:0">'+(b.person[0]||'?').toUpperCase()+'</div>'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:12px;font-weight:600;color:#b5481f">'+esc(b.person)+
+            ' <span class="badge">'+b.totalQty+' '+(b.totalQty!==1?t('drinksPlural'):t('drink'))+'</span>'+
+            (b.totalSpend>0?' <span style="font-size:11px;color:#b5481f;font-weight:600">€'+b.totalSpend.toFixed(2)+'</span>':'')+
+            '</div>'+
+            '<div style="font-size:10px;color:#6a3020;margin-top:1px">'+dateRange+'</div>'+
+            '<div class="drink-tags">'+b.tags+'</div>'+
+            '<div style="display:flex;gap:6px;margin-top:3px">'+statusBits.join('')+'</div>'+
+            priceEditHtml+
           '</div>'+
-          '<div style="font-size:10px;color:#6a3020;margin-top:1px">'+dateRange+'</div>'+
-          '<div class="drink-tags">'+b.tags+'</div>'+
-          '<div style="display:flex;gap:6px;margin-top:3px">'+statusBits.join('')+'</div>'+
-        '</div>'+
       '</div>'+
-      '<span style="font-size:11px;color:#6a3020">'+esc(t('details'))+'</span>'+
+      '<span style="font-size:11px;color:#6a3020;flex-shrink:0;align-self:flex-start;padding-top:2px">'+esc(t('details'))+'</span>'+
     '</div>';
   };
 
@@ -1487,6 +1564,61 @@ function renderConsolidatedToday(){
   }
 
   return html;
+}
+
+// Save updated unit price for a drink in the consolidated running tab
+async function saveConsolidatedPrice(person, drink, inputId){
+  var inputEl = document.getElementById(inputId);
+  if (!inputEl) return;
+  var newUnit = parseFloat(inputEl.value) || 0;
+
+  // Update all of this user's entries for this drink that they own
+  var entries = STATE.logs.filter(function(l){
+    return l.person === person && l.drink === drink && isMine(l) && (parseFloat(l.unit_price)||0) > 0;
+  });
+
+  if (!entries.length) { notify(LANG==='de'?'Keine Einträge gefunden':'No entries found', true); return; }
+
+  var errors = [];
+  for (var i = 0; i < entries.length; i++) {
+    var l = entries[i];
+    var newTotal = newUnit * (l.quantity || 1);
+    var res = await SB.from('drink_logs').update({unit_price: newUnit, total_price: newTotal}).eq('id', l.id);
+    if (res.error) errors.push(res.error.message);
+  }
+
+  // Also persist as user's default price for this drink
+  setDrinkPrice(drink, newUnit);
+
+  if (errors.length) { notify('Error: '+errors[0], true); return; }
+
+  // Visual feedback on the button
+  var btn = inputEl.nextElementSibling;
+  if (btn) { var orig = btn.textContent; btn.textContent = '✓'; setTimeout(function(){ btn.textContent = orig; }, 1200); }
+
+  notify((LANG==='de'?'Preis aktualisiert':'Price updated')+' · '+emoji(drink)+' €'+newUnit.toFixed(2)+' ✓');
+  await loadAll();
+}
+
+// Save price for a single specific log entry
+async function saveSingleEntryPrice(entryId, inputId, drink){
+  var inputEl = document.getElementById(inputId);
+  if (!inputEl) return;
+  var newUnit = parseFloat(inputEl.value) || 0;
+
+  var entry = STATE.logs.find(function(l){ return l.id === entryId; });
+  if (!entry) { notify(LANG==='de'?'Eintrag nicht gefunden':'Entry not found', true); return; }
+
+  var newTotal = newUnit * (entry.quantity || 1);
+  var res = await SB.from('drink_logs').update({unit_price: newUnit, total_price: newTotal}).eq('id', entryId);
+  if (res.error) { notify('Error: '+res.error.message, true); return; }
+
+  // Visual feedback
+  var btn = inputEl.nextElementSibling;
+  if (btn) { var orig = btn.textContent; btn.textContent = '✓'; btn.style.background='#0e6b8c'; setTimeout(function(){ btn.textContent=orig; btn.style.background='#1f8a4f'; }, 1500); }
+
+  notify((LANG==='de'?'Eintrag aktualisiert':'Entry updated')+' · €'+newUnit.toFixed(2)+' ✓');
+  await loadAll();
 }
 
 function updTotal(){
@@ -1618,6 +1750,18 @@ function showPersonRunningTab(person){
             '<button class="btn-icon" style="width:26px;height:26px;font-size:14px" onclick="editDrinkQty(\''+l.id+'\',1,\''+esc(person)+'\',\'\')">+</button>'+
           '</div>'
         : '';
+      // Inline price edit for the user's own priced entries
+      var priceControl = (canEdit && (parseFloat(l.unit_price)||0) > 0)
+        ? '<div style="display:flex;align-items:center;gap:4px;margin-top:5px;background:#fce4d0;border-radius:7px;padding:3px 7px;width:fit-content">'+
+            '<span style="font-size:11px;color:#5a3a28;font-weight:700">€</span>'+
+            '<input id="spe-'+l.id+'" type="number" min="0" step="0.01" value="'+(parseFloat(l.unit_price)||0).toFixed(2)+'" '+
+              'style="width:55px;border:none;background:transparent;font-size:13px;font-weight:800;color:#b5481f;text-align:center;outline:none;padding:0" />'+
+            '<span style="font-size:10px;color:#7a5200">/'+esc(LANG==='de'?'Stk':'ea')+(l.quantity>1?'  ×'+l.quantity:'')+'</span>'+
+            '<button onclick="saveSingleEntryPrice(\''+l.id+'\',\'spe-'+l.id+'\',\''+esc(l.drink)+'\')" '+
+              'style="background:#1f8a4f;border:none;border-radius:5px;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;cursor:pointer">'+
+              (LANG==='de'?'Ok':'OK')+'</button>'+
+          '</div>'
+        : '';
       return '<div class="entry">'+
         '<div class="entry-l">'+
           '<span class="ej">'+emoji(l.drink)+'</span>'+
@@ -1625,6 +1769,7 @@ function showPersonRunningTab(person){
             '<div class="en">'+esc(l.drink.replace(/^.+? /,''))+(!canEdit&&l.quantity>1?' ×'+l.quantity:'')+'</div>'+
             '<div class="es">🕐 '+timeStr+(l.total_price>0?' · €'+parseFloat(l.total_price).toFixed(2):' · '+t('free'))+byLine+'</div>'+
             (l.note?'<div class="es" style="font-style:italic">"'+esc(l.note)+'"</div>':'')+
+            priceControl+
             qtyControl+
           '</div>'+
         '</div>'+
