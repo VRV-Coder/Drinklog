@@ -204,6 +204,10 @@
 <div id="app">
   <div id="notif"></div>
   <div id="modal-root"></div>
+  <!-- Login intro animation overlay -->
+  <div id="intro-anim-overlay" style="display:none;position:fixed;inset:0;z-index:19999;background:#0a1a0a;align-items:center;justify-content:center;flex-direction:column"></div>
+  <!-- Replace crate animation overlay -->
+  <div id="crate-anim-overlay" style="display:none;position:fixed;inset:0;z-index:19999;background:rgba(10,20,10,.92);align-items:center;justify-content:center;flex-direction:column"></div>
   <div class="header">
     <div class="header-row">
       <span style="font-size:22px">🎾🍺</span>
@@ -218,13 +222,13 @@
     </div>
     <nav id="main-nav">
       <button class="active" onclick="switchTab('log',this)"><span id="nav-log-label">📋 Log</span></button>
-      <button onclick="switchTab('stats',this)"><span id="nav-stats-label">📊 Stats</span></button>
-      <button onclick="switchTab('dashboard',this)"><span id="nav-dashboard-label">📈 Dashboard</span></button>
       <button onclick="switchTab('payments',this)"><span id="nav-payments-label">💶 Payments</span></button>
       <button onclick="switchTab('history',this)" id="nav-history-btn" style="display:none"><span id="nav-history-label">📅 History</span></button>
       <button onclick="switchTab('replace',this)"><span id="nav-replace-label">🔄 Replace</span></button>
+      <button onclick="switchTab('stats',this)"><span id="nav-stats-label">📊 Stats</span></button>
+      <button onclick="switchTab('dashboard',this)"><span id="nav-dashboard-label">📈 Dashboard</span></button>
       <button onclick="switchTab('audit',this)" id="nav-audit-btn" style="display:none"><span id="nav-audit-label">📜 Audit</span></button>
-      <button onclick="switchTab('people',this)" id="nav-people-btn"><span id="nav-people-label">👥 People</span></button>
+      <button onclick="switchTab('people',this)" id="nav-people-btn" style="display:none"><span id="nav-people-label">👥 People</span></button>
     </nav>
   </div>
   <div class="team-banner-wrap" id="team-banner-wrap">
@@ -641,18 +645,23 @@ function enterApp(){
   var peopleBtn = document.getElementById('nav-people-btn');
   if (peopleBtn) peopleBtn.style.display = IS_ADMIN ? '' : 'none';
   document.getElementById('auth-screen').style.display = 'none';
-  document.getElementById('app').style.display = 'block';
+  // Show intro tennis-ball animation, then reveal app
+  var introOv = document.getElementById('intro-anim-overlay');
+  introOv.style.display='flex';
+  showIntroAnimation(function(){
+    document.getElementById('app').style.display = 'block';
   updateHeaderLabels();
   registerSelfAsPerson();
   loadAll().then(function(){
     console.log('[BeerOClock] loadAll complete, showing login joke popup');
     showLoginJokePopup();
-    startRealtime();   // ← kick off live updates after first load
+    startRealtime();
   }).catch(function(e){
     console.error('[BeerOClock] loadAll rejected unexpectedly:', e);
     showLoginJokePopup();
     startRealtime();
   });
+  }); // end showIntroAnimation callback
 }
 
 // ── REALTIME + POLLING ───────────────────────────────────────
@@ -2562,9 +2571,7 @@ async function confirmReplaceWho(drink, targetDate){
   if (forPerson && forPerson !== replacedBy) msg += (isDE?' für ':' for ')+forPerson;
   if (val > 0) msg += ' · €'+val.toFixed(2);
   notify(msg+' ✓');
-
-  await loadAll();
-}
+  showCrateAnimation(drink, function(){ loadAll(); });
 
 // Show day-wise breakdown for a specific drink in a modal
 function showReplaceByDate(drink){
@@ -2924,6 +2931,397 @@ function showMyBalance(){
     '<button class="modal-close" onclick="closeModal()">'+esc(t('close'))+'</button>'
   );
 }
-</script>
-</body>
-</html>
+
+// ══════════════════════════════════════════════════════════════
+// 🎬 INTRO ANIMATION — tennis ball smashes bar window
+// ══════════════════════════════════════════════════════════════
+function showIntroAnimation(cb){
+  var ov = document.getElementById('intro-anim-overlay');
+  ov.style.display = 'flex';
+  var isDE = LANG === 'de';
+
+  // Build SVG scene: night sky, bar window, tennis ball trajectory
+  ov.innerHTML = `
+  <div style="text-align:center;width:100%;max-width:480px;padding:20px">
+    <canvas id="intro-canvas" width="420" height="280" style="width:100%;border-radius:16px;background:#0a1a0a"></canvas>
+    <div id="intro-caption" style="margin-top:14px;font-size:16px;font-weight:700;color:#f8d878;min-height:28px;font-family:sans-serif"></div>
+    <div style="margin-top:6px;font-size:12px;color:#4a7a3a;font-family:sans-serif">${isDE?'Klicken um zu überspringen':'tap to skip'}</div>
+  </div>`;
+
+  ov.onclick = function(){ finishIntro(cb); };
+
+  var c = document.getElementById('intro-canvas');
+  var ctx = c.getContext('2d');
+  var W=420, H=280;
+  var t=0, raf, captions=isDE
+    ? ['🎾 Schöner Tag auf dem Platz...','💨 Der Ball fliegt übers Netz...','🍺 Geradewegs ins Bar-Fenster!','💥 CRASH! Beer\'O\'Clock!']
+    : ['🎾 Perfect match on the clay...','💨 Ball soars over the net...','🍺 Straight into the bar window!','💥 CRASH! It\'s Beer\'O\'Clock!'];
+  var capIdx = -1;
+
+  function setCaption(i){
+    if(i===capIdx) return;
+    capIdx=i;
+    var el=document.getElementById('intro-caption');
+    if(el) el.textContent = captions[i]||'';
+  }
+
+  function drawScene(progress){
+    ctx.clearRect(0,0,W,H);
+
+    // Night sky gradient
+    var sky = ctx.createLinearGradient(0,0,0,H*0.65);
+    sky.addColorStop(0,'#050d1a'); sky.addColorStop(1,'#1a3a1a');
+    ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
+
+    // Stars
+    [[30,20],[80,10],[150,30],[220,8],[300,25],[370,15],[400,40],[60,55],[180,48],[320,50]].forEach(function(s){
+      ctx.fillStyle='rgba(255,255,200,'+(0.4+0.6*Math.random())+'0)';
+      ctx.beginPath(); ctx.arc(s[0],s[1],1,0,Math.PI*2); ctx.fill();
+    });
+
+    // Ground (clay court)
+    var ground = ctx.createLinearGradient(0,H*0.62,0,H);
+    ground.addColorStop(0,'#7a2e1a'); ground.addColorStop(1,'#3a1208');
+    ctx.fillStyle=ground; ctx.fillRect(0,H*0.62,W,H);
+
+    // Court lines
+    ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(W*0.15,H*0.62); ctx.lineTo(W*0.85,H*0.62); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(W*0.5,H*0.62); ctx.lineTo(W*0.5,H); ctx.stroke();
+    // Net
+    ctx.strokeStyle='#cccccc'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(W*0.15,H*0.58); ctx.lineTo(W*0.85,H*0.58); ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,255,0.3)'; ctx.lineWidth=0.5;
+    for(var nx=W*0.15;nx<W*0.85;nx+=8){ctx.beginPath();ctx.moveTo(nx,H*0.55);ctx.lineTo(nx,H*0.62);ctx.stroke();}
+
+    // Bar building (right side)
+    ctx.fillStyle='#2a1a0e'; ctx.fillRect(W*0.72,H*0.18,W*0.26,H*0.44);
+    // Roof
+    ctx.fillStyle='#1a0e06';
+    ctx.beginPath(); ctx.moveTo(W*0.70,H*0.18); ctx.lineTo(W*0.99,H*0.18); ctx.lineTo(W*0.95,H*0.08); ctx.lineTo(W*0.74,H*0.08); ctx.closePath(); ctx.fill();
+    // Sign
+    ctx.fillStyle='#f8d878'; ctx.font='bold 9px sans-serif'; ctx.textAlign='center';
+    ctx.fillText("🍺 BAR",W*0.85,H*0.15);
+
+    // Window
+    var wxl=W*0.76, wyt=H*0.25, ww=W*0.14, wh=H*0.18;
+    var broken = progress > 0.82;
+    if(!broken){
+      ctx.fillStyle='rgba(120,200,255,0.25)'; ctx.fillRect(wxl,wyt,ww,wh);
+      ctx.strokeStyle='#5a3a1a'; ctx.lineWidth=2;
+      ctx.strokeRect(wxl,wyt,ww,wh);
+      // window cross
+      ctx.beginPath(); ctx.moveTo(wxl+ww/2,wyt); ctx.lineTo(wxl+ww/2,wyt+wh); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(wxl,wyt+wh/2); ctx.lineTo(wxl+ww,wyt+wh/2); ctx.stroke();
+      // warm glow inside
+      var glow=ctx.createRadialGradient(wxl+ww/2,wyt+wh/2,2,wxl+ww/2,wyt+wh/2,ww);
+      glow.addColorStop(0,'rgba(255,180,60,0.5)'); glow.addColorStop(1,'rgba(255,120,20,0)');
+      ctx.fillStyle=glow; ctx.fillRect(wxl,wyt,ww,wh);
+    } else {
+      // Shattered window
+      ctx.fillStyle='rgba(120,200,255,0.1)'; ctx.fillRect(wxl,wyt,ww,wh);
+      ctx.strokeStyle='rgba(200,230,255,0.6)'; ctx.lineWidth=1.5;
+      // crack lines from impact centre
+      var cx2=wxl+ww/2, cy2=wyt+wh/2;
+      var cracks=[[wxl+2,wyt+2],[wxl+ww-2,wyt+2],[wxl+2,wyt+wh-2],[wxl+ww-2,wyt+wh-2],
+                  [wxl,wyt+wh/2],[wxl+ww,wyt+wh/2],[wxl+ww/2,wyt],[wxl+ww/2,wyt+wh]];
+      cracks.forEach(function(pt){
+        ctx.beginPath(); ctx.moveTo(cx2,cy2); ctx.lineTo(pt[0],pt[1]); ctx.stroke();
+      });
+      // Glass shards raining
+      var shardProg = (progress-0.82)/0.18;
+      for(var sh=0;sh<8;sh++){
+        var sx=wxl+ww*0.2+sh*(ww*0.08)+Math.sin(sh*2.1)*ww*0.05;
+        var sy=cy2+shardProg*(H*0.35+sh*6);
+        ctx.fillStyle='rgba(180,230,255,'+(0.7-shardProg*0.5)+')';
+        ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(sx+4,sy+8); ctx.lineTo(sx+8,sy+2); ctx.closePath(); ctx.fill();
+      }
+
+      // CRASH text
+      if(shardProg>0.1){
+        ctx.save();
+        ctx.font='bold '+(18+shardProg*10)+'px sans-serif';
+        ctx.textAlign='center';
+        ctx.fillStyle='rgba(255,80,20,'+(0.6+shardProg*0.4)+')';
+        ctx.fillText('💥 CRASH!', W*0.83, H*0.22);
+        ctx.restore();
+      }
+    }
+
+    // Light from bar spilling out
+    var lightSpill = ctx.createRadialGradient(W*0.72,H*0.35,0,W*0.72,H*0.35,80);
+    lightSpill.addColorStop(0,'rgba(255,180,60,0.08)'); lightSpill.addColorStop(1,'rgba(255,180,60,0)');
+    ctx.fillStyle=lightSpill; ctx.fillRect(0,0,W,H);
+
+    // Tennis ball trajectory
+    var p1x=0, p1y=H*0.7;         // start: bottom left (off screen)
+    var p2x=W*0.4, p2y=H*0.52;    // arc peak (over net)
+    var p3x=W*0.83, p3y=H*0.34;   // window centre
+    var nt = Math.min(progress, 1);
+    var bx,by;
+    if(nt < 0.5){
+      var u=nt*2;
+      bx=p1x+(p2x-p1x)*u; by=p1y+(p2y-p1y)*u - Math.sin(u*Math.PI)*30;
+    } else {
+      var u=(nt-0.5)*2;
+      bx=p2x+(p3x-p2x)*u; by=p2y+(p3y-p2y)*u - Math.sin((1-u)*Math.PI)*20;
+    }
+
+    // Trail
+    if(nt>0.05){
+      for(var tr=5;tr>0;tr--){
+        var trp=Math.max(0,nt-tr*0.04);
+        var tu,tbx,tby;
+        if(trp<0.5){tu=trp*2;tbx=p1x+(p2x-p1x)*tu;tby=p1y+(p2y-p1y)*tu-Math.sin(tu*Math.PI)*30;}
+        else{tu=(trp-0.5)*2;tbx=p2x+(p3x-p2x)*tu;tby=p2y+(p3y-p2y)*tu-Math.sin((1-tu)*Math.PI)*20;}
+        ctx.beginPath(); ctx.arc(tbx,tby,6-tr*0.8,0,Math.PI*2);
+        ctx.fillStyle='rgba(200,230,80,'+(0.15-tr*0.025)+')'; ctx.fill();
+      }
+    }
+
+    // Ball itself (only while flying, disappears after crash)
+    if(nt < 0.85){
+      ctx.save();
+      ctx.translate(bx,by);
+      ctx.rotate(nt*Math.PI*6);
+      // Ball
+      ctx.beginPath(); ctx.arc(0,0,8,0,Math.PI*2);
+      var bg=ctx.createRadialGradient(-2,-3,1,-2,-3,9);
+      bg.addColorStop(0,'#f0f840'); bg.addColorStop(0.6,'#c8e020'); bg.addColorStop(1,'#8aac00');
+      ctx.fillStyle=bg; ctx.fill();
+      // Seam
+      ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=1.2;
+      ctx.beginPath(); ctx.arc(0,0,8,0.2,2.5); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0,0,8,Math.PI+0.2,Math.PI+2.5); ctx.stroke();
+      ctx.restore();
+    }
+
+    // Flashing beer emoji at window on crash
+    if(broken && Math.floor(t/8)%2===0){
+      ctx.font='18px sans-serif'; ctx.textAlign='center';
+      ctx.fillText('🍺',W*0.83,H*0.3);
+    }
+  }
+
+  function tick(){
+    t++;
+    var progress = t/120; // ~4s at 30fps
+    if(progress>0.3) setCaption(0);
+    if(progress>0.5) setCaption(1);
+    if(progress>0.78) setCaption(2);
+    if(progress>0.88) setCaption(3);
+    drawScene(Math.min(progress,1));
+    if(progress < 1.35) raf=requestAnimationFrame(tick);
+    else finishIntro(cb);
+  }
+  raf=requestAnimationFrame(tick);
+
+  function finishIntro(cb){
+    cancelAnimationFrame(raf);
+    ov.style.display='none';
+    if(cb) cb();
+  }
+  window._finishIntro = function(){ finishIntro(cb); };
+}
+
+// ══════════════════════════════════════════════════════════════
+// 🎬 CRATE ANIMATION — load empties → drive → refill → return
+// ══════════════════════════════════════════════════════════════
+function showCrateAnimation(drinkName, cb){
+  var ov = document.getElementById('crate-anim-overlay');
+  ov.style.display='flex';
+  var isDE = LANG==='de';
+
+  ov.innerHTML = `
+  <div style="text-align:center;width:100%;max-width:480px;padding:20px">
+    <canvas id="crate-canvas" width="420" height="240" style="width:100%;border-radius:14px;background:#0a1a2a"></canvas>
+    <div id="crate-caption" style="margin-top:12px;font-size:15px;font-weight:700;color:#f8d878;min-height:26px;font-family:sans-serif"></div>
+    <div style="margin-top:4px;font-size:11px;color:#4a9a6a;font-family:sans-serif">${isDE?'Klicken um zu überspringen':'tap to skip'}</div>
+  </div>`;
+
+  ov.onclick = function(){ finishCrate(); };
+
+  var c=document.getElementById('crate-canvas');
+  var ctx=c.getContext('2d');
+  var W=420, H=240, t=0, raf2, phase=0;
+  // phases: 0=load empties at club (0-40f), 1=drive away (40-80f), 2=at garage fill (80-120f), 3=drive back (120-160f), 4=place in fridge (160-200f)
+  var capts=isDE
+    ? ['📦 Leere Kisten werden geladen...','🚗 Fahrt nach Hause...','🏠 Neue Kisten werden beladen...','🚗 Zurück zum Club!','❄️ Eingeräumt — Prost! 🍺']
+    : ['📦 Loading empty crates...','🚗 Driving home...','🏠 Loading fresh crates...','🚗 Heading back to the club!','❄️ Stocked! Cheers! 🍺'];
+
+  function setC(i){ var el=document.getElementById('crate-caption'); if(el)el.textContent=capts[i]||''; }
+
+  // Colours
+  var CAR_COL='#c0392b', CRATE_EMPTY='rgba(180,140,80,0.7)', CRATE_FULL='rgba(60,160,80,0.9)';
+
+  function drawBg(scene){
+    // sky
+    var sky=ctx.createLinearGradient(0,0,0,H*0.6);
+    if(scene==='night'){ sky.addColorStop(0,'#05091a'); sky.addColorStop(1,'#0a2a0a'); }
+    else { sky.addColorStop(0,'#1a2a5a'); sky.addColorStop(1,'#0a1a0a'); }
+    ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
+    // Road
+    ctx.fillStyle='#1a1a1a'; ctx.fillRect(0,H*0.62,W,H);
+    ctx.fillStyle='#333'; ctx.fillRect(0,H*0.61,W,5);
+    // Road markings
+    for(var rx=0;rx<W;rx+=50){
+      ctx.fillStyle='rgba(255,255,100,0.4)';
+      ctx.fillRect((rx+t*2*(scene==='return'?-1:1))%W, H*0.7, 28, 3);
+    }
+    // Stars
+    if(scene==='night') [[30,15],[100,8],[190,22],[280,10],[360,20],[420,5]].forEach(function(s){
+      ctx.fillStyle='rgba(255,255,200,0.8)'; ctx.beginPath(); ctx.arc(s[0],s[1],1,0,Math.PI*2); ctx.fill();
+    });
+  }
+
+  function drawBuilding(x, type){
+    // Club or Home
+    ctx.fillStyle= type==='club' ? '#3a1208' : '#1a2a3a';
+    ctx.fillRect(x, H*0.2, 100, H*0.42);
+    ctx.fillStyle= type==='club' ? '#2a0e06' : '#0a1a2a';
+    ctx.beginPath(); ctx.moveTo(x-6,H*0.2); ctx.lineTo(x+106,H*0.2); ctx.lineTo(x+95,H*0.06); ctx.lineTo(x+10,H*0.06); ctx.closePath(); ctx.fill();
+    // Sign
+    ctx.fillStyle='#f8d878'; ctx.font='bold 9px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(type==='club'?'🎾 CLUB':'🏠 HOME', x+50, H*0.14);
+    // Door
+    ctx.fillStyle='#5a3a1a'; ctx.fillRect(x+38,H*0.5,25,H*0.12);
+    // Window
+    ctx.fillStyle='rgba(255,200,80,0.3)'; ctx.fillRect(x+15,H*0.3,25,18); ctx.fillRect(x+60,H*0.3,25,18);
+    ctx.strokeStyle='#5a3a1a'; ctx.lineWidth=1.5;
+    ctx.strokeRect(x+15,H*0.3,25,18); ctx.strokeRect(x+60,H*0.3,25,18);
+  }
+
+  function drawFridge(x, full){
+    ctx.fillStyle='#4a6a8a'; ctx.fillRect(x,H*0.26,40,H*0.35); ctx.strokeStyle='#7a9aba'; ctx.lineWidth=1.5; ctx.strokeRect(x,H*0.26,40,H*0.35);
+    ctx.fillStyle='#c0d8f0'; ctx.fillRect(x+4,H*0.28,32,H*0.14);
+    ctx.fillStyle='#a0c0e0'; ctx.fillRect(x+4,H*0.44,32,H*0.14);
+    // fridge handle
+    ctx.strokeStyle='#9abacf'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(x+35,H*0.36); ctx.lineTo(x+35,H*0.5); ctx.stroke();
+    ctx.font='12px sans-serif'; ctx.textAlign='center';
+    if(full) ctx.fillText('🍺',x+20,H*0.38);
+    ctx.fillStyle='rgba(120,200,255,0.1)'; ctx.fillRect(x+4,H*0.28,32,H*0.3);
+  }
+
+  function drawCrate(x, y, empty, scale){
+    scale=scale||1;
+    ctx.save(); ctx.translate(x,y); ctx.scale(scale,scale);
+    ctx.fillStyle= empty ? CRATE_EMPTY : CRATE_FULL;
+    ctx.fillRect(-11,-8,22,16); ctx.strokeStyle='#7a5200'; ctx.lineWidth=1.5; ctx.strokeRect(-11,-8,22,16);
+    // grid lines
+    ctx.strokeStyle='rgba(0,0,0,0.2)'; ctx.lineWidth=0.8;
+    ctx.beginPath(); ctx.moveTo(-4,-8); ctx.lineTo(-4,8); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(4,-8); ctx.lineTo(4,8); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-11,0); ctx.lineTo(11,0); ctx.stroke();
+    if(!empty){ ctx.font='7px sans-serif'; ctx.textAlign='center'; ctx.fillText('🍺',-6,-3); ctx.fillText('🍺',2,-3); }
+    ctx.restore();
+  }
+
+  function drawCar(cx, bounceY, hasCrates, empty){
+    var by=bounceY||0;
+    // Car body
+    ctx.fillStyle=CAR_COL;
+    ctx.beginPath(); ctx.roundRect(cx-50,H*0.56+by,100,24,5); ctx.fill();
+    // Roof
+    ctx.beginPath(); ctx.roundRect(cx-32,H*0.47+by,64,14,6); ctx.fill();
+    // Windows
+    ctx.fillStyle='rgba(120,200,255,0.5)';
+    ctx.fillRect(cx-28,H*0.49+by,22,11); ctx.fillRect(cx+6,H*0.49+by,22,11);
+    // Headlights
+    ctx.fillStyle='rgba(255,255,180,0.8)'; ctx.beginPath(); ctx.ellipse(cx+50,H*0.64+by,6,4,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,150,80,0.7)'; ctx.beginPath(); ctx.ellipse(cx-50,H*0.64+by,5,4,0,0,Math.PI*2); ctx.fill();
+    // Wheels
+    [cx-30,cx+30].forEach(function(wx){
+      ctx.fillStyle='#1a1a1a'; ctx.beginPath(); ctx.arc(wx,H*0.73+by,11,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#555'; ctx.beginPath(); ctx.arc(wx,H*0.73+by,7,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#aaa'; ctx.beginPath(); ctx.arc(wx,H*0.73+by,3,0,Math.PI*2); ctx.fill();
+    });
+    // Crates on roof rack
+    if(hasCrates){
+      for(var ci=0;ci<3;ci++) drawCrate(cx-25+ci*22, H*0.44+by, empty, 0.9);
+    }
+  }
+
+  function tick2(){
+    t++;
+    ctx.clearRect(0,0,W,H);
+    var bounce = Math.sin(t*0.3)*2;
+
+    if(t>=1 && t<40){
+      // Phase 0: loading at club
+      setC(0);
+      drawBg('night'); drawBuilding(10,'club'); drawBuilding(W-110,'home');
+      // Car parked at club, empties being tossed
+      drawCar(110, 0, t>15, true);
+      var numLoad=Math.min(3,Math.floor((t-5)/7));
+      for(var cl=0;cl<numLoad;cl++){
+        var cx2=110-25+cl*22, flyPct=Math.max(0,Math.min(1,(t-5-cl*7)/6));
+        drawCrate(cx2, H*0.6 - flyPct*(H*0.18), true, 0.9-flyPct*0.1);
+      }
+    } else if(t>=40 && t<80){
+      // Phase 1: drive away right
+      setC(1);
+      var carX = 110 + (t-40)*5;
+      drawBg('drive'); drawBuilding(10,'club'); drawBuilding(W-110,'home');
+      if(carX < W+70) drawCar(carX, bounce, true, true);
+      // exhaust puffs
+      if(t%6<3 && carX<W+30){
+        ctx.fillStyle='rgba(200,200,200,0.3)'; ctx.beginPath(); ctx.arc(carX-58+Math.random()*10,H*0.63+Math.random()*6,5,0,Math.PI*2); ctx.fill();
+      }
+    } else if(t>=80 && t<120){
+      // Phase 2: at garage / home, swap crates
+      setC(2);
+      drawBg('night'); drawBuilding(W-110,'home');
+      drawFridge(W-95, true);
+      drawCar(W-130, 0, true, (t-80)>20);
+      // animation of crate swap
+      var swapIdx=Math.floor((t-80)/14);
+      for(var sc2=0;sc2<3;sc2++){
+        var swapPct=sc2<swapIdx?1:(sc2===swapIdx?Math.min(1,(t-80-sc2*14)/12):0);
+        drawCrate(W-130-25+sc2*22, H*0.44, swapPct<0.5, 0.9);
+      }
+    } else if(t>=120 && t<160){
+      // Phase 3: drive back left
+      setC(3);
+      var carX2 = W-130 - (t-120)*5;
+      drawBg('drive'); drawBuilding(10,'club'); drawBuilding(W-110,'home');
+      if(carX2 > -80) drawCar(carX2, bounce, true, false);
+      if(t%6<3 && carX2>-30){
+        ctx.fillStyle='rgba(200,200,200,0.3)'; ctx.beginPath(); ctx.arc(carX2+58+Math.random()*10,H*0.63+Math.random()*6,5,0,Math.PI*2); ctx.fill();
+      }
+    } else if(t>=160 && t<=205){
+      // Phase 4: place in fridge at club
+      setC(4);
+      drawBg('night'); drawBuilding(10,'club');
+      drawFridge(40, t>185);
+      drawCar(110, 0, t<180, false);
+      // big cheers
+      if(t>185){
+        ctx.font='30px sans-serif'; ctx.textAlign='center';
+        ctx.fillText('🍺🎉',W/2,H*0.45);
+        ctx.fillStyle='#f8d878'; ctx.font='bold 16px sans-serif';
+        ctx.fillText(isDE?'Frisch bestückt!':'Fully stocked!',W/2,H*0.6);
+      }
+    } else if(t>205) {
+      finishCrate();
+      return;
+    }
+
+    raf2=requestAnimationFrame(tick2);
+  }
+
+  function finishCrate(){
+    cancelAnimationFrame(raf2);
+    ov.style.display='none';
+    if(cb) cb();
+  }
+
+  raf2=requestAnimationFrame(tick2);
+}
+
+// Hook crate animation into confirmReplaceWho after notify
+function _wrappedNotifyAndAnimate(msg, drink, originalCb){
+  notify(msg);
+  showCrateAnimation(drink, originalCb);
+}
+
