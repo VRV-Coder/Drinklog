@@ -1636,21 +1636,23 @@ function renderConsolidatedToday(){
 
             return '<div style="width:100%;background:#fce4d0;border:1.5px solid #e8b870;border-radius:11px;overflow:hidden" onclick="event.stopPropagation()">'+
               // Group price row
-              '<div style="display:flex;align-items:center;gap:4px;padding:5px 8px">'+
-                '<span style="font-size:13px">'+emoji(drink)+'</span>'+
-                '<span style="font-size:11px;font-weight:700;color:#5a3a28">'+esc(drink.replace(/^.+? /,''))+'</span>'+
-                '<span style="font-size:10px;color:#9c4a22;margin-right:2px">×'+info.qty+'</span>'+
-                '<span style="font-size:12px;color:#5a3a28;font-weight:700">€</span>'+
+              '<div style="display:flex;align-items:center;gap:6px;padding:8px 10px;flex-wrap:wrap">'+
+                '<span style="font-size:15px">'+emoji(drink)+'</span>'+
+                '<span style="font-size:12px;font-weight:700;color:#5a3a28">'+esc(drink.replace(/^.+? /,''))+'</span>'+
+                '<span style="font-size:11px;color:#9c4a22;margin-right:4px">×'+info.qty+'</span>'+
+                '<span style="font-size:13px;color:#5a3a28;font-weight:700">€</span>'+
                 '<input id="'+safeId+'" type="number" min="0" step="0.01" value="'+info.unitPrice.toFixed(2)+'" '+
-                  'style="width:52px;border:none;background:transparent;font-size:13px;font-weight:800;color:#b5481f;text-align:center;outline:none;padding:0" '+
+                  'style="width:60px;border:1px solid #e8dccc;border-radius:6px;padding:3px 4px;font-size:14px;font-weight:800;color:#b5481f;text-align:center;background:#fff" '+
                   'onclick="event.stopPropagation()" />'+
+              '</div>'+
+              '<div style="display:flex;gap:8px;padding:0 10px 10px 10px">'+
                 '<button onclick="event.stopPropagation();saveConsolidatedPrice(\''+esc(b.person)+'\',\''+esc(drink)+'\',\''+safeId+'\')" '+
-                  'style="background:#b5481f;border:none;border-radius:6px;color:#fff;font-size:11px;font-weight:700;padding:3px 7px;cursor:pointer">'+
+                  'style="flex:1;background:#b5481f;border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:800;padding:8px 0;cursor:pointer;min-height:40px">'+
                   (isDE?'Alle':'All')+'</button>'+
                 (myEntries.length > 1
-                  ? '<button onclick="event.stopPropagation();var el=document.getElementById(\''+indivId+'\');el.style.display=el.style.display===\'none\'?\'\':\'none\'" '+
-                    'style="background:transparent;border:1.5px solid #b5481f;border-radius:6px;color:#b5481f;font-size:10px;font-weight:700;padding:2px 6px;cursor:pointer;white-space:nowrap">'+
-                    (isDE?'Einzeln ↕':'Per entry ↕')+'</button>'
+                  ? '<button onclick="event.stopPropagation();var el=document.getElementById(\''+indivId+'\');var open=el.style.display!==\'none\';el.style.display=open?\'none\':\'\';this.textContent=open?\''+(isDE?'↕ Einzeln':'↕ Per entry')+'\':\'▲ '+(isDE?'Einklappen':'Close')+'\'" '+
+                    'style="flex:1;background:#fff;border:2px solid #b5481f;border-radius:8px;color:#b5481f;font-size:13px;font-weight:800;padding:8px 0;cursor:pointer;min-height:40px">'+
+                    (isDE?'↕ Einzeln':'↕ Per entry')+'</button>'
                   : '')+
               '</div>'+
               // Individual entries (hidden by default)
@@ -3475,7 +3477,69 @@ function showIntroAnimation(cb){
         }
       }
 
-      // Tennis ball trajectory
+      // Tennis player (left side of court) — stick figure that swings racket
+      var playerX = W*0.12, playerY = H*0.62;
+      var swingPhase = Math.min(1, progress * 2); // 0→1 over first half
+
+      ctx.save();
+      ctx.translate(playerX, playerY);
+
+      // Shadow
+      ctx.fillStyle='rgba(0,0,0,0.18)';
+      ctx.beginPath(); ctx.ellipse(0,2,10,3,0,0,Math.PI*2); ctx.fill();
+
+      // Legs
+      var legSpread = swingPhase < 0.5 ? swingPhase * 0.4 : (1-swingPhase)*0.2+0.1; // step forward
+      ctx.strokeStyle='#e8c090'; ctx.lineWidth=2.5; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(0,-4); ctx.lineTo(-5+legSpread*8, 14); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,-4); ctx.lineTo(5-legSpread*4, 14); ctx.stroke();
+
+      // Body
+      ctx.strokeStyle='#3a8a3a'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.moveTo(0,-4); ctx.lineTo(0,-20); ctx.stroke();
+
+      // Head
+      ctx.fillStyle='#f5c090';
+      ctx.beginPath(); ctx.arc(0,-25,6,0,Math.PI*2); ctx.fill();
+      // Wristband / hair
+      ctx.fillStyle='#ffffff';
+      ctx.beginPath(); ctx.arc(0,-27,3,Math.PI,Math.PI*2); ctx.fill();
+
+      // Racket arm — swings from back to forward
+      var armAngle = -0.6 + swingPhase * 2.2; // backswing → followthrough
+      var armLen = 15, racketLen = 12;
+      var elbowX = Math.cos(armAngle-0.3)*armLen;
+      var elbowY = -18 + Math.sin(armAngle-0.3)*armLen;
+      var handX = elbowX + Math.cos(armAngle)*armLen*0.7;
+      var handY = elbowY + Math.sin(armAngle)*armLen*0.7;
+      var racketTipX = handX + Math.cos(armAngle-0.2)*racketLen;
+      var racketTipY = handY + Math.sin(armAngle-0.2)*racketLen;
+
+      // Arm
+      ctx.strokeStyle='#e8c090'; ctx.lineWidth=2.5;
+      ctx.beginPath(); ctx.moveTo(0,-18); ctx.lineTo(elbowX,elbowY); ctx.lineTo(handX,handY); ctx.stroke();
+
+      // Other arm (non-racket) — toss/balance
+      var arm2angle = armAngle*0.3 - 1.8;
+      ctx.beginPath(); ctx.moveTo(0,-18);
+      ctx.lineTo(Math.cos(arm2angle)*12, -18+Math.sin(arm2angle)*12); ctx.stroke();
+
+      // Racket
+      ctx.strokeStyle='#c8a040'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(handX,handY); ctx.lineTo(racketTipX,racketTipY); ctx.stroke();
+      // Racket head (oval)
+      ctx.save();
+      ctx.translate(racketTipX,racketTipY);
+      ctx.rotate(armAngle-0.2);
+      ctx.strokeStyle='#d4b060'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.ellipse(0,-6,5,8,0,0,Math.PI*2); ctx.stroke();
+      // Strings
+      ctx.strokeStyle='rgba(220,220,180,0.6)'; ctx.lineWidth=0.8;
+      for(var si=-4;si<=4;si+=2){ ctx.beginPath(); ctx.moveTo(si,-14); ctx.lineTo(si,2); ctx.stroke(); }
+      for(var sj=-7;sj<=1;sj+=2){ ctx.beginPath(); ctx.moveTo(-5,sj); ctx.lineTo(5,sj); ctx.stroke(); }
+      ctx.restore();
+
+      ctx.restore(); // player transform
       var nt = Math.min(progress, 1);
       var p1x=0, p1y=H*0.7, p2x=W*0.4, p2y=H*0.5, p3x=W*0.83, p3y=H*0.34;
       var bx, by;
@@ -3653,6 +3717,63 @@ function showCrateAnimation(drinkName, cb){
     }
   }
 
+  // Tennis player stick figure for crate animation
+  function drawCratePerson(x, y, action, frame){
+    // action: 'carry'=walking with crate, 'lift'=lifting, 'cheer'=celebrate
+    ctx.save();
+    ctx.translate(x, y);
+
+    // Shadow
+    ctx.fillStyle='rgba(0,0,0,0.15)';
+    ctx.beginPath(); ctx.ellipse(0,2,9,2.5,0,0,Math.PI*2); ctx.fill();
+
+    // Walking cycle
+    var walk = Math.sin(frame * 0.25) * 0.3;
+    var legF = action==='carry' ? walk : 0;
+
+    // Legs
+    ctx.strokeStyle='#c8a070'; ctx.lineWidth=2.5; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(0,-3); ctx.lineTo(-5+legF*8,13); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,-3); ctx.lineTo(4-legF*8,13); ctx.stroke();
+
+    // Body / shirt
+    ctx.strokeStyle='#2a6a3a'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(0,-3); ctx.lineTo(0,-18); ctx.stroke();
+
+    // Head
+    ctx.fillStyle='#f5c090';
+    ctx.beginPath(); ctx.arc(0,-23,5.5,0,Math.PI*2); ctx.fill();
+    // Tennis cap brim
+    ctx.fillStyle='#ffffff';
+    ctx.beginPath(); ctx.ellipse(0,-27,7,2.5,0,0,Math.PI); ctx.fill();
+    ctx.fillStyle='#3a8a3a';
+    ctx.beginPath(); ctx.arc(0,-24,5,Math.PI,Math.PI*2); ctx.fill();
+
+    if(action==='carry'){
+      // Arms stretched out holding crate
+      ctx.strokeStyle='#c8a070'; ctx.lineWidth=2.5;
+      ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(-13,-10); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(13,-10); ctx.stroke();
+      // Crate in hands
+      drawCrate(0,-7, false, 0.85);
+    } else if(action==='lift'){
+      // Arms raised, straining
+      var liftWave = Math.sin(frame*0.4)*0.15;
+      ctx.strokeStyle='#c8a070'; ctx.lineWidth=2.5;
+      ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(-12,-24+liftWave*3); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(12,-24+liftWave*3); ctx.stroke();
+      drawCrate(0,-32, false, 0.75);
+    } else if(action==='cheer'){
+      // Arms up in V for victory
+      var wave = Math.sin(frame*0.5)*0.4;
+      ctx.strokeStyle='#c8a070'; ctx.lineWidth=2.5;
+      ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(-14,-26+wave); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(14,-26-wave); ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
   var raf2;
 
   function tick2(){
@@ -3670,6 +3791,9 @@ function showCrateAnimation(drinkName, cb){
         var cx2=110-25+cl*22, flyPct=Math.max(0,Math.min(1,(t-5-cl*7)/6));
         drawCrate(cx2, H*0.6 - flyPct*(H*0.18), true, 0.9-flyPct*0.1);
       }
+      // Player loading crates — walks toward car
+      var personX = Math.max(35, 90 - t*1.2);
+      drawCratePerson(personX, H*0.63, t>8 ? 'carry' : 'lift', t);
     } else if(t>=40 && t<80){
       setC(1);
       var carX = 110 + (t-40)*5;
@@ -3678,6 +3802,8 @@ function showCrateAnimation(drinkName, cb){
       if(t%6<3 && carX<W+30){
         ctx.fillStyle='rgba(200,200,200,0.3)'; ctx.beginPath(); ctx.arc(carX-58+Math.random()*10,H*0.63+Math.random()*6,5,0,Math.PI*2); ctx.fill();
       }
+      // Player waves goodbye from club entrance
+      drawCratePerson(55, H*0.63, 'cheer', t);
     } else if(t>=80 && t<120){
       setC(2);
       drawBg('night'); drawBuilding(W-110,'home');
@@ -3688,6 +3814,9 @@ function showCrateAnimation(drinkName, cb){
         var swapPct=sc2<swapIdx?1:(sc2===swapIdx?Math.min(1,(t-80-sc2*14)/12):0);
         drawCrate(W-130-25+sc2*22, H*0.44, swapPct<0.5, 0.9);
       }
+      // Player unloading at home
+      var pAction = t > 100 ? 'carry' : 'lift';
+      drawCratePerson(W-155, H*0.63, pAction, t);
     } else if(t>=120 && t<160){
       setC(3);
       var carX2 = W-130 - (t-120)*5;
@@ -3696,11 +3825,16 @@ function showCrateAnimation(drinkName, cb){
       if(t%6<3 && carX2>-30){
         ctx.fillStyle='rgba(200,200,200,0.3)'; ctx.beginPath(); ctx.arc(carX2+58+Math.random()*10,H*0.63+Math.random()*6,5,0,Math.PI*2); ctx.fill();
       }
+      // Player at club entrance waiting
+      drawCratePerson(55, H*0.63, 'cheer', t);
     } else if(t>=160 && t<=205){
       setC(4);
       drawBg('night'); drawBuilding(10,'club');
       drawFridge(40, t>185);
       drawCar(110, 0, t<180, false);
+      // Player loading fridge
+      var finalAction = t>185 ? 'cheer' : 'carry';
+      drawCratePerson(85, H*0.63, finalAction, t);
       if(t>185){
         ctx.font='30px sans-serif'; ctx.textAlign='center';
         ctx.fillText('🍺🎉',W/2,H*0.45);
