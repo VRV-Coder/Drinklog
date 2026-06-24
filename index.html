@@ -655,8 +655,12 @@ function enterApp(){
     showLoginJokePopup();
     startRealtime();
   });
-  // Play intro animation as a non-blocking overlay on top
-  try { showIntroAnimation(function(){}); } catch(e) { console.warn('Intro anim error:', e); }
+  // Play intro animation once per session — not on screen-wake/unlock
+  var _animKey = 'boc_intro_played_' + (CURRENT_NAME||'guest');
+  if (!sessionStorage.getItem(_animKey)) {
+    sessionStorage.setItem(_animKey, '1');
+    try { showIntroAnimation(function(){}); } catch(e) { console.warn('Intro anim error:', e); }
+  }
 }
 
 // ── REALTIME + POLLING ───────────────────────────────────────
@@ -927,6 +931,11 @@ async function registerSelfAsPerson(){
 async function signOut(){
   stopRealtime();
   DRINK_PRICES = {}; // clear prices so next user starts fresh
+  // Clear intro-played flag so the animation shows again on next login
+  try {
+    var k = 'boc_intro_played_' + (CURRENT_NAME||'guest');
+    sessionStorage.removeItem(k);
+  } catch(e){}
   if (IS_ADMIN && SB && SB.auth) { await SB.auth.signOut(); }
   if (IS_GUEST) {
     localStorage.removeItem('guest_name');
@@ -1247,12 +1256,12 @@ function renderRunningTodayTab(){
         }
       }
 
-      // "Add price" button for my own free drinks
+      // "Add price" button for my own free drinks — opens full group+individual modal
       var addPriceBtn = '';
       if (isMe && info.freeQty > 0 && info.entries.some(function(l){ return isMine(l) && (parseFloat(l.unit_price)||0)===0; })){
-        addPriceBtn = '<button class="plus" style="font-size:10px;padding:1px 5px;background:#fff;border:1.5px solid #b5481f;color:#b5481f;border-radius:5px;font-weight:700" '+
-          'onclick="event.stopPropagation();addPriceToFreeDrink(\''+esc(person)+'\',\''+esc(d)+'\',\''+today+'\')" '+
-          'title="'+(isDE?'Preis nachträglich eingeben':'Add price later')+'">€+</button>';
+        addPriceBtn = '<button class="plus" style="font-size:11px;padding:3px 7px;background:#d4f5e2;border:1.5px solid #1f8a4f;color:#1f8a4f;border-radius:6px;font-weight:800;min-height:26px" '+
+          'onclick="event.stopPropagation();showTodayFreePriceModal(\''+esc(person)+'\',\''+esc(d)+'\',\''+today+'\')" '+
+          'title="'+(isDE?'Preis hinzufügen':'Add price')+'">€+</button>';
       }
 
       return '<span class="rtab-drink-item" style="flex-direction:column;align-items:flex-start;gap:2px;padding:4px 7px">'+
@@ -1293,7 +1302,7 @@ function renderRunningTodayTab(){
                 '€'+pd.total.toFixed(2)+' ✏️</button>'
               : '<div class="rtab-total">€'+pd.total.toFixed(2)+'</div>')
           : '')+
-        '<div style="font-size:11px;color:#7a5200">👁 '+esc(t('details'))+'</div>'+
+        '<div style="font-size:16px;color:#7a5200">👁</div>'+
       '</div>'+
     '</div>';
   }).join('');
@@ -1346,7 +1355,93 @@ async function quickRemoveDrink(person, drink, event){
   await loadAll();
 }
 
-// Add price retroactively to a free drink in today's running tab
+// Show group+individual free drink pricing modal from Today's running tab
+function showTodayFreePriceModal(person, drink, date){
+  var isDE = LANG === 'de';
+  var freeEntries = STATE.logs.filter(function(l){
+    return l.person===person && l.drink===drink && l.date===date && isMine(l) && (parseFloat(l.unit_price)||0)===0;
+  }).sort(function(a,b){ return (a.logged_at||'') > (b.logged_at||'') ? -1 : 1; });
+  if (!freeEntries.length){ notify(isDE?'Keine kostenlosen Einträge':'No free entries',true); return; }
+
+  var totalQty = freeEntries.reduce(function(s,l){return s+(l.quantity||0);},0);
+  var suggested = getDrinkPrice(drink) || '';
+
+  // Build individual rows
+  var indivRows = freeEntries.map(function(l){
+    var entryId = 'tdyfep-'+l.id;
+    var timeStr = l.logged_at ? new Date(l.logged_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) : date;
+    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #d4eed8" onclick="event.stopPropagation()">'+
+      '<span style="font-size:12px;color:#1f6a3f;flex:1">'+timeStr+(l.quantity>1?' ×'+l.quantity:'')+'</span>'+
+      '<span style="font-size:13px;color:#1a4a2a;font-weight:700">€</span>'+
+      '<input id="'+entryId+'" type="number" min="0" step="0.01" value="" placeholder="0.00" '+
+        'style="width:72px;border:1.5px solid #5aaa6a;border-radius:8px;padding:6px 4px;font-size:15px;font-weight:700;color:#1f8a4f;text-align:center" />'+
+      '<button onclick="saveSingleEntryPrice(\''+l.id+'\',\''+entryId+'\',\''+esc(drink)+'\');closeModal()" '+
+        'style="background:#1f8a4f;border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;padding:8px 14px;cursor:pointer;min-height:40px">OK</button>'+
+    '</div>';
+  }).join('');
+
+  var indivId = 'tdy-findiv-'+person.replace(/\W/g,'_')+'-'+drink.replace(/\W/g,'_');
+
+  showModal(
+    '<h3 style="margin-bottom:4px">€+ '+(isDE?'Preis hinzufügen':'Add Price')+'</h3>'+
+    '<div style="font-size:13px;color:#1a4a2a;margin-bottom:12px">'+emoji(drink)+' '+esc(drink.replace(/^.+? /,''))+
+      ' <span style="background:#d4f5e2;border-radius:6px;padding:2px 8px;font-size:11px;color:#1f8a4f">🍾 '+totalQty+' free</span></div>'+
+
+    // Group price block
+    '<div style="background:#d4f5e2;border:1.5px solid #5aaa6a;border-radius:12px;padding:14px;margin-bottom:10px">'+
+      '<div style="font-size:11px;color:#1f6a3f;font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px">'+
+        (isDE?'Einheitspreis für alle':'Same price for all ×'+totalQty)+'</div>'+
+      '<div style="display:flex;align-items:center;gap:8px">'+
+        '<span style="font-size:20px;font-weight:800;color:#1a4a2a">€</span>'+
+        '<input id="tdy-free-group-'+esc(drink.replace(/\W/g,'_'))+'" type="number" min="0" step="0.01" value="'+suggested+'" placeholder="0.00" '+
+          'style="flex:1;font-size:22px;font-weight:800;color:#1f8a4f;border:1.5px solid #5aaa6a;border-radius:8px;padding:8px;text-align:center;background:#fff"/>'+
+        '<span style="font-size:12px;color:#1f6a3f">/ea</span>'+
+      '</div>'+
+      '<button onclick="saveTodayFreeGroupPrice(\''+esc(person)+'\',\''+esc(drink)+'\',\''+date+'\',\'tdy-free-group-'+esc(drink.replace(/\W/g,'_'))+'\')" '+
+        'style="width:100%;margin-top:10px;background:#1f8a4f;border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:800;padding:12px;cursor:pointer">'+
+        (isDE?'✓ Alle setzen':'✓ Set for all')+'</button>'+
+    '</div>'+
+
+    // Individual per-entry block
+    (freeEntries.length > 1
+      ? '<div style="margin-bottom:8px">'+
+          '<button onclick="(function(btn){var el=document.getElementById(\''+indivId+'\');var open=el.style.display!==\'none\';el.style.display=open?\'none\':\'\';btn.textContent=open?\''+(isDE?'↕ Einzeln':'↕ Individual')+'\':\'▲ '+(isDE?'Schließen':'Close')+'\'})(this)" '+
+            'style="width:100%;background:#fff;border:2px solid #1f8a4f;border-radius:10px;color:#1f8a4f;font-size:14px;font-weight:800;padding:10px;cursor:pointer">'+
+            (isDE?'↕ Einzeln':'↕ Individual')+'</button>'+
+          '<div id="'+indivId+'" style="display:none;margin-top:8px;background:#f0fff4;border:1px solid #b0e0bc;border-radius:10px;padding:8px 12px">'+
+            '<div style="font-size:11px;color:#1f6a3f;font-weight:700;margin-bottom:6px;text-transform:uppercase">'+
+              (isDE?'Pro Eintrag':'Per entry')+'</div>'+
+            indivRows+
+          '</div>'+
+        '</div>'
+      : '')+
+
+    '<button class="modal-close" onclick="closeModal()" style="width:100%;margin-top:4px">'+esc(t('cancel'))+'</button>'
+  );
+  setTimeout(function(){ var el=document.getElementById('tdy-free-group-'+drink.replace(/\W/g,'_')); if(el)el.focus(); }, 80);
+}
+
+async function saveTodayFreeGroupPrice(person, drink, date, inputId){
+  var inputEl = document.getElementById(inputId);
+  if (!inputEl) return;
+  var newUnit = parseFloat(inputEl.value)||0;
+  if (newUnit <= 0){ notify(LANG==='de'?'Bitte Preis eingeben':'Please enter a price',true); return; }
+
+  var entries = STATE.logs.filter(function(l){
+    return l.person===person && l.drink===drink && l.date===date && isMine(l) && (parseFloat(l.unit_price)||0)===0;
+  });
+  var errors=[];
+  for(var i=0;i<entries.length;i++){
+    var l=entries[i];
+    var res=await SB.from('drink_logs').update({unit_price:newUnit,total_price:newUnit*(l.quantity||1)}).eq('id',l.id);
+    if(res.error) errors.push(res.error.message);
+  }
+  setDrinkPrice(drink,newUnit);
+  closeModal();
+  if(errors.length){notify('Error: '+errors[0],true);return;}
+  notify((LANG==='de'?'Preise gesetzt':'Prices set')+' · '+emoji(drink)+' €'+newUnit.toFixed(2)+' ✓');
+  await loadAll();
+}
 function addPriceToFreeDrink(person, drink, date){
   var isDE = LANG === 'de';
   // Find all free entries for this person+drink today that the user can edit
@@ -1604,17 +1699,29 @@ function renderConsolidatedToday(){
         pricedByDrink[l.drink].qty += (l.quantity||0);
         pricedByDrink[l.drink].unitPrice = parseFloat(l.unit_price)||0;
       });
+
+      // Also collect FREE drink entries for price-later feature
+      var freeByDrink = {};
+      STATE.logs.filter(function(l){
+        return l.person === b.person && isMine(l) && (parseFloat(l.unit_price)||0) === 0;
+      }).forEach(function(l){
+        if (!freeByDrink[l.drink]) freeByDrink[l.drink] = {qty:0, entries:[]};
+        freeByDrink[l.drink].qty += (l.quantity||0);
+        freeByDrink[l.drink].entries.push(l);
+      });
+
+      var sections = [];
+
       if (Object.keys(pricedByDrink).length) {
-        priceEditHtml = '<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #e8dccc">' +
+        sections.push(
           '<div style="font-size:10px;color:#7a5200;font-weight:700;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px">'+
-            '✏️ '+(isDE?'Preis je Getränk bearbeiten':'Edit price per drink')+'</div>'+
-          '<div style="display:flex;flex-wrap:wrap;gap:6px">'+
+            '✏️ '+(isDE?'Preis bearbeiten':'Edit price per drink')+'</div>'+
+          '<div style="display:flex;flex-wrap:wrap;gap:8px">'+
           Object.entries(pricedByDrink).map(function(e){
             var drink = e[0], info = e[1];
             var safeId = 'crt-'+b.person.replace(/\W/g,'_')+'-'+drink.replace(/\W/g,'_');
             var indivId = 'indiv-'+safeId;
 
-            // Build individual entry rows (one price field per log entry)
             var myEntries = STATE.logs.filter(function(l){
               return l.person === b.person && l.drink === drink && isMine(l) && (parseFloat(l.unit_price)||0) > 0;
             }).sort(function(a,b){ return (a.date > b.date ? -1 : 1); });
@@ -1629,13 +1736,11 @@ function renderConsolidatedToday(){
                   'style="width:70px;border:1.5px solid #e8b870;border-radius:8px;padding:6px 4px;font-size:15px;font-weight:700;color:#b5481f;text-align:center" '+
                   'onclick="event.stopPropagation()" />'+
                 '<button onclick="event.stopPropagation();saveSingleEntryPrice(\''+l.id+'\',\''+entryId+'\',\''+esc(drink)+'\')" '+
-                  'style="background:#1f8a4f;border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;padding:8px 14px;cursor:pointer;min-height:40px;white-space:nowrap">'+
-                  (isDE?'Ok':'OK')+'</button>'+
+                  'style="background:#1f8a4f;border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;padding:8px 14px;cursor:pointer;min-height:40px;white-space:nowrap">OK</button>'+
               '</div>';
             }).join('');
 
             return '<div style="width:100%;background:#fce4d0;border:1.5px solid #e8b870;border-radius:11px;overflow:hidden" onclick="event.stopPropagation()">'+
-              // Group price row
               '<div style="display:flex;align-items:center;gap:6px;padding:10px 12px;flex-wrap:wrap">'+
                 '<span style="font-size:17px">'+emoji(drink)+'</span>'+
                 '<span style="font-size:13px;font-weight:700;color:#5a3a28">'+esc(drink.replace(/^.+? /,''))+'</span>'+
@@ -1647,23 +1752,86 @@ function renderConsolidatedToday(){
               '</div>'+
               '<div style="display:flex;gap:10px;padding:0 12px 12px 12px">'+
                 '<button onclick="event.stopPropagation();saveConsolidatedPrice(\''+esc(b.person)+'\',\''+esc(drink)+'\',\''+safeId+'\')" '+
-                  'style="flex:1;background:#b5481f;border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:800;padding:12px 0;cursor:pointer;min-height:48px;letter-spacing:.3px">'+
+                  'style="flex:1;background:#b5481f;border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:800;padding:12px 0;cursor:pointer;min-height:48px">'+
                   (isDE?'✓ Alle':'✓ All')+'</button>'+
                 (myEntries.length > 1
                   ? '<button id="tog-'+safeId+'" onclick="event.stopPropagation();(function(btn){var el=document.getElementById(\''+indivId+'\');var open=el.style.display!==\'none\';el.style.display=open?\'none\':\'\';btn.textContent=open?\''+(isDE?'↕ Einzeln':'↕ Entries')+'\':\'▲ '+(isDE?'Schließen':'Close')+'\';})(this)" '+
-                    'style="flex:1;background:#fff;border:2px solid #b5481f;border-radius:10px;color:#b5481f;font-size:15px;font-weight:800;padding:12px 0;cursor:pointer;min-height:48px;white-space:nowrap">'+
+                    'style="flex:1;background:#fff;border:2px solid #b5481f;border-radius:10px;color:#b5481f;font-size:15px;font-weight:800;padding:12px 0;cursor:pointer;min-height:48px">'+
                     (isDE?'↕ Einzeln':'↕ Entries')+'</button>'
                   : '')+
               '</div>'+
-              // Individual entries (hidden by default)
-              '<div id="'+indivId+'" style="display:none;padding:6px 12px 12px 12px;background:#fff8f2;border-top:1px solid #e8dccc">'+
-                '<div style="font-size:11px;color:#7a5200;font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px">'+
-                  (isDE?'Einzelne Einträge':'Individual entries')+'</div>'+
-                indivRows+
-              '</div>'+
+              (myEntries.length > 1 ?
+                '<div id="'+indivId+'" style="display:none;padding:6px 12px 12px 12px;background:#fff8f2;border-top:1px solid #e8dccc">'+
+                  '<div style="font-size:11px;color:#7a5200;font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px">'+
+                    (isDE?'Einzelne Einträge':'Individual entries')+'</div>'+
+                  indivRows+
+                '</div>' : '')+
             '</div>';
           }).join('')+
-          '</div></div>';
+          '</div>'
+        );
+      }
+
+      // Free drinks — add price per bottle / all section
+      if (Object.keys(freeByDrink).length) {
+        sections.push(
+          '<div style="font-size:10px;color:#1f8a4f;font-weight:700;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px;margin-top:'+(Object.keys(pricedByDrink).length?'10px':'0')+'">'+
+            '🍾 '+(isDE?'Preis für kostenlose Getränke':'Add price to free drinks')+'</div>'+
+          '<div style="display:flex;flex-wrap:wrap;gap:8px">'+
+          Object.entries(freeByDrink).map(function(e){
+            var drink = e[0], info = e[1];
+            var fSafeId = 'frt-'+b.person.replace(/\W/g,'_')+'-'+drink.replace(/\W/g,'_');
+            var fIndivId = 'findiv-'+fSafeId;
+
+            // Individual free entries
+            var fIndivRows = info.entries.sort(function(a,b){ return (a.date > b.date ? -1 : 1); }).map(function(l){
+              var fEntryId = 'fep-'+l.id;
+              var timeLabel = l.date + (l.logged_at ? ' '+new Date(l.logged_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) : '');
+              return '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #d4eed8" onclick="event.stopPropagation()">'+
+                '<span style="font-size:12px;color:#1f6a3f;flex:1">'+timeLabel+(l.quantity>1?' ×'+l.quantity:'')+'</span>'+
+                '<span style="font-size:13px;color:#1a4a2a;font-weight:700">€</span>'+
+                '<input id="'+fEntryId+'" type="number" min="0" step="0.01" value="" placeholder="0.00" '+
+                  'style="width:70px;border:1.5px solid #5aaa6a;border-radius:8px;padding:6px 4px;font-size:15px;font-weight:700;color:#1f8a4f;text-align:center" '+
+                  'onclick="event.stopPropagation()" />'+
+                '<button onclick="event.stopPropagation();saveSingleEntryPrice(\''+l.id+'\',\''+fEntryId+'\',\''+esc(drink)+'\')" '+
+                  'style="background:#1f8a4f;border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;padding:8px 14px;cursor:pointer;min-height:40px;white-space:nowrap">OK</button>'+
+              '</div>';
+            }).join('');
+
+            return '<div style="width:100%;background:#d4f5e2;border:1.5px solid #5aaa6a;border-radius:11px;overflow:hidden" onclick="event.stopPropagation()">'+
+              '<div style="display:flex;align-items:center;gap:6px;padding:10px 12px;flex-wrap:wrap">'+
+                '<span style="font-size:17px">'+emoji(drink)+'</span>'+
+                '<span style="font-size:13px;font-weight:700;color:#1a4a2a">'+esc(drink.replace(/^.+? /,''))+'</span>'+
+                '<span style="font-size:11px;color:#1f6a3f;background:#fff;border-radius:6px;padding:1px 6px">🍾 '+info.qty+' '+(isDE?'kostenlos':'free')+'</span>'+
+                '<span style="font-size:14px;color:#1a4a2a;font-weight:700">€</span>'+
+                '<input id="'+fSafeId+'" type="number" min="0" step="0.01" value="" placeholder="0.00" '+
+                  'style="width:72px;border:1.5px solid #5aaa6a;border-radius:8px;padding:5px 6px;font-size:16px;font-weight:800;color:#1f8a4f;text-align:center;background:#fff" '+
+                  'onclick="event.stopPropagation()" />'+
+              '</div>'+
+              '<div style="display:flex;gap:10px;padding:0 12px 12px 12px">'+
+                '<button onclick="event.stopPropagation();saveFreeGroupPrice(\''+esc(b.person)+'\',\''+esc(drink)+'\',\''+fSafeId+'\')" '+
+                  'style="flex:1;background:#1f8a4f;border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:800;padding:12px 0;cursor:pointer;min-height:48px">'+
+                  (isDE?'✓ Alle':'✓ All')+'</button>'+
+                (info.entries.length > 1
+                  ? '<button id="tog-'+fSafeId+'" onclick="event.stopPropagation();(function(btn){var el=document.getElementById(\''+fIndivId+'\');var open=el.style.display!==\'none\';el.style.display=open?\'none\':\'\';btn.textContent=open?\''+(isDE?'↕ Einzeln':'↕ Entries')+'\':\'▲ '+(isDE?'Schließen':'Close')+'\';})(this)" '+
+                    'style="flex:1;background:#fff;border:2px solid #1f8a4f;border-radius:10px;color:#1f8a4f;font-size:15px;font-weight:800;padding:12px 0;cursor:pointer;min-height:48px">'+
+                    (isDE?'↕ Einzeln':'↕ Entries')+'</button>'
+                  : '')+
+              '</div>'+
+              (info.entries.length > 1 ?
+                '<div id="'+fIndivId+'" style="display:none;padding:6px 12px 12px 12px;background:#f0fff4;border-top:1px solid #b0e0bc">'+
+                  '<div style="font-size:11px;color:#1f6a3f;font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:.4px">'+
+                    (isDE?'Einzelne Einträge':'Individual entries')+'</div>'+
+                  fIndivRows+
+                '</div>' : '')+
+            '</div>';
+          }).join('')+
+          '</div>'
+        );
+      }
+
+      if (sections.length) {
+        priceEditHtml = '<div style="margin-top:10px;padding-top:10px;border-top:1px dashed #e8dccc">'+sections.join('')+'</div>';
       }
     }
 
@@ -1681,7 +1849,7 @@ function renderConsolidatedToday(){
             priceEditHtml+
           '</div>'+
       '</div>'+
-      '<span style="font-size:11px;color:#6a3020;flex-shrink:0;align-self:flex-start;padding-top:2px">'+esc(t('details'))+'</span>'+
+      '<span style="font-size:16px;color:#6a3020;flex-shrink:0;align-self:flex-start;padding-top:2px">👁</span>'+
     '</div>';
   };
 
@@ -1728,6 +1896,34 @@ async function saveConsolidatedPrice(person, drink, inputId){
   if (btn) { var orig = btn.textContent; btn.textContent = '✓'; setTimeout(function(){ btn.textContent = orig; }, 1200); }
 
   notify((LANG==='de'?'Preis aktualisiert':'Price updated')+' · '+emoji(drink)+' €'+newUnit.toFixed(2)+' ✓');
+  await loadAll();
+}
+
+// Save unit price for ALL free entries of a drink type (group action on free drinks)
+async function saveFreeGroupPrice(person, drink, inputId){
+  var inputEl = document.getElementById(inputId);
+  if (!inputEl) return;
+  var newUnit = parseFloat(inputEl.value) || 0;
+  if (newUnit <= 0){ notify(LANG==='de'?'Bitte Preis eingeben':'Please enter a price',true); return; }
+
+  var entries = STATE.logs.filter(function(l){
+    return l.person === person && l.drink === drink && isMine(l) && (parseFloat(l.unit_price)||0) === 0;
+  });
+  if (!entries.length){ notify(LANG==='de'?'Keine kostenlosen Einträge':'No free entries',true); return; }
+
+  var errors = [];
+  for (var i=0;i<entries.length;i++){
+    var l=entries[i];
+    var res=await SB.from('drink_logs').update({unit_price:newUnit,total_price:newUnit*(l.quantity||1)}).eq('id',l.id);
+    if(res.error) errors.push(res.error.message);
+  }
+  setDrinkPrice(drink, newUnit);
+  if(errors.length){notify('Error: '+errors[0],true);return;}
+
+  var btn=inputEl.parentElement && inputEl.parentElement.nextElementSibling && inputEl.parentElement.nextElementSibling.firstElementChild;
+  if(btn){var o=btn.textContent;btn.textContent='✓';setTimeout(function(){btn.textContent=o;},1200);}
+
+  notify((LANG==='de'?'Preise gesetzt':'Prices set')+' · '+emoji(drink)+' €'+newUnit.toFixed(2)+' ✓');
   await loadAll();
 }
 
@@ -2509,11 +2705,25 @@ function renderHistory(){
         var loggedByLine = (loggedBy && loggedBy !== l.person)
           ? t('loggedBy')+' <strong style="color:#3a2010">'+esc(loggedBy)+'<\/strong> for '+esc(l.person)
           : t('loggedBy')+' '+esc(loggedBy);
+        // Delete controls: −1 (decrement qty) and 🗑 (delete whole row)
+        var delControls = canDel
+          ? '<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;margin-left:8px">'+
+              (l.quantity > 1
+                ? '<button onclick="decrementLogEntry(\''+l.id+'\',\''+esc(l.person)+'\',\''+esc(l.drink)+'\')" '+
+                    'style="background:#f5ede4;border:1.5px solid #b5481f;border-radius:8px;color:#b5481f;font-size:13px;font-weight:800;padding:5px 10px;cursor:pointer;min-width:40px" '+
+                    'title="Remove one">−1</button>'
+                : '')+
+              '<button onclick="delEntry(\'drink_logs\',\''+l.id+'\',\''+esc(l.drink)+' for '+esc(l.person)+'\')" '+
+                'style="background:#fff0f0;border:1.5px solid #c4392b;border-radius:8px;color:#c4392b;font-size:15px;padding:5px 8px;cursor:pointer;min-width:40px" '+
+                'title="Delete whole entry">🗑</button>'+
+              (IS_ADMIN ? '<button class="btn-edit" onclick="adminEditDrink(\''+l.id+'\')">✏️</button>' : '')+
+            '</div>'
+          : '<span style="font-size:11px;color:#6a3020;margin-left:8px">🔒</span>';
         return '<div class="entry"><div class="entry-l"><span class="ej">'+emoji(l.drink)+'</span><div>'+
           '<div class="en">'+esc(l.person)+(l.quantity>1?' <span class="badge">×'+l.quantity+'</span>':'')+'</div>'+
           '<div class="es">'+esc(l.drink.replace(/^.+? /,''))+(l.total_price>0?' · €'+parseFloat(l.unit_price).toFixed(2)+' ea · €'+parseFloat(l.total_price).toFixed(2):'')+(l.note?' · '+esc(l.note):'')+'</div>'+
           '<div class="es" style="color:#6a3020">'+loggedByLine+'</div>'+
-          '</div></div>'+delEditBtns('drink_logs',l.id,esc(l.drink)+' for '+esc(l.person),canDel,l)+'</div>';
+          '</div></div>'+delControls+'</div>';
       }).join('')+'</div></div>';
   }).join('');
 }
@@ -3193,6 +3403,24 @@ async function delEntry(table,id,label){
   var actionMap={'drink_logs':'DELETE_DRINK_LOGS','payments':'DELETE_PAYMENTS','replacements':'DELETE_REPLACEMENTS'};
   await audit(actionMap[table]||'DELETE',table,id,{label:label});
   notify(t('deleted'));
+  await loadAll();
+}
+
+// Decrement quantity by 1 (−1 button in Log tab)
+async function decrementLogEntry(id, person, drink){
+  var entry = STATE.logs.find(function(l){return l.id===id;});
+  if (!entry) return;
+  var newQty = (entry.quantity||1) - 1;
+  if (newQty <= 0) {
+    // Delete entirely
+    await delEntry('drink_logs', id, drink+' for '+person);
+    return;
+  }
+  var unit = parseFloat(entry.unit_price)||0;
+  var {error} = await SB.from('drink_logs').update({quantity:newQty, total_price:unit*newQty}).eq('id',id);
+  if(error){notify('Error: '+error.message,true);return;}
+  await audit('EDIT_DRINK_QTY','drink_logs',id,{person:person,drink:drink,new_qty:newQty});
+  notify((LANG==='de'?'Menge reduziert':'Qty reduced')+' → ×'+newQty);
   await loadAll();
 }
 
