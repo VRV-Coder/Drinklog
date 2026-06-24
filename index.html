@@ -4116,6 +4116,77 @@ function showIntroAnimation(cb){
     } catch(e) { /* safe — never crash the app */ }
   }
 
+  // ── Beer opening sound — synthesised via Web Audio API ──
+  var _soundPlayed = false;
+  function playBeerOpenSound(){
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      var ac = new AC();
+
+      // 1. GLASS CRACK — short white-noise burst filtered to high frequencies
+      var crackerDur = 0.18;
+      var crackBuf = ac.createBuffer(1, ac.sampleRate * crackerDur, ac.sampleRate);
+      var crackData = crackBuf.getChannelData(0);
+      for (var i=0; i<crackData.length; i++){
+        crackData[i] = (Math.random()*2-1) * Math.pow(1 - i/crackData.length, 1.5);
+      }
+      var crackSrc = ac.createBufferSource();
+      crackSrc.buffer = crackBuf;
+      var crackHp = ac.createBiquadFilter();
+      crackHp.type = 'highpass'; crackHp.frequency.value = 3200;
+      var crackGain = ac.createGain();
+      crackGain.gain.setValueAtTime(1.4, ac.currentTime);
+      crackGain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + crackerDur);
+      crackSrc.connect(crackHp); crackHp.connect(crackGain); crackGain.connect(ac.destination);
+      crackSrc.start(ac.currentTime);
+
+      // 2. PRESSURISED HISS — bandpass noise that ramps up then tails off (pshhhhh)
+      var hissDur = 0.95;
+      var hissBuf = ac.createBuffer(1, ac.sampleRate * hissDur, ac.sampleRate);
+      var hissData = hissBuf.getChannelData(0);
+      for (var j=0; j<hissData.length; j++) hissData[j] = Math.random()*2-1;
+      var hissSrc = ac.createBufferSource();
+      hissSrc.buffer = hissBuf;
+      var hissBp = ac.createBiquadFilter();
+      hissBp.type = 'bandpass'; hissBp.frequency.value = 2800; hissBp.Q.value = 0.8;
+      var hissGain = ac.createGain();
+      hissGain.gain.setValueAtTime(0.001, ac.currentTime + 0.05);
+      hissGain.gain.linearRampToValueAtTime(0.55, ac.currentTime + 0.18);
+      hissGain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + hissDur);
+      hissSrc.connect(hissBp); hissBp.connect(hissGain); hissGain.connect(ac.destination);
+      hissSrc.start(ac.currentTime + 0.05);
+
+      // 3. GLUG-GLUG — 3 pitched bubbles (short sine tones with pitch wobble)
+      [0.55, 0.72, 0.88].forEach(function(delay, idx){
+        var freq = 420 - idx * 55; // descending pitch
+        var osc = ac.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ac.currentTime + delay);
+        osc.frequency.exponentialRampToValueAtTime(freq * 0.72, ac.currentTime + delay + 0.12);
+        var glugGain = ac.createGain();
+        glugGain.gain.setValueAtTime(0.001, ac.currentTime + delay);
+        glugGain.gain.linearRampToValueAtTime(0.32, ac.currentTime + delay + 0.025);
+        glugGain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + delay + 0.13);
+        osc.connect(glugGain); glugGain.connect(ac.destination);
+        osc.start(ac.currentTime + delay);
+        osc.stop(ac.currentTime + delay + 0.15);
+      });
+
+      // 4. LOW THUD — the impact thump as the ball hits
+      var thudOsc = ac.createOscillator();
+      thudOsc.type = 'sine';
+      thudOsc.frequency.setValueAtTime(160, ac.currentTime);
+      thudOsc.frequency.exponentialRampToValueAtTime(40, ac.currentTime + 0.12);
+      var thudGain = ac.createGain();
+      thudGain.gain.setValueAtTime(0.9, ac.currentTime);
+      thudGain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.14);
+      thudOsc.connect(thudGain); thudGain.connect(ac.destination);
+      thudOsc.start(ac.currentTime); thudOsc.stop(ac.currentTime + 0.15);
+
+    } catch(e){ /* audio not supported — silent */ }
+  }
+
   function tick(){
     t++;
     var progress = t / 120;
@@ -4123,6 +4194,8 @@ function showIntroAnimation(cb){
     if(progress>0.48) setCaption(1);
     if(progress>0.76) setCaption(2);
     if(progress>0.86) setCaption(3);
+    // Fire beer-opening sound exactly once when window shatters
+    if(progress > 0.82 && !_soundPlayed){ _soundPlayed=true; playBeerOpenSound(); }
     drawScene(Math.min(progress,1));
     if(progress < 1.4) raf = requestAnimationFrame(tick);
     else finishIntro();
@@ -4384,11 +4457,178 @@ function showCrateAnimation(drinkName, cb){
 
   var raf2;
 
+  // ── Crate animation sounds — Web Audio API ──
+  var _crateAC = null;
+  var _crateEngineNode = null;
+  var _crateEngineDone = false;
+  var _soundsPlayed = {};
+
+  function getCrateAC(){
+    if (_crateAC) return _crateAC;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    _crateAC = new AC();
+    return _crateAC;
+  }
+
+  // Bottle clink — short high sine ping with decay
+  function playBottleClink(ac, delay, freq, vol){
+    freq = freq || 1380;
+    vol = vol || 0.22;
+    var osc = ac.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, ac.currentTime+delay);
+    osc.frequency.exponentialRampToValueAtTime(freq*0.82, ac.currentTime+delay+0.18);
+    var g = ac.createGain();
+    g.gain.setValueAtTime(vol, ac.currentTime+delay);
+    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime+delay+0.28);
+    // Slight reverb body (second osc detuned)
+    var osc2 = ac.createOscillator();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(freq*1.007, ac.currentTime+delay+0.004);
+    osc2.frequency.exponentialRampToValueAtTime(freq*0.79, ac.currentTime+delay+0.2);
+    var g2 = ac.createGain();
+    g2.gain.setValueAtTime(vol*0.35, ac.currentTime+delay+0.004);
+    g2.gain.exponentialRampToValueAtTime(0.001, ac.currentTime+delay+0.22);
+    osc.connect(g); g.connect(ac.destination);
+    osc2.connect(g2); g2.connect(ac.destination);
+    osc.start(ac.currentTime+delay); osc.stop(ac.currentTime+delay+0.3);
+    osc2.start(ac.currentTime+delay+0.004); osc2.stop(ac.currentTime+delay+0.25);
+  }
+
+  // Bottle rattle — rapid noise bursts (glass on glass)
+  function playBottleRattle(ac, delay, dur){
+    dur = dur || 0.22;
+    var buf = ac.createBuffer(1, ac.sampleRate*dur, ac.sampleRate);
+    var d = buf.getChannelData(0);
+    for(var i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(Math.sin(i/d.length*Math.PI),0.5);
+    var src = ac.createBufferSource();
+    src.buffer = buf;
+    var bp = ac.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=2400; bp.Q.value=3;
+    var g = ac.createGain();
+    g.gain.setValueAtTime(0.18, ac.currentTime+delay);
+    g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime+delay+dur);
+    src.connect(bp); bp.connect(g); g.connect(ac.destination);
+    src.start(ac.currentTime+delay);
+  }
+
+  // Engine rumble — low oscillator + noise
+  function startEngineRumble(ac){
+    // Low rumble oscillator
+    var eng = ac.createOscillator();
+    eng.type = 'sawtooth';
+    eng.frequency.setValueAtTime(48, ac.currentTime);
+    eng.frequency.linearRampToValueAtTime(55, ac.currentTime+0.4);
+    var engG = ac.createGain(); engG.gain.value = 0.09;
+    var lp = ac.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=180;
+    eng.connect(lp); lp.connect(engG); engG.connect(ac.destination);
+    eng.start(ac.currentTime);
+
+    // Engine noise layer
+    var noiseDur = 2.5;
+    var nBuf = ac.createBuffer(1, ac.sampleRate*noiseDur, ac.sampleRate);
+    var nd = nBuf.getChannelData(0);
+    for(var i=0;i<nd.length;i++) nd[i]=(Math.random()*2-1)*0.6;
+    var nSrc = ac.createBufferSource();
+    nSrc.buffer = nBuf;
+    var nbp = ac.createBiquadFilter(); nbp.type='bandpass'; nbp.frequency.value=95; nbp.Q.value=0.6;
+    var nG = ac.createGain(); nG.gain.value=0.07;
+    nSrc.connect(nbp); nbp.connect(nG); nG.connect(ac.destination);
+    nSrc.start(ac.currentTime);
+
+    // Bottles jiggling on road bumps — random clinks at low vol
+    [0.15,0.38,0.62,0.9,1.15,1.4,1.7,2.0,2.25].forEach(function(d){
+      playBottleClink(ac, d, 900+Math.random()*400, 0.06+Math.random()*0.05);
+    });
+
+    return { eng:eng, nSrc:nSrc };
+  }
+
+  function stopEngine(nodes){
+    try { nodes.eng.stop(); } catch(e){}
+    try { nodes.nSrc.stop(); } catch(e){}
+  }
+
+  function playCrateSound(phase){
+    try {
+      var ac = getCrateAC();
+      if (!ac) return;
+
+      if (phase === 0) {
+        // Loading empties — 4 clinks in quick succession + a rattle
+        playBottleClink(ac, 0.00, 1250, 0.25);
+        playBottleRattle(ac, 0.12, 0.18);
+        playBottleClink(ac, 0.28, 1450, 0.20);
+        playBottleRattle(ac, 0.40, 0.15);
+        playBottleClink(ac, 0.55, 1180, 0.22);
+        playBottleRattle(ac, 0.68, 0.20);
+        playBottleClink(ac, 0.85, 1320, 0.18);
+
+      } else if (phase === 1) {
+        // Driving away — engine + jiggling bottles
+        _crateEngineNode = startEngineRumble(ac);
+
+        // Exhaust pop on start
+        var pop = ac.createOscillator(); pop.type='sine';
+        pop.frequency.setValueAtTime(90,ac.currentTime);
+        pop.frequency.exponentialRampToValueAtTime(30,ac.currentTime+0.08);
+        var popG=ac.createGain(); popG.gain.setValueAtTime(0.5,ac.currentTime);
+        popG.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+0.1);
+        pop.connect(popG); popG.connect(ac.destination);
+        pop.start(ac.currentTime); pop.stop(ac.currentTime+0.12);
+
+      } else if (phase === 2) {
+        // Stop engine
+        if (_crateEngineNode){ stopEngine(_crateEngineNode); _crateEngineNode=null; }
+
+        // Crates being swapped — rattle + clinks as bottles restocked
+        playBottleRattle(ac, 0.05, 0.25);
+        playBottleClink(ac, 0.18, 1100, 0.28);
+        playBottleRattle(ac, 0.35, 0.22);
+        playBottleClink(ac, 0.50, 1350, 0.24);
+        playBottleRattle(ac, 0.65, 0.18);
+        playBottleClink(ac, 0.80, 1200, 0.22);
+        playBottleClink(ac, 0.95, 1500, 0.18);
+        playBottleRattle(ac, 1.05, 0.20);
+
+      } else if (phase === 3) {
+        // Driving back — engine again
+        _crateEngineNode = startEngineRumble(ac);
+
+      } else if (phase === 4) {
+        // Arrived — stop engine, final satisfying clink + fridge hum
+        if (_crateEngineNode){ stopEngine(_crateEngineNode); _crateEngineNode=null; }
+
+        // Fridge door open hum
+        var fridgeOsc = ac.createOscillator();
+        fridgeOsc.type='sine'; fridgeOsc.frequency.value=60;
+        var fridgeG=ac.createGain();
+        fridgeG.gain.setValueAtTime(0.0001,ac.currentTime+0.1);
+        fridgeG.gain.linearRampToValueAtTime(0.08,ac.currentTime+0.5);
+        fridgeG.gain.linearRampToValueAtTime(0.0001,ac.currentTime+1.4);
+        fridgeOsc.connect(fridgeG); fridgeG.connect(ac.destination);
+        fridgeOsc.start(ac.currentTime+0.1); fridgeOsc.stop(ac.currentTime+1.5);
+
+        // Celebratory double-clink (cheers!)
+        playBottleClink(ac, 0.2, 1600, 0.30);
+        playBottleClink(ac, 0.32, 1420, 0.26);
+        playBottleClink(ac, 0.55, 1550, 0.20);
+      }
+    } catch(e){ /* audio not supported — silent */ }
+  }
+
   function tick2(){
     try {
     t++;
     ctx.clearRect(0,0,W,H);
     var bounce = Math.sin(t*0.3)*2;
+
+    // Fire sounds once per phase transition
+    if(t===1)   playCrateSound(0);
+    if(t===40)  playCrateSound(1);
+    if(t===80)  playCrateSound(2);
+    if(t===120) playCrateSound(3);
+    if(t===160) playCrateSound(4);
 
     if(t>=1 && t<40){
       setC(0);
@@ -4458,6 +4698,9 @@ function showCrateAnimation(drinkName, cb){
 
   function finishCrate(){
     cancelAnimationFrame(raf2);
+    // Stop engine sound if still running
+    if (_crateEngineNode){ try{ stopEngine(_crateEngineNode); }catch(e){} _crateEngineNode=null; }
+    if (_crateAC){ try{ _crateAC.close(); }catch(e){} _crateAC=null; }
     ov.style.display='none';
     if(cb) cb();
   }
