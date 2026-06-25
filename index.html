@@ -1168,31 +1168,12 @@ function renderLog(){
   // ── SECTION 4: Today's running tab ──
   html += renderRunningTodayTab();
 
-  // ── SECTION 5: Advanced log toggle — high-contrast so it's always visible ──
-  html += '<button class="btn-advanced-toggle" onclick="STATE.showAdvancedLog=!STATE.showAdvancedLog;renderTab(\'log\')">'+
-    (STATE.showAdvancedLog ? '▲' : '▼')+
-    '<span>'+(isDE ? (STATE.showAdvancedLog?'Erweiterte Eingabe schließen':'📋 Erweiterte Eingabe') : (STATE.showAdvancedLog?'Close Advanced Log':'📋 Advanced Log'))+'</span>'+
-    (STATE.showAdvancedLog ? '' : '<span style="font-size:12px;font-weight:600;opacity:.7">'+(isDE?'Datum · Menge · Notiz':'Date · Qty · Note')+'</span>')+
+  // ── SECTION 5: Advanced log — opens as full-screen drawer ──
+  html += '<button class="btn-advanced-toggle" onclick="showAdvancedLogDrawer()">'+
+    '📋 '+(isDE?'Erweiterte Eingabe':'Advanced Log')+
+    '<span style="font-size:12px;font-weight:600;opacity:.7;margin-left:6px">'+(isDE?'Datum · Menge · Notiz':'Date · Qty · Note')+'</span>'+
+    '<span style="margin-left:auto;font-size:18px">⬆️</span>'+
   '</button>';
-
-  if (STATE.showAdvancedLog){
-    var total = ((parseFloat(STATE.logPrice)||0)*STATE.logQty).toFixed(2);
-    html += card(t('logADrink'),
-      '<div class="grid2">'+
-        fld(t('date'),'<input type="date" value="'+STATE.logDate+'" onchange="STATE.logDate=this.value"/>')+
-        fld(t('person'),'<select onchange="STATE.logPerson=this.value">'+pOpts(STATE.logPerson)+'</select>')+
-      '</div>'+
-      fld(t('drinkType'),'<div class="chips" id="drink-chip-row">'+DRINK_TYPES.map(function(d){
-        return '<span class="chip'+(STATE.logDrink===d?' cp':'')+'" data-drink-select="'+esc(d)+'">' +d+'</span>';
-      }).join('')+'</div>')+
-      '<div class="grid2">'+
-        fld(t('drinks'),stepper('logQty',STATE.logQty))+
-        fld(t('pricePerDrink'),'<div style="position:relative"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#5a3a28">€</span><input type="number" min="0" step="0.01" value="'+(STATE.logPrice||'')+'" placeholder="0.00" style="padding-left:24px" oninput="STATE.logPrice=this.value;updTotal()"/></div>')+
-      '</div>'+
-      '<div class="total-row" id="trow"><span>'+esc(t('totalPrice'))+'</span><span>€'+total+'</span></div>'+
-      fld(t('note'),'<input type="text" value="'+esc(STATE.logNote)+'" oninput="STATE.logNote=this.value" placeholder="'+esc(t('noteOptional'))+'"/>') +
-      '<button class="btn-primary" onclick="saveLog()">'+esc(t('logDrinkBtn'))+'</button>');
-  }
 
   // ── SECTION 6: Historical consolidated running tabs ──
   html += renderConsolidatedToday();
@@ -1280,7 +1261,11 @@ function renderRunningTodayTab(){
           STATE.replacements.forEach(function(r){ if(r.drink&&consF[r.drink]) consF[r.drink]=Math.max(0,consF[r.drink]-(r.quantity||0)); });
           var fundAvail = Math.max(0,(contrF[d]||0)-(consF[d]||0));
           if (fundAvail >= uncovered){
-            badge += '<span style="font-size:10px;background:#d4f5e2;color:#1f8a4f;border-radius:5px;padding:1px 5px;font-weight:700">🍾 '+(isDE?'Freibier-Vorrat':'from fund')+'</span>';
+            var ctribs = (STATE.freeContributions||[]).filter(function(c){return c.drink===d;}).map(function(c){return c.person;});
+            var ctribLabel = [...new Set(ctribs)].join(', ');
+            badge += '<span style="font-size:10px;background:#d4f5e2;color:#1f8a4f;border-radius:5px;padding:1px 5px;font-weight:700" '+
+              'title="'+(isDE?'Bezahlt von':'Paid by')+': '+esc(ctribLabel)+'">'+
+              '🍾 '+(isDE?'Freibier':'Free Beers')+(ctribLabel?' · '+esc(ctribLabel):'')+'</span>';
           } else {
             badge += '<span style="font-size:10px;background:#fef3cd;color:#7a5200;border-radius:5px;padding:1px 5px;font-weight:700">🍾 '+(myCovered>0?myCovered+'/'+myFree+' ':'')+(isDE?'offen':'to replace')+'</span>';
           }
@@ -2154,6 +2139,88 @@ async function saveSingleEntryPrice(entryId, inputId, drink){
   await loadAll();
 }
 
+// ── ADVANCED LOG DRAWER ──────────────────────────────────────
+function showAdvancedLogDrawer(){
+  var isDE = LANG==='de';
+  var total = ((parseFloat(STATE.logPrice)||0)*STATE.logQty).toFixed(2);
+  var allPeople = STATE.people.slice();
+  if (CURRENT_NAME && !allPeople.find(function(p){return p.display_name===CURRENT_NAME;}))
+    allPeople.unshift({display_name:CURRENT_NAME,created_by:''});
+  var pOpts2 = allPeople.map(function(p){
+    return '<option value="'+esc(p.display_name)+'"'+(STATE.logPerson===p.display_name?' selected':'')+'>'+esc(p.display_name)+'</option>';
+  }).join('');
+  var drinkChips = DRINK_TYPES.map(function(d){
+    return '<span class="chip'+(STATE.logDrink===d?' cp':'')+'" onclick="STATE.logDrink=\''+esc(d)+'\';document.querySelectorAll(\'#adv-drawer .chip\').forEach(function(c){c.classList.remove(\'cp\')});this.classList.add(\'cp\');advUpdTotal()">'+d+'</span>';
+  }).join('');
+  var existing = document.getElementById('adv-log-drawer');
+  if (existing) existing.remove();
+  var backdrop = document.createElement('div');
+  backdrop.id = 'adv-log-backdrop';
+  backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:8999';
+  var drawer = document.createElement('div');
+  drawer.id = 'adv-log-drawer';
+  drawer.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9000;background:#fff;border-radius:22px 22px 0 0;box-shadow:0 -8px 40px rgba(0,0,0,0.22);max-height:92vh;overflow-y:auto;padding:0';
+  backdrop.onclick = function(){ drawer.remove(); backdrop.remove(); };
+  drawer.innerHTML =
+    '<div style="padding:14px 18px 24px">'+
+    '<div style="width:36px;height:4px;background:#e8dccc;border-radius:2px;margin:0 auto 14px"></div>'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'+
+      '<div style="font-size:17px;font-weight:800;color:#1a0e08">📋 '+(isDE?'Erweiterte Eingabe':'Advanced Log')+'</div>'+
+      '<button onclick="document.getElementById(\'adv-log-drawer\').remove();document.getElementById(\'adv-log-backdrop\').remove()" '+
+        'style="background:#f5ede4;border:none;border-radius:10px;padding:8px 14px;font-size:14px;font-weight:700;color:#5a3a28;cursor:pointer">✕</button>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">'+
+      '<div><div style="font-size:11px;font-weight:700;color:#7a5200;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">'+esc(t('date'))+'</div>'+
+        '<input type="date" value="'+STATE.logDate+'" onchange="STATE.logDate=this.value" '+
+          'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px;font-size:14px;color:#1a0e08"/></div>'+
+      '<div><div style="font-size:11px;font-weight:700;color:#7a5200;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">'+esc(t('person'))+'</div>'+
+        '<select onchange="STATE.logPerson=this.value" '+
+          'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px;font-size:14px;color:#1a0e08;background:#fff">'+pOpts2+'</select></div>'+
+    '</div>'+
+    '<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#7a5200;margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px">'+esc(t('drinkType'))+'</div>'+
+      '<div id="adv-drawer" class="chips" style="flex-wrap:wrap;gap:6px">'+drinkChips+'</div></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">'+
+      '<div><div style="font-size:11px;font-weight:700;color:#7a5200;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">'+esc(t('drinks'))+'</div>'+
+        '<div style="display:flex;align-items:center;gap:6px;background:#f5ede4;border-radius:10px;padding:6px 8px">'+
+          '<button onclick="STATE.logQty=Math.max(1,STATE.logQty-1);document.getElementById(\'adv-qty\').value=STATE.logQty;advUpdTotal()" '+
+            'style="background:#b5481f;border:none;border-radius:8px;color:#fff;font-size:18px;font-weight:700;width:36px;height:36px;cursor:pointer;flex-shrink:0">−</button>'+
+          '<input type="number" min="1" id="adv-qty" value="'+STATE.logQty+'" oninput="STATE.logQty=parseInt(this.value)||1;advUpdTotal()" '+
+            'style="flex:1;border:none;background:transparent;font-size:18px;font-weight:800;color:#1a0e08;text-align:center"/>'+
+          '<button onclick="STATE.logQty++;document.getElementById(\'adv-qty\').value=STATE.logQty;advUpdTotal()" '+
+            'style="background:#b5481f;border:none;border-radius:8px;color:#fff;font-size:18px;font-weight:700;width:36px;height:36px;cursor:pointer;flex-shrink:0">+</button>'+
+        '</div></div>'+
+      '<div><div style="font-size:11px;font-weight:700;color:#7a5200;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">'+esc(t('pricePerDrink'))+'</div>'+
+        '<div style="position:relative">'+
+          '<span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#5a3a28;font-weight:700;font-size:16px">€</span>'+
+          '<input type="number" min="0" step="0.01" value="'+(STATE.logPrice||'')+'" placeholder="0.00" '+
+            'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 10px 10px 28px;font-size:16px;font-weight:700;color:#b5481f" '+
+            'oninput="STATE.logPrice=this.value;advUpdTotal()"/></div></div>'+
+    '</div>'+
+    '<div id="adv-total" style="display:flex;justify-content:space-between;align-items:center;background:#fce4d0;border-radius:10px;padding:10px 14px;margin-bottom:14px">'+
+      '<span style="font-size:14px;font-weight:700;color:#5a3a28">'+esc(t('totalPrice'))+'</span>'+
+      '<span style="font-size:18px;font-weight:800;color:#b5481f">€'+total+'</span></div>'+
+    '<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:#7a5200;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">'+esc(t('note'))+'</div>'+
+      '<input type="text" value="'+esc(STATE.logNote||'')+'" oninput="STATE.logNote=this.value" placeholder="'+esc(t('noteOptional'))+'" '+
+        'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 12px;font-size:15px;color:#1a0e08"/></div>'+
+    '<button onclick="saveLog().then(function(){var d=document.getElementById(\'adv-log-drawer\');var b=document.getElementById(\'adv-log-backdrop\');if(d)d.remove();if(b)b.remove();})" '+
+      'style="width:100%;background:linear-gradient(135deg,#b5481f,#e07030);border:none;border-radius:14px;color:#fff;font-size:17px;font-weight:800;padding:16px;cursor:pointer;letter-spacing:.3px">'+
+      '🍺 '+esc(t('logDrinkBtn'))+'</button>'+
+    '</div>';
+  document.body.appendChild(backdrop);
+  document.body.appendChild(drawer);
+  drawer.style.transform = 'translateY(100%)';
+  drawer.style.transition = 'transform .32s cubic-bezier(.32,1,.23,1)';
+  requestAnimationFrame(function(){ requestAnimationFrame(function(){ drawer.style.transform = 'translateY(0)'; }); });
+}
+
+function advUpdTotal(){
+  var el = document.getElementById('adv-total');
+  if (!el) return;
+  var total = ((parseFloat(STATE.logPrice)||0)*STATE.logQty).toFixed(2);
+  el.querySelector('span:last-child').textContent = '\u20ac'+total;
+}
+
+
 function updTotal(){
   var t = ((parseFloat(STATE.logPrice)||0)*STATE.logQty).toFixed(2);
   var el = document.getElementById('trow');
@@ -2365,12 +2432,23 @@ function showPersonRunningTab(person){
               (LANG==='de'?'Ok':'OK')+'</button>'+
           '</div>'
         : '';
+      // Free beer contributor label
+      var freeLabel = '';
+      if ((parseFloat(l.unit_price)||0) === 0) {
+        var ctribs2 = (STATE.freeContributions||[]).filter(function(c){return c.drink===l.drink;}).map(function(c){return c.person;});
+        var ctribStr = [...new Set(ctribs2)].join(', ');
+        freeLabel = '<div style="display:inline-flex;align-items:center;gap:4px;background:#d4f5e2;border-radius:6px;padding:2px 7px;margin-top:3px">'+
+          '<span style="font-size:11px;font-weight:700;color:#1f8a4f">🍾 '+(LANG==='de'?'Freibier von':'Free beer from')+'</span>'+
+          '<span style="font-size:11px;color:#1a4a2a;font-weight:700">'+esc(ctribStr||'—')+'</span>'+
+        '</div>';
+      }
       return '<div class="entry">'+
         '<div class="entry-l">'+
           '<span class="ej">'+emoji(l.drink)+'</span>'+
           '<div>'+
             '<div class="en">'+esc(l.drink.replace(/^.+? /,''))+(!canEdit&&l.quantity>1?' ×'+l.quantity:'')+'</div>'+
             '<div class="es">🕐 '+timeStr+(l.total_price>0?' · €'+parseFloat(l.total_price).toFixed(2):' · '+t('free'))+byLine+'</div>'+
+            (freeLabel?freeLabel:'')+
             (l.note?'<div class="es" style="font-style:italic">"'+esc(l.note)+'"</div>':'')+
             priceControl+
             qtyControl+
@@ -4207,7 +4285,13 @@ function renderPeople(){
         '<div><div class="en">'+esc(p.display_name)+(isMe?' <span style="font-size:10px;color:#b5481f">'+t('youSuffix')+'</span>':'')+'</div>'+
         '<div class="es">'+total+' drink'+(total!==1?'s':'')+' · €'+spend.toFixed(2)+'</div>'+
         (p.created_by?'<div class="es" style="color:#6a3020">'+t('addedBy')+' '+esc(p.created_by)+'</div>':'')+
-        '</div></div></div>';
+        '</div></div>'+
+        (IS_ADMIN && !isMe
+          ? '<button onclick="deletePerson(\''+esc(p.display_name)+'\')" '+
+              'style="background:#fff0f0;border:1.5px solid #c4392b;border-radius:8px;color:#c4392b;font-size:15px;padding:6px 10px;cursor:pointer;margin-left:8px;flex-shrink:0" '+
+              'title="Delete person">🗑</button>'
+          : '')+
+        '</div>';
     }).join(''):'<div style="color:#6a3020;font-size:13px">No members yet.</div>'));
   el.innerHTML=html;
 }
@@ -4222,6 +4306,24 @@ async function addPersonFromPeopleTab(){
     notify(name+' added to the group ✓');
     await loadAll();
   }
+}
+
+async function deletePerson(name){
+  var isDE = LANG==='de';
+  var drinkCount = STATE.logs.filter(function(l){return l.person===name;}).length;
+  var msg = isDE
+    ? 'Person "'+name+'" löschen?\n\n'+(drinkCount?drinkCount+' Drink-Einträge bleiben erhalten, aber die Person wird aus der Gruppe entfernt.':'Diese Person hat keine Drinks.')
+    : 'Delete "'+name+'" from the group?\n\n'+(drinkCount?drinkCount+' drink log entries will remain but the person will be removed from the group.':'This person has no drinks.');
+  if (!confirm(msg)) return;
+  // Find the person row in the people table by name
+  var {data, error} = await SB.from('people').select('id').eq('name', name).maybeSingle();
+  if (error){ notify('Error: '+error.message, true); return; }
+  if (!data){ notify(isDE?'Person nicht gefunden in Datenbank':'Person not found in database', true); return; }
+  var {error: delErr} = await SB.from('people').delete().eq('id', data.id);
+  if (delErr){ notify('Error: '+delErr.message, true); return; }
+  await audit('DELETE_PERSON','people',data.id,{name:name});
+  notify((isDE?'Person entfernt':'Person removed')+': '+name);
+  await loadAll();
 }
 
 // ── GENERIC DELETE ──────────────────────────────────────────
