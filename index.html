@@ -226,6 +226,7 @@
       <button onclick="switchTab('dashboard',this)"><span id="nav-dashboard-label">📈 Dashboard</span></button>
       <button onclick="switchTab('audit',this)" id="nav-audit-btn" style="display:none"><span id="nav-audit-label">📜 Audit</span></button>
       <button onclick="switchTab('people',this)" id="nav-people-btn" style="display:none"><span id="nav-people-label">👥 People</span></button>
+      <button onclick="switchTab('drinktypes',this)" id="nav-drinktypes-btn" style="display:none"><span id="nav-drinktypes-label">🍹 Drinks</span></button>
     </nav>
   </div>
   <div class="team-banner-wrap" id="team-banner-wrap">
@@ -241,8 +242,9 @@
     <div id="tab-payments" style="display:none"></div>
     <div id="tab-history"  style="display:none"></div>
     <div id="tab-replace"  style="display:none"></div>
-    <div id="tab-audit"    style="display:none"></div>
-    <div id="tab-people"   style="display:none"></div>
+    <div id="tab-audit"      style="display:none"></div>
+    <div id="tab-people"     style="display:none"></div>
+    <div id="tab-drinktypes" style="display:none"></div>
   </div>
 </div>
 
@@ -261,20 +263,22 @@ var CURRENT_USER = null;     // Supabase auth user object (admin only)
 var CURRENT_NAME = '';       // display name for everyone
 var GUEST_TOKEN = localStorage.getItem('guest_token') || '';
 
+// DRINK_TYPES — dynamically loaded from Supabase drink_types table.
+// Seeded with defaults so the app works even before the first load.
 var DRINK_TYPES = [
-  "🍺 Beer (Weizen)",
-  "🍺 Beer AF (Weizen)",
-  "🍺 Beer (Pils)",
-  "🍺 Beer AF (Pils)",
-  "🍺 Radler",
-  "🍷 Wine",
-  "🥃 Spirits",
-  "🍹 Cocktail",
-  "🧃 Juice",
-  "💧 Water",
-  "☕ Coffee",
-  "🧋 Other"
+  "🍺 Beer (Weizen)","🍺 Beer AF (Weizen)","🍺 Beer (Pils)","🍺 Beer AF (Pils)",
+  "🍺 Radler","🍷 Wine","🥃 Spirits","🍹 Cocktail","🧃 Juice","💧 Water","☕ Coffee","🧋 Other"
 ];
+// Raw rows from Supabase (have id, emoji, name, default_price, sort_order, active)
+var DRINK_TYPE_ROWS = [];
+
+function buildDrinkTypesFromRows(rows){
+  DRINK_TYPE_ROWS = rows || [];
+  DRINK_TYPES = DRINK_TYPE_ROWS
+    .filter(function(r){ return r.active !== false; })
+    .sort(function(a,b){ return (a.sort_order||0)-(b.sort_order||0); })
+    .map(function(r){ return r.emoji+' '+r.name; });
+}
 var AVATAR_COLORS = ["#b5481f","#c5a000","#0e6b8c","#b4502a","#9c4a22","#8c3a1f","#1f5a7a","#7a8c1f"];
 
 // Default prices per drink — persisted in localStorage, editable inline
@@ -646,6 +650,8 @@ function enterApp(){
   if (historyBtn) historyBtn.style.display = IS_ADMIN ? '' : 'none';
   var peopleBtn = document.getElementById('nav-people-btn');
   if (peopleBtn) peopleBtn.style.display = IS_ADMIN ? '' : 'none';
+  var dtBtn = document.getElementById('nav-drinktypes-btn');
+  if (dtBtn) dtBtn.style.display = IS_ADMIN ? '' : 'none';
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   loadDrinkPrices(); // load this user's saved prices
@@ -958,19 +964,21 @@ async function signOut(){
 // ── LOAD DATA ───────────────────────────────────────────────
 async function loadAll(){
   try {
-    var [ppl, l, pay, rep, aud, fc] = await Promise.all([
+    var [ppl, l, pay, rep, aud, fc, dt] = await Promise.all([
       SB.from('people').select('*').order('name'),
       SB.from('drink_logs').select('*').order('date',{ascending:false}).order('logged_at',{ascending:false}),
       SB.from('payments').select('*').order('date',{ascending:false}),
       SB.from('replacements').select('*').order('for_date',{ascending:false}),
       SB.from('audit_log').select('*').order('performed_at',{ascending:false}).limit(100),
-      SB.from('free_contributions').select('*').order('date',{ascending:false})
+      SB.from('free_contributions').select('*').order('date',{ascending:false}),
+      SB.from('drink_types').select('*').order('sort_order')
     ]);
     if(ppl.error) notify('People error: '+ppl.error.message, true);
     if(l.error)   notify('Logs error: '+l.error.message, true);
     if(pay.error) notify('Payments error: '+pay.error.message, true);
     if(rep.error) notify('Replace error: '+rep.error.message, true);
     if(fc.error)  notify('Free drinks error: '+fc.error.message, true);
+    if(dt.data && dt.data.length) buildDrinkTypesFromRows(dt.data);
 
     STATE.logs              = l.data   || [];
     STATE.payments          = pay.data || [];
@@ -978,8 +986,10 @@ async function loadAll(){
     STATE.auditLog          = aud.data || [];
     STATE.freeContributions = fc.data  || [];
 
-    // People come from the real people table now
-    var peopleRows = ppl.data || [];
+    // People: only active people show in the group list.
+    // Inactive (deleted) people's logs/payments still appear in running tabs so debts can be cleared.
+    var peopleRows = (ppl.data || []).filter(function(p){ return p.active !== false; });
+    var allPeopleRows = ppl.data || []; // all including inactive, for name lookup
     var names = new Set(peopleRows.map(function(p){ return p.name; }));
 
     // Safety net: also include anyone found in logs/payments that
@@ -1073,7 +1083,7 @@ function switchTab(tab, btn){
   }
   document.querySelectorAll('nav button').forEach(function(b){b.classList.remove('active');});
   btn.classList.add('active');
-  ['log','freedrinks','stats','dashboard','payments','history','replace','audit','people'].forEach(function(t){
+  ['log','freedrinks','stats','dashboard','payments','history','replace','audit','people','drinktypes'].forEach(function(t){
     document.getElementById('tab-'+t).style.display = t===tab?'':'none';
   });
   STATE.tab = tab;
@@ -1089,7 +1099,8 @@ function renderTab(t){
     if(t==='history')  renderHistory();
     if(t==='replace')  renderReplace();
     if(t==='audit')    renderAudit();
-    if(t==='people')   renderPeople();
+    if(t==='people')      renderPeople();
+    if(t==='drinktypes')  renderDrinkTypes();
   } catch(e) {
     console.error('Render error on tab', t, e);
     notify('Display error: ' + e.message, true);
@@ -1365,22 +1376,36 @@ async function quickAddDrink(person, drink, event){
 
 async function quickRemoveDrink(person, drink, event){
   event.stopPropagation();
-  // Find the most recent entry for this person+drink today that the user can edit
   var today = td();
   var match = STATE.logs
     .filter(function(l){ return l.person===person && l.drink===drink && l.date===today && isMine(l); })
     .sort(function(a,b){ return new Date(b.logged_at)-new Date(a.logged_at); })[0];
   if (!match){ notify(LANG==='de'?'Nichts zu entfernen':'Nothing to remove',true); return; }
+  // Save snapshot for undo
+  var snapshot = JSON.parse(JSON.stringify(match));
   if (match.quantity <= 1){
     var {error} = await SB.from('drink_logs').delete().eq('id',match.id);
     if(error){notify('Error: '+error.message,true);return;}
     await audit('DELETE_DRINK_LOGS','drink_logs',match.id,{person:person,drink:drink});
+    notifyWithUndo(
+      (LANG==='de'?'Entfernt: ':'Removed: ')+emoji(drink)+' '+esc(drink.replace(/^.+? /,'')),
+      async function(){ await SB.from('drink_logs').insert({
+        date:snapshot.date, person:snapshot.person, drink:snapshot.drink,
+        quantity:snapshot.quantity, unit_price:snapshot.unit_price, total_price:snapshot.total_price,
+        note:snapshot.note||'', added_by:snapshot.added_by, logged_by:snapshot.logged_by,
+        guest_token:snapshot.guest_token||null, user_id:snapshot.user_id||null
+      }); await loadAll(); }
+    );
   } else {
     var newQty = match.quantity - 1;
     var price = parseFloat(match.unit_price)||0;
     var {error} = await SB.from('drink_logs').update({quantity:newQty,total_price:price*newQty}).eq('id',match.id);
     if(error){notify('Error: '+error.message,true);return;}
     await audit('EDIT_DRINK_QTY','drink_logs',match.id,{person:person,drink:drink,new_qty:newQty});
+    notifyWithUndo(
+      emoji(drink)+' ×'+newQty+' (−1)',
+      async function(){ await SB.from('drink_logs').update({quantity:match.quantity,total_price:price*match.quantity}).eq('id',match.id); await loadAll(); }
+    );
   }
   await loadAll();
 }
@@ -1404,9 +1429,11 @@ function showTodayFreePriceModal(person, drink, date){
       '<span style="font-size:12px;color:#1f6a3f;flex:1">'+timeStr+(l.quantity>1?' ×'+l.quantity:'')+'</span>'+
       '<span style="font-size:13px;color:#1a4a2a;font-weight:700">€</span>'+
       '<input id="'+entryId+'" type="number" min="0" step="0.01" value="" placeholder="0.00" '+
-        'style="width:72px;border:1.5px solid #5aaa6a;border-radius:8px;padding:6px 4px;font-size:15px;font-weight:700;color:#1f8a4f;text-align:center" />'+
+        'style="width:64px;border:1.5px solid #5aaa6a;border-radius:8px;padding:6px 4px;font-size:14px;font-weight:700;color:#1f8a4f;text-align:center" />'+
       '<button onclick="saveSingleEntryPrice(\''+l.id+'\',\''+entryId+'\',\''+esc(drink)+'\');closeModal()" '+
-        'style="background:#1f8a4f;border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;padding:8px 14px;cursor:pointer;min-height:40px">OK</button>'+
+        'style="background:#1f8a4f;border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;padding:8px 10px;cursor:pointer;min-height:40px">OK</button>'+
+      '<button onclick="deleteFreeLogEntry(\''+l.id+'\',\''+esc(drink)+'\')" '+
+        'style="background:#fff0f0;border:1.5px solid #c4392b;border-radius:8px;color:#c4392b;font-size:15px;padding:8px 10px;cursor:pointer;min-height:40px" title="Delete entry">🗑</button>'+
     '</div>';
   }).join('');
 
@@ -1449,6 +1476,29 @@ function showTodayFreePriceModal(person, drink, date){
     '<button class="modal-close" onclick="closeModal()" style="width:100%;margin-top:4px">'+esc(t('cancel'))+'</button>'
   );
   setTimeout(function(){ var el=document.getElementById('tdy-free-group-'+drink.replace(/\W/g,'_')); if(el)el.focus(); }, 80);
+}
+
+// Delete a single free (zero-price) drink log entry with undo
+async function deleteFreeLogEntry(id, drink){
+  var isDE = LANG==='de';
+  var entry = STATE.logs.find(function(l){ return l.id===id; });
+  if (!entry){ notify(isDE?'Eintrag nicht gefunden':'Entry not found',true); return; }
+  var snapshot = JSON.parse(JSON.stringify(entry));
+  var {error} = await SB.from('drink_logs').delete().eq('id',id);
+  if (error){ notify('Error: '+error.message,true); return; }
+  await audit('DELETE_DRINK_LOGS','drink_logs',id,{person:entry.person,drink:drink,reason:'free_entry_deleted'});
+  closeModal();
+  await loadAll();
+  var restoreObj = {
+    date:snapshot.date, person:snapshot.person, drink:snapshot.drink,
+    quantity:snapshot.quantity, unit_price:0, total_price:0,
+    note:snapshot.note||'', added_by:snapshot.added_by, logged_by:snapshot.logged_by,
+    guest_token:snapshot.guest_token||null, user_id:snapshot.user_id||null
+  };
+  notifyWithUndo(
+    '🗑 '+(isDE?'Gelöscht: ':'Deleted: ')+emoji(drink)+' '+esc(drink.replace(/^.+? /,'')),
+    async function(){ await SB.from('drink_logs').insert(restoreObj); await loadAll(); }
+  );
 }
 
 async function saveTodayFreeGroupPrice(person, drink, date, inputId){
@@ -2972,6 +3022,13 @@ async function addFreeContrib(){
   }
 
   notify('🍾 '+(isDE?'Beitrag gespeichert':'Contribution saved')+' · '+(crates*20+extra)+' '+(isDE?'Fl.':'btl'));
+  // Offer undo for 6 seconds after saving
+  var savedId = fcData && fcData.id;
+  if (savedId) {
+    notifyWithUndo('🍾 '+(crates*20+extra)+' '+(isDE?'Fl. gespeichert':'btl saved'),
+      async function(){ await SB.from('free_contributions').delete().eq('id',savedId); await loadAll(); }
+    );
+  }
 
   // Clear quantity/money fields but keep name and drink for next quick entry
   ['fc-crates','fc-extra','fc-paidto','fc-amount','fc-note'].forEach(function(id){
@@ -2985,10 +3042,20 @@ async function addFreeContrib(){
 async function deleteFreeContrib(id){
   var isDE = LANG==='de';
   if (!confirm(isDE?'Beitrag löschen?':'Delete this contribution?')) return;
+  // Save the row before deleting for undo
+  var {data: snapshot} = await SB.from('free_contributions').select('*').eq('id',id).single();
   var {error} = await SB.from('free_contributions').delete().eq('id', id);
   if (error){ notify('Error: '+error.message, true); return; }
-  notify(isDE?'Beitrag gelöscht':'Contribution deleted');
   await loadAll();
+  if (snapshot){
+    var restoreObj = Object.assign({}, snapshot);
+    delete restoreObj.id; delete restoreObj.created_at;
+    notifyWithUndo(isDE?'Beitrag gelöscht':'Contribution deleted',
+      async function(){ await SB.from('free_contributions').insert(restoreObj); await loadAll(); }
+    );
+  } else {
+    notify(isDE?'Beitrag gelöscht':'Contribution deleted');
+  }
 }
 
 function renderStats(){
@@ -4257,6 +4324,188 @@ async function clearAllAuditLogs(){
 // ══════════════════════════════════════════════════════════════
 // PEOPLE TAB
 // ══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// 🍹 ADMIN — DRINK TYPES MANAGEMENT
+// ══════════════════════════════════════════════════════════════
+function renderDrinkTypes(){
+  var el = document.getElementById('tab-drinktypes');
+  var isDE = LANG==='de';
+  var rows = DRINK_TYPE_ROWS.slice().sort(function(a,b){return (a.sort_order||0)-(b.sort_order||0);});
+
+  var html = '';
+
+  // ── Add new drink type form ──
+  html += '<div class="card" style="margin-bottom:14px">';
+  html += '<div style="font-size:13px;font-weight:800;color:#b5481f;margin-bottom:12px">➕ '+(isDE?'Neuen Drink hinzufügen':'Add New Drink Type')+'</div>';
+  html += '<div style="display:grid;grid-template-columns:56px 1fr;gap:8px;margin-bottom:10px">';
+  html += '<div><div style="font-size:11px;font-weight:700;color:#7a5200;margin-bottom:4px;text-transform:uppercase">Emoji</div>'+
+    '<input id="dt-emoji" type="text" value="🍺" maxlength="4" '+
+      'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 6px;font-size:22px;text-align:center"/></div>';
+  html += '<div><div style="font-size:11px;font-weight:700;color:#7a5200;margin-bottom:4px;text-transform:uppercase">'+(isDE?'Name':'Name')+'</div>'+
+    '<input id="dt-name" type="text" placeholder="e.g. IPA Beer" '+
+      'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 12px;font-size:15px;font-weight:600;color:#1a0e08"/></div>';
+  html += '</div>';
+  html += '<div style="display:grid;grid-template-columns:1fr 60px;gap:8px;margin-bottom:10px">';
+  html += '<div><div style="font-size:11px;font-weight:700;color:#7a5200;margin-bottom:4px;text-transform:uppercase">'+(isDE?'Standardpreis':'Default Price')+'</div>'+
+    '<div style="position:relative"><span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#5a3a28;font-weight:700">€</span>'+
+    '<input id="dt-price" type="number" min="0" step="0.01" value="0" placeholder="0.00" '+
+      'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 12px 10px 26px;font-size:15px;font-weight:700;color:#b5481f"/></div></div>';
+  html += '<div><div style="font-size:11px;font-weight:700;color:#7a5200;margin-bottom:4px;text-transform:uppercase">'+(isDE?'Reih.':'Order')+'</div>'+
+    '<input id="dt-order" type="number" min="0" value="'+(rows.length+1)+'" '+
+      'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 8px;font-size:15px;font-weight:700;color:#1a0e08;text-align:center"/></div>';
+  html += '</div>';
+  html += '<button onclick="addDrinkType()" style="width:100%;background:#1f8a4f;border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:800;padding:13px;cursor:pointer">'+
+    '➕ '+(isDE?'Drink-Typ hinzufügen':'Add Drink Type')+'</button>';
+  html += '</div>';
+
+  // ── Existing drink types list ──
+  html += '<div class="card">';
+  html += '<div style="font-size:13px;font-weight:800;color:#5a3a28;margin-bottom:12px">🍹 '+(isDE?'Alle Drink-Typen':'All Drink Types')+
+    ' <span style="background:#f5ede4;border-radius:6px;padding:2px 8px;font-size:11px;color:#7a5200;font-weight:600">'+rows.length+' total</span></div>';
+
+  if (!rows.length){
+    html += '<div style="color:#7a5200;font-size:13px">'+(isDE?'Noch keine Drink-Typen':'No drink types yet — run the SQL to seed defaults')+'</div>';
+  } else {
+    rows.forEach(function(r){
+      var usageCount = STATE.logs.filter(function(l){ return l.drink === r.emoji+' '+r.name; }).length;
+      var isActive = r.active !== false;
+      html += '<div id="dtrow-'+r.id+'" style="border:1.5px solid '+(isActive?'#e8dccc':'#f0e0d8')+';border-radius:12px;margin-bottom:8px;overflow:hidden;background:'+(isActive?'#fff':'#faf5f0')+'">'+
+        // Display row
+        '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px">'+
+          '<span id="dt-disp-emoji-'+r.id+'" style="font-size:26px;flex-shrink:0">'+r.emoji+'</span>'+
+          '<div style="flex:1;min-width:0">'+
+            '<div style="font-size:14px;font-weight:700;color:'+(isActive?'#1a0e08':'#9a7060')+'">'+esc(r.name)+(isActive?'':' <span style="font-size:10px;color:#c4392b;background:#fce8e6;border-radius:5px;padding:1px 5px">inactive</span>')+'</div>'+
+            '<div style="font-size:11px;color:#7a5200">'+
+              (r.default_price>0?'€'+parseFloat(r.default_price).toFixed(2)+' default · ':'Free · ')+
+              usageCount+' '+(isDE?'mal geloggt':'times logged')+
+              ' · sort: '+r.sort_order+
+            '</div>'+
+          '</div>'+
+          // Action buttons
+          '<div style="display:flex;gap:6px;flex-shrink:0">'+
+            '<button onclick="toggleDrinkTypeEdit(\''+r.id+'\')" '+
+              'style="background:#f5ede4;border:1.5px solid #b5481f;border-radius:8px;color:#b5481f;font-size:13px;font-weight:700;padding:6px 10px;cursor:pointer;min-height:36px">✏️</button>'+
+            (isActive
+              ? '<button onclick="deactivateDrinkType(\''+r.id+'\',\''+esc(r.emoji+' '+r.name)+'\')" '+
+                  'style="background:#fff0f0;border:1.5px solid #c4392b;border-radius:8px;color:#c4392b;font-size:13px;font-weight:700;padding:6px 10px;cursor:pointer;min-height:36px" '+
+                  'title="'+(isDE?'Deaktivieren (aus Log-Tab entfernen)':'Deactivate — removes from log tab, keeps all records')+'">🚫</button>'
+              : '<button onclick="reactivateDrinkType(\''+r.id+'\')" '+
+                  'style="background:#d4f5e2;border:1.5px solid #1f8a4f;border-radius:8px;color:#1f8a4f;font-size:13px;font-weight:700;padding:6px 10px;cursor:pointer;min-height:36px">♻️</button>')+
+            (usageCount === 0
+              ? '<button onclick="hardDeleteDrinkType(\''+r.id+'\',\''+esc(r.name)+'\')" '+
+                  'style="background:#fff0f0;border:1.5px solid #c4392b;border-radius:8px;color:#c4392b;font-size:13px;font-weight:700;padding:6px 10px;cursor:pointer;min-height:36px">🗑</button>'
+              : '')+
+          '</div>'+
+        '</div>'+
+        // Edit form (hidden by default)
+        '<div id="dtedit-'+r.id+'" style="display:none;padding:12px 14px;background:#faf5f0;border-top:1px solid #e8dccc">'+
+          '<div style="display:grid;grid-template-columns:56px 1fr;gap:8px;margin-bottom:8px">'+
+            '<div><div style="font-size:10px;font-weight:700;color:#7a5200;margin-bottom:3px;text-transform:uppercase">Emoji</div>'+
+              '<input id="dtedit-emoji-'+r.id+'" type="text" value="'+esc(r.emoji)+'" maxlength="4" '+
+                'style="width:100%;border:1.5px solid #e8b870;border-radius:8px;padding:8px 4px;font-size:22px;text-align:center"/></div>'+
+            '<div><div style="font-size:10px;font-weight:700;color:#7a5200;margin-bottom:3px;text-transform:uppercase">Name</div>'+
+              '<input id="dtedit-name-'+r.id+'" type="text" value="'+esc(r.name)+'" '+
+                'style="width:100%;border:1.5px solid #e8b870;border-radius:8px;padding:8px 10px;font-size:14px;font-weight:600"/></div>'+
+          '</div>'+
+          '<div style="display:grid;grid-template-columns:1fr 70px;gap:8px;margin-bottom:10px">'+
+            '<div><div style="font-size:10px;font-weight:700;color:#7a5200;margin-bottom:3px;text-transform:uppercase">'+(isDE?'Standardpreis':'Default Price')+'</div>'+
+              '<div style="position:relative"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#5a3a28;font-weight:700">€</span>'+
+              '<input id="dtedit-price-'+r.id+'" type="number" min="0" step="0.01" value="'+(parseFloat(r.default_price)||0).toFixed(2)+'" '+
+                'style="width:100%;border:1.5px solid #e8b870;border-radius:8px;padding:8px 8px 8px 24px;font-size:14px;font-weight:700;color:#b5481f"/></div></div>'+
+            '<div><div style="font-size:10px;font-weight:700;color:#7a5200;margin-bottom:3px;text-transform:uppercase">'+(isDE?'Reih.':'Order')+'</div>'+
+              '<input id="dtedit-order-'+r.id+'" type="number" min="0" value="'+r.sort_order+'" '+
+                'style="width:100%;border:1.5px solid #e8b870;border-radius:8px;padding:8px;font-size:14px;font-weight:700;text-align:center"/></div>'+
+          '</div>'+
+          '<div style="display:flex;gap:8px">'+
+            '<button onclick="saveDrinkType(\''+r.id+'\')" '+
+              'style="flex:1;background:#b5481f;border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:800;padding:10px;cursor:pointer;min-height:42px">'+
+              '💾 '+(isDE?'Speichern':'Save')+'</button>'+
+            '<button onclick="toggleDrinkTypeEdit(\''+r.id+'\')" '+
+              'style="background:#f5ede4;border:1.5px solid #b5481f;border-radius:10px;color:#b5481f;font-size:14px;font-weight:700;padding:10px 16px;cursor:pointer;min-height:42px">'+
+              (isDE?'Abbrechen':'Cancel')+'</button>'+
+          '</div>'+
+        '</div>'+
+      '</div>';
+    });
+  }
+  html += '<div style="font-size:11px;color:#7a5200;margin-top:8px;line-height:1.6">'+
+    '<strong>🚫 '+(isDE?'Deaktivieren':'Deactivate')+'</strong>: '+(isDE?'Entfernt den Drink aus dem Log-Tab. Alle bisherigen Logs bleiben erhalten.':'Removes from Log tab. All historical records are preserved.')+
+    '<br><strong>🗑 '+(isDE?'Löschen':'Delete')+'</strong>: '+(isDE?'Nur möglich wenn noch nie geloggt.':'Only available if this type was never logged.')+
+  '</div>';
+  html += '</div>';
+
+  el.innerHTML = html;
+}
+
+function toggleDrinkTypeEdit(id){
+  var el = document.getElementById('dtedit-'+id);
+  if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+async function addDrinkType(){
+  var isDE = LANG==='de';
+  var emoji2 = (document.getElementById('dt-emoji').value||'').trim() || '🍺';
+  var name2  = (document.getElementById('dt-name').value||'').trim();
+  var price2 = parseFloat(document.getElementById('dt-price').value)||0;
+  var order2 = parseInt(document.getElementById('dt-order').value)||99;
+  if (!name2){ notify(isDE?'Bitte Name eingeben':'Please enter a name',true); return; }
+  var {error} = await SB.from('drink_types').insert({
+    emoji:emoji2, name:name2, default_price:price2, sort_order:order2,
+    active:true, created_by:CURRENT_NAME
+  });
+  if (error){ notify('Error: '+error.message,true); return; }
+  notify('✓ '+emoji2+' '+name2+' '+(isDE?'hinzugefügt':'added'));
+  await loadAll();
+  renderDrinkTypes();
+}
+
+async function saveDrinkType(id){
+  var isDE = LANG==='de';
+  var emoji2 = (document.getElementById('dtedit-emoji-'+id).value||'').trim();
+  var name2  = (document.getElementById('dtedit-name-'+id).value||'').trim();
+  var price2 = parseFloat(document.getElementById('dtedit-price-'+id).value)||0;
+  var order2 = parseInt(document.getElementById('dtedit-order-'+id).value)||0;
+  if (!name2){ notify(isDE?'Name darf nicht leer sein':'Name cannot be empty',true); return; }
+  var {error} = await SB.from('drink_types').update({
+    emoji:emoji2, name:name2, default_price:price2, sort_order:order2
+  }).eq('id',id);
+  if (error){ notify('Error: '+error.message,true); return; }
+  notify('💾 '+(isDE?'Gespeichert':'Saved')+': '+emoji2+' '+name2);
+  await loadAll();
+  renderDrinkTypes();
+}
+
+async function deactivateDrinkType(id, label){
+  var isDE = LANG==='de';
+  if (!confirm((isDE?'"'+label+'" deaktivieren?\n\nWird aus dem Log-Tab entfernt. Alle bisherigen Logs bleiben erhalten.':
+    'Deactivate "'+label+'"?\n\nWill be removed from the Log tab. All historical records are preserved.'))) return;
+  var {error} = await SB.from('drink_types').update({active:false}).eq('id',id);
+  if (error){ notify('Error: '+error.message,true); return; }
+  notify('🚫 '+(isDE?'Deaktiviert':'Deactivated')+': '+label);
+  await loadAll();
+  renderDrinkTypes();
+}
+
+async function reactivateDrinkType(id){
+  var {data:row} = await SB.from('drink_types').select('emoji,name').eq('id',id).single();
+  var {error} = await SB.from('drink_types').update({active:true}).eq('id',id);
+  if (error){ notify('Error: '+error.message,true); return; }
+  notify('♻️ '+(LANG==='de'?'Reaktiviert':'Reactivated')+(row?' : '+row.emoji+' '+row.name:''));
+  await loadAll();
+  renderDrinkTypes();
+}
+
+async function hardDeleteDrinkType(id, name2){
+  var isDE = LANG==='de';
+  if (!confirm((isDE?'"'+name2+'" dauerhaft löschen? Diese Aktion kann nicht rückgängig gemacht werden.':
+    'Permanently delete "'+name2+'"? This cannot be undone.'))) return;
+  var {error} = await SB.from('drink_types').delete().eq('id',id);
+  if (error){ notify('Error: '+error.message,true); return; }
+  notify('🗑 '+(isDE?'Gelöscht':'Deleted')+': '+name2);
+  await loadAll();
+  renderDrinkTypes();
+}
+
 function renderPeople(){
   var el=document.getElementById('tab-people');
 
@@ -4310,19 +4559,39 @@ async function addPersonFromPeopleTab(){
 
 async function deletePerson(name){
   var isDE = LANG==='de';
-  var drinkCount = STATE.logs.filter(function(l){return l.person===name;}).length;
-  var msg = isDE
-    ? 'Person "'+name+'" löschen?\n\n'+(drinkCount?drinkCount+' Drink-Einträge bleiben erhalten, aber die Person wird aus der Gruppe entfernt.':'Diese Person hat keine Drinks.')
-    : 'Delete "'+name+'" from the group?\n\n'+(drinkCount?drinkCount+' drink log entries will remain but the person will be removed from the group.':'This person has no drinks.');
+  // Check for unsettled bills or unreplaced bottles
+  var personLogs = STATE.logs.filter(function(l){return l.person===name;});
+  var spent = personLogs.reduce(function(s,l){return s+(parseFloat(l.total_price)||0);},0);
+  var paid  = STATE.payments.reduce(function(s,p){
+    var pp=(p.payers||'').split(',').map(function(x){return x.trim();});
+    return pp.indexOf(name)!==-1?s+(parseFloat(p.amount)||0):s;
+  },0);
+  var owes = Math.max(0, spent-paid);
+  var freeCount = personLogs.filter(function(l){return (parseFloat(l.unit_price)||0)===0;}).length;
+
+  var warnings = [];
+  if (owes > 0.01) warnings.push((isDE?'Offene Rechnung':'Unsettled bill')+': €'+owes.toFixed(2));
+  if (freeCount > 0) warnings.push(freeCount+' '+(isDE?'kostenlose Drinks noch nicht ersetzt':'free drinks not yet replaced'));
+
+  var msg = (isDE?'"'+name+'" aus der Gruppe entfernen?':'Remove "'+name+'" from the group?')+'\n\n';
+  if (warnings.length){
+    msg += '⚠️ '+(isDE?'Achtung:':'Warning:')+'\n'+warnings.join('\n')+'\n\n';
+    msg += isDE
+      ? 'Die Person wird als inaktiv markiert. Alle Getränke-Logs, Zahlungen und Schulden bleiben erhalten, bis alles beglichen ist.'
+      : 'The person will be marked inactive. All drink logs, payments and debts are preserved until fully settled.';
+  } else {
+    msg += isDE?'Alle Rechnungen sind beglichen. Die Person wird aus der Gruppe entfernt.':'All bills are settled. Person will be removed from the group.';
+  }
   if (!confirm(msg)) return;
-  // Find the person row in the people table by name
-  var {data, error} = await SB.from('people').select('id').eq('name', name).maybeSingle();
+
+  // Soft-delete: set active=false (preserves all log data)
+  var {data: row, error} = await SB.from('people').select('id').eq('name', name).maybeSingle();
   if (error){ notify('Error: '+error.message, true); return; }
-  if (!data){ notify(isDE?'Person nicht gefunden in Datenbank':'Person not found in database', true); return; }
-  var {error: delErr} = await SB.from('people').delete().eq('id', data.id);
-  if (delErr){ notify('Error: '+delErr.message, true); return; }
-  await audit('DELETE_PERSON','people',data.id,{name:name});
-  notify((isDE?'Person entfernt':'Person removed')+': '+name);
+  if (!row){ notify(isDE?'Person nicht gefunden':'Person not found in database', true); return; }
+  var {error: updErr} = await SB.from('people').update({active: false}).eq('id', row.id);
+  if (updErr){ notify('Error: '+updErr.message, true); return; }
+  await audit('DEACTIVATE_PERSON','people',row.id,{name:name,owes:owes,freeCount:freeCount});
+  notify('🗑 '+(isDE?'Person inaktiv gesetzt (Logs erhalten)':'Person deactivated — logs preserved')+': '+name);
   await loadAll();
 }
 
@@ -4433,6 +4702,23 @@ function stepper(k,v){return '<div class="stepper"><button class="btn-icon" oncl
 function pOpts(sel){return '<option value="">— select —</option>'+STATE.people.map(function(p){return '<option value="'+esc(p.display_name)+'"'+(p.display_name===sel?' selected':'')+'>'+esc(p.display_name)+'</option>';}).join('');}
 function tog(k,v){var i=STATE[k].indexOf(v);if(i===-1)STATE[k].push(v);else STATE[k].splice(i,1);renderTab(STATE.tab);}
 function empty(icon,title,sub){return '<div class="empty"><div class="big">'+icon+'</div><strong style="color:#2e1c14">'+title+'<\/strong><p>'+sub+'</p></div>';}
+// notifyWithUndo — shows toast with an ↩ Undo button for 6 seconds
+var _undoCbs = {};
+function notifyWithUndo(msg, undoFn){
+  var uid = 'u'+Date.now();
+  _undoCbs[uid] = undoFn;
+  var el = document.getElementById('notif');
+  var p = document.createElement('div');
+  p.className = 'np';
+  p.style.cssText = 'display:flex;align-items:center;gap:8px';
+  p.innerHTML = '<span>'+msg+'</span>'+
+    '<button onclick="_undoCbs[\''+uid+'\'] && _undoCbs[\''+uid+'\']().then(function(){delete _undoCbs[\''+uid+'\'];})" '+
+      'style="background:rgba(255,255,255,0.22);border:1.5px solid rgba(255,255,255,0.5);border-radius:6px;'+
+      'color:#fff;font-size:12px;font-weight:800;padding:3px 10px;cursor:pointer;white-space:nowrap;flex-shrink:0">'+
+      '↩ '+(LANG==='de'?'Rückgängig':'Undo')+'</button>';
+  el.appendChild(p);
+  setTimeout(function(){ p.remove(); delete _undoCbs[uid]; }, 6000);
+}
 function notify(msg,err){var el=document.getElementById('notif');var p=document.createElement('div');p.className='np'+(err?' err':'');p.textContent=msg;el.appendChild(p);setTimeout(function(){p.remove();},2600);}
 function td(){return new Date().toISOString().split('T')[0];}
 function fmtDate(d){if(!d)return '';var dt=new Date(String(d).includes('T')?d:d+'T00:00:00');return dt.toLocaleDateString('en-GB',{weekday:'short',month:'short',day:'numeric'});}
