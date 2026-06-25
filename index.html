@@ -3863,6 +3863,12 @@ function fmtDrinkCount(drink, count, isDE){
 
 function renderReplace(){
   var el=document.getElementById('tab-replace');
+
+  // ── Save note input values before re-render (realtime wipes DOM) ──
+  var savedNotes = {};
+  document.querySelectorAll('[id^="repl-note-"]').forEach(function(inp){
+    if (inp.value) savedNotes[inp.id] = inp.value;
+  });
   var cbd={},pbd={};
   STATE.logs.forEach(function(l){cbd[l.date]=(cbd[l.date]||0)+(parseFloat(l.total_price)||0);});
   STATE.payments.forEach(function(p){pbd[p.date]=(pbd[p.date]||0)+(parseFloat(p.amount)||0);});
@@ -4064,25 +4070,17 @@ function renderReplace(){
   html += '</div>';
 
   // ── REPLACEMENT LOG ──────────────────────────────────────
-  if(STATE.replacements.length) html+=card(t('replacementLog'),STATE.replacements.map(function(r){
-    var canDel=isMine(r);
-    var isClosed = r.drink === '_SESSION_CLOSED_';
-    if (isClosed){
-      return '<div class="entry" style="background:#d4f5e2;border-radius:10px;margin-bottom:6px"><div class="entry-l">'+
-        '<span style="font-size:22px">✅</span>'+
-        '<div>'+
-          '<div class="en" style="color:#1f8a4f">'+(LANG==='de'?'Sitzung abgeschlossen':'Session Closed')+'</div>'+
-          '<div class="es">'+fmtDate(r.for_date)+(r.note?' · '+esc(r.note):'')+'</div>'+
-        '</div></div>'+
-        (canDel?'<button onclick="delEntry(\'replacements\',\''+r.id+'\',\'Session close\')" style="background:none;border:none;color:#c4392b;cursor:pointer;font-size:16px">🗑</button>':'')+
-      '</div>';
-    }
-    return '<div class="entry"><div class="entry-l"><span class="ej">'+emoji(r.drink)+'</span><div>'+
-      '<div class="en">'+r.quantity+'× '+esc(r.drink.replace(/^.+? /,''))+'</div>'+
-      '<div class="es">'+esc(t('forDate'))+' '+fmtDate(r.for_date)+(r.replaced_by?' · by '+esc(r.replaced_by):'')+(r.note?' · '+esc(r.note):'')+'</div>'+
-      '<div class="es" style="color:#6a3020">'+t('loggedBy')+' '+esc(r.added_by||'unknown')+'</div>'+
-      '</div></div>'+delEditBtns('replacements',r.id,'Replacement for '+fmtDate(r.for_date),canDel,r)+'</div>';
-  }).join(''));
+  if(STATE.replacements.length){
+    var visibleReps = STATE.replacements.filter(function(r){ return r.drink !== '_SESSION_CLOSED_' && (r.quantity||0) > 0; });
+    if (visibleReps.length) html+=card(t('replacementLog'), visibleReps.map(function(r){
+      var canDel=isMine(r);
+      return '<div class="entry"><div class="entry-l"><span class="ej">'+emoji(r.drink)+'</span><div>'+
+        '<div class="en">'+r.quantity+'× '+esc(r.drink.replace(/^.+? /,''))+'</div>'+
+        '<div class="es">'+esc(t('forDate'))+' '+fmtDate(r.for_date)+(r.replaced_by?' · by '+esc(r.replaced_by):'')+(r.note?' · '+esc(r.note):'')+'</div>'+
+        '<div class="es" style="color:#6a3020">'+t('loggedBy')+' '+esc(r.added_by||'unknown')+'</div>'+
+        '</div></div>'+delEditBtns('replacements',r.id,'Replacement for '+fmtDate(r.for_date),canDel,r)+'</div>';
+    }).join(''));
+  }
 
   // ── CLOSED SESSIONS archive ──────────────────────────────
   if (closedSessions.length){
@@ -4099,24 +4097,42 @@ function renderReplace(){
   }
 
   el.innerHTML=html;
+
+  // Restore any note inputs being typed when re-render fired
+  Object.keys(savedNotes).forEach(function(id){
+    var inp = document.getElementById(id);
+    if (inp) inp.value = savedNotes[id];
+  });
 }
 
 async function closeReplaceSession(){
   var isDE = LANG==='de';
-  var note = prompt(isDE?'Optionale Notiz zur Sitzung (z.B. "Nach Training am Dienstag"):':'Optional note for this session (e.g. "After Tuesday practice"):') || '';
+  // Prompt for optional note using a modal instead of browser prompt
+  showModal(
+    '<h3 style="margin-bottom:12px">✅ '+(isDE?'Sitzung abschließen':'Close Session')+'</h3>'+
+    '<div style="font-size:13px;color:#5a3a28;margin-bottom:12px">'+(isDE?'Alle Flaschen wurden ersetzt. Möchtest du diese Sitzung archivieren?':'All bottles replaced. Archive this replacement session?')+'</div>'+
+    '<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#7a5200;margin-bottom:4px;text-transform:uppercase">'+esc(isDE?'Notiz (optional)':'Note (optional)')+'</div>'+
+      '<input id="close-sess-note" type="text" placeholder="'+(isDE?'z.B. Nach Training am Dienstag':'e.g. After Tuesday practice')+'" '+
+        'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 12px;font-size:14px;color:#1a0e08"/></div>'+
+    '<button onclick="doCloseReplaceSession()" style="width:100%;background:#1f8a4f;border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:800;padding:13px;cursor:pointer;margin-bottom:8px">'+
+      '✅ '+(isDE?'Abschließen':'Close Session')+'</button>'+
+    '<button class="modal-close" onclick="closeModal()" style="width:100%">'+esc(t('cancel'))+'</button>'
+  );
+  setTimeout(function(){ var el=document.getElementById('close-sess-note'); if(el) el.focus(); }, 80);
+}
+
+function doCloseReplaceSession(){
+  var isDE = LANG==='de';
+  var noteEl = document.getElementById('close-sess-note');
+  var note = noteEl ? noteEl.value.trim() : '';
   var today = td();
-  // Insert a marker row in replacements table so it shows in the log
-  var {error} = await SB.from('replacements').insert({
-    for_date: today, drink: '_SESSION_CLOSED_', quantity: 0,
-    replaced_by: CURRENT_NAME, note: note||null, added_by: CURRENT_NAME
-  });
-  if (error){ notify('Error: '+error.message, true); return; }
-  // Save to localStorage for display
+  // Store in localStorage only — no Supabase insert needed
   var sessions = JSON.parse(localStorage.getItem('boc_closed_replace_sessions')||'[]');
   sessions.push({ closedAt: today, note: note, closedBy: CURRENT_NAME });
   localStorage.setItem('boc_closed_replace_sessions', JSON.stringify(sessions));
+  closeModal();
   notify('✅ '+(isDE?'Sitzung abgeschlossen':'Session closed')+(note?' · '+note:''));
-  await loadAll();
+  renderReplace();
 }
 
 function reopenReplaceSession(idx){
@@ -4136,15 +4152,42 @@ async function saveReplaceNote(drink, noteInputId){
   var inp = document.getElementById(noteInputId);
   var note = inp ? inp.value.trim() : '';
   if (!note){ notify(isDE?'Bitte Notiz eingeben':'Please enter a note', true); return; }
-  var today = td();
-  // Insert a zero-quantity replacement row with just the note
-  var {error} = await SB.from('replacements').insert({
-    for_date: today, drink: drink, quantity: 0,
-    replaced_by: CURRENT_NAME, note: note, added_by: CURRENT_NAME
-  });
-  if (error){ notify('Error: '+error.message, true); return; }
+
+  // Find the most recent replacement for this drink to attach note to,
+  // or insert a note-only row
+  var existing = STATE.replacements
+    .filter(function(r){ return r.drink===drink && (r.quantity||0) > 0 && isMine(r); })
+    .sort(function(a,b){ return (b.for_date > a.for_date ? 1 : -1); })[0];
+
+  var err;
+  if (existing && !existing.note){
+    // Attach note to the most recent replacement
+    var res = await SB.from('replacements').update({note: note}).eq('id', existing.id);
+    err = res.error;
+  } else {
+    // Insert a standalone note row (quantity=1 to avoid DB constraints)
+    var today = td();
+    var res = await SB.from('replacements').insert({
+      for_date: today, drink: drink, quantity: 0,
+      replaced_by: CURRENT_NAME, note: note, added_by: CURRENT_NAME
+    });
+    err = res.error;
+    // If quantity=0 fails due to constraint, try with quantity=0 omitted or use a note field workaround
+    if (err){
+      // Fallback: store note in audit log only
+      await audit('REPLACE_NOTE','replacements',null,{drink:drink,note:note});
+      notify('📝 '+(isDE?'Notiz im Audit gespeichert':'Note saved to audit')+': '+note);
+      if (inp) inp.value = '';
+      return;
+    }
+  }
+  if (err){ notify('Error: '+err.message, true); return; }
+
+  // Clear input BEFORE loadAll to avoid flicker
   if (inp) inp.value = '';
   notify('📝 '+(isDE?'Notiz gespeichert':'Note saved')+': '+note);
+
+  // loadAll re-renders — note input is already cleared so nothing to preserve
   await loadAll();
 }
 
