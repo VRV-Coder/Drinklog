@@ -285,16 +285,13 @@ function getDrinkPrice(drink){ return parseFloat(DRINK_PRICES[drink])||0; }
 function setDrinkPrice(drink, price){ DRINK_PRICES[drink]=parseFloat(price)||0; localStorage.setItem(_priceKey(),JSON.stringify(DRINK_PRICES)); }
 
 var STATE = {
-  tab:'log', people:[], logs:[], payments:[], replacements:[], auditLog:[],
+  tab:'log', people:[], logs:[], payments:[], replacements:[], auditLog:[], freeContributions:[],
   logPerson:'', logDrink:'🍺 Beer', logQty:1, logPrice:'', logDate:td(), logNote:'',
   payPayers:[], payNonDrinkers:[], payAmount:'', payDate:td(), payNote:'',
   undoStack:[], showAdvancedLog:false
 };
 
-// Free drink contributions — stored in localStorage (no Supabase table needed)
-function _freeContribKey(){ return 'boc_free_contrib'; }
-function loadFreeContribs(){ return JSON.parse(localStorage.getItem(_freeContribKey())||'[]'); }
-function saveFreeContribs(arr){ localStorage.setItem(_freeContribKey(), JSON.stringify(arr)); }
+// Free drink contributions — stored in Supabase free_contributions table
 
 // ── LANGUAGE / TRANSLATIONS ──────────────────────────────────
 var LANG = localStorage.getItem('app_lang') || 'en';
@@ -957,22 +954,25 @@ async function signOut(){
 // ── LOAD DATA ───────────────────────────────────────────────
 async function loadAll(){
   try {
-    var [ppl, l, pay, rep, aud] = await Promise.all([
+    var [ppl, l, pay, rep, aud, fc] = await Promise.all([
       SB.from('people').select('*').order('name'),
       SB.from('drink_logs').select('*').order('date',{ascending:false}).order('logged_at',{ascending:false}),
       SB.from('payments').select('*').order('date',{ascending:false}),
       SB.from('replacements').select('*').order('for_date',{ascending:false}),
-      SB.from('audit_log').select('*').order('performed_at',{ascending:false}).limit(100)
+      SB.from('audit_log').select('*').order('performed_at',{ascending:false}).limit(100),
+      SB.from('free_contributions').select('*').order('date',{ascending:false})
     ]);
     if(ppl.error) notify('People error: '+ppl.error.message, true);
     if(l.error)   notify('Logs error: '+l.error.message, true);
     if(pay.error) notify('Payments error: '+pay.error.message, true);
     if(rep.error) notify('Replace error: '+rep.error.message, true);
+    if(fc.error)  notify('Free drinks error: '+fc.error.message, true);
 
-    STATE.logs         = l.data   || [];
-    STATE.payments     = pay.data || [];
-    STATE.replacements = rep.data || [];
-    STATE.auditLog      = aud.data || [];
+    STATE.logs              = l.data   || [];
+    STATE.payments          = pay.data || [];
+    STATE.replacements      = rep.data || [];
+    STATE.auditLog          = aud.data || [];
+    STATE.freeContributions = fc.data  || [];
 
     // People come from the real people table now
     var peopleRows = ppl.data || [];
@@ -1349,8 +1349,8 @@ async function quickAddDrink(person, drink, event){
   await loadAll();
   // Free drink fund check for zero-price quick-adds
   if (price === 0) {
-    var CRATE_SIZE=20, contribsQ=loadFreeContribs(), contrQ={}, consQ={};
-    contribsQ.forEach(function(c){ var k=c.drink||'🍺 Beer (Pils)'; contrQ[k]=(contrQ[k]||0)+(c.crates||0)*CRATE_SIZE+(c.extraBottles||0); });
+    var CRATE_SIZE=20, contribsQ=STATE.freeContributions, contrQ={}, consQ={};
+    contribsQ.forEach(function(c){ var k=c.drink||'🍺 Beer (Pils)'; contrQ[k]=(contrQ[k]||0)+(c.crates||0)*CRATE_SIZE+(c.extra_bottles||0); });
     STATE.logs.forEach(function(l){ if((parseFloat(l.unit_price)||0)===0) consQ[l.drink]=(consQ[l.drink]||0)+(l.quantity||0); });
     STATE.replacements.forEach(function(r){ if(r.drink&&consQ[r.drink]) consQ[r.drink]=Math.max(0,consQ[r.drink]-(r.quantity||0)); });
     var availQ=(contrQ[drink]||0)-(consQ[drink]||0);
@@ -2063,11 +2063,11 @@ async function saveLog(){
   if (unit === 0) {
     await loadAll(); // reload so consumed counts are fresh
     var CRATE_SIZE = 20;
-    var contribs2 = loadFreeContribs();
+    var contribs2 = STATE.freeContributions;
     var contributed2 = {};
     contribs2.forEach(function(c){
       var k = c.drink||'🍺 Beer (Pils)';
-      contributed2[k] = (contributed2[k]||0) + (c.crates||0)*CRATE_SIZE + (c.extraBottles||0);
+      contributed2[k] = (contributed2[k]||0) + (c.crates||0)*CRATE_SIZE + (c.extra_bottles||0);
     });
     var consumed2 = {};
     STATE.logs.forEach(function(l){
@@ -2447,7 +2447,7 @@ function buildDashBuckets(period){
 function renderFreeDrinks(){
   var el = document.getElementById('tab-freedrinks');
   var isDE = LANG==='de';
-  var contribs = loadFreeContribs();
+  var contribs = STATE.freeContributions || [];
 
   // ── Compute total contributed bottles per drink type ──
   // A crate of beer = 20 bottles (standard German crate)
@@ -2455,7 +2455,7 @@ function renderFreeDrinks(){
   var contributed = {}; // drink → total bottles contributed
   contribs.forEach(function(c){
     var key = c.drink || '🍺 Beer (Pils)';
-    contributed[key] = (contributed[key]||0) + (c.crates||0)*CRATE_SIZE + (c.extraBottles||0);
+    contributed[key] = (contributed[key]||0) + (c.crates||0)*CRATE_SIZE + (c.extra_bottles||0);
   });
 
   // ── Compute consumed free drinks (unit_price=0) from logs ──
@@ -2565,9 +2565,8 @@ function renderFreeDrinks(){
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
     html += '<div style="font-size:13px;font-weight:800;color:#5a3a28">📋 '+(isDE?'Alle Beiträge':'All Contributions')+'</div>';
     html += '</div>';
-    contribs.slice().reverse().forEach(function(c, ri){
-      var idx = contribs.length-1-ri;
-      var bottles = (c.crates||0)*CRATE_SIZE + (c.extraBottles||0);
+    contribs.slice().reverse().forEach(function(c){
+      var bottles = (c.crates||0)*CRATE_SIZE + (c.extra_bottles||0);
       html += '<div class="entry" style="margin-bottom:8px">';
       html += '<div class="entry-l">';
       html += '<span style="font-size:22px">'+emoji(c.drink)+'</span>';
@@ -2575,11 +2574,11 @@ function renderFreeDrinks(){
       html += '<div class="en">'+esc(c.person)+'</div>';
       html += '<div class="es">'+esc(fmtDate(c.date))+(c.note?' · '+esc(c.note):'')+'</div>';
       html += '<div class="es"><span style="background:#d4f5e2;color:#1f8a4f;border-radius:6px;padding:1px 7px;font-weight:700">'+
-        (c.crates?c.crates+' '+(isDE?'Kiste(n)':'crate(s)')+' ':'')+(c.extraBottles?' +'+c.extraBottles+' '+(isDE?'Fl.':'btl'):'')+'= '+bottles+' '+(isDE?'Fl.':'btl')+'</span>'+
-        (c.paidTo?' · '+(isDE?'an':'to')+' '+esc(c.paidTo):'')+(c.amount?' · €'+parseFloat(c.amount).toFixed(2):'')+'</div>';
+        (c.crates?c.crates+' '+(isDE?'Kiste(n)':'crate(s)')+' ':'')+(c.extra_bottles?' +'+c.extra_bottles+' '+(isDE?'Fl.':'btl'):'')+'= '+bottles+' '+(isDE?'Fl.':'btl')+'</span>'+
+        (c.paid_to?' · '+(isDE?'an':'to')+' '+esc(c.paid_to):'')+(c.amount?' · €'+parseFloat(c.amount).toFixed(2):'')+'</div>';
       html += '</div></div>';
       if (c.person===CURRENT_NAME || IS_ADMIN){
-        html += '<button onclick="deleteFreeContrib('+idx+')" style="background:none;border:none;font-size:18px;color:#c4392b;cursor:pointer;padding:4px 8px">🗑</button>';
+        html += '<button onclick="deleteFreeContrib(\''+c.id+'\')" style="background:none;border:none;font-size:18px;color:#c4392b;cursor:pointer;padding:4px 8px">🗑</button>';
       }
       html += '</div>';
     });
@@ -2648,7 +2647,7 @@ function renderFreeDrinks(){
   el.innerHTML = html;
 }
 
-function addFreeContrib(){
+async function addFreeContrib(){
   var isDE = LANG==='de';
   var name   = (document.getElementById('fc-name').value||'').trim();
   var drink  = document.getElementById('fc-drink').value;
@@ -2662,22 +2661,30 @@ function addFreeContrib(){
   if (!name){ notify(isDE?'Bitte Namen eingeben':'Please enter your name',true); return; }
   if (crates===0 && extra===0){ notify(isDE?'Bitte Kisten oder Flaschen eingeben':'Please enter crates or bottles',true); return; }
 
-  var contribs = loadFreeContribs();
-  contribs.push({id:Date.now(), person:name, drink:drink, crates:crates, extraBottles:extra,
-    paidTo:paidTo, amount:amount, date:date, note:note, addedAt:new Date().toISOString()});
-  saveFreeContribs(contribs);
+  var obj = {
+    person: name, drink: drink,
+    crates: crates, extra_bottles: extra,
+    paid_to: paidTo||null, amount: amount||0,
+    date: date, note: note||null,
+    added_by: CURRENT_NAME
+  };
+  if (IS_ADMIN && CURRENT_USER) obj.user_id = CURRENT_USER.id;
+  if (IS_GUEST) obj.guest_token = GUEST_TOKEN;
+
+  var {error} = await SB.from('free_contributions').insert(obj);
+  if (error){ notify('Error: '+error.message, true); return; }
+
   notify('🍾 '+(isDE?'Beitrag gespeichert':'Contribution saved')+' · '+(crates*20+extra)+' '+(isDE?'Fl.':'btl'));
-  renderFreeDrinks();
+  await loadAll();
 }
 
-function deleteFreeContrib(idx){
+async function deleteFreeContrib(id){
   var isDE = LANG==='de';
   if (!confirm(isDE?'Beitrag löschen?':'Delete this contribution?')) return;
-  var contribs = loadFreeContribs();
-  contribs.splice(idx,1);
-  saveFreeContribs(contribs);
+  var {error} = await SB.from('free_contributions').delete().eq('id', id);
+  if (error){ notify('Error: '+error.message, true); return; }
   notify(isDE?'Beitrag gelöscht':'Contribution deleted');
-  renderFreeDrinks();
+  await loadAll();
 }
 
 function renderStats(){
