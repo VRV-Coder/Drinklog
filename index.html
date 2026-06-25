@@ -2353,12 +2353,26 @@ async function saveLog(){
       if (r.drink && consumed2[r.drink]) consumed2[r.drink]=Math.max(0,consumed2[r.drink]-(r.quantity||0));
     });
     var avail2 = (contributed2[loggedDrink]||0) - (consumed2[loggedDrink]||0);
+
     if ((contributed2[loggedDrink]||0) === 0 || avail2 < 0) {
-      // No fund for this drink — nudge toward Replace tab
+      // No fund — auto-log as a replacement needed and navigate to Replace tab
       notify('🔄 '+(LANG==='de'
-        ? 'Kein Freibier-Vorrat — bitte in Ersatz-Tab eintragen'
-        : 'No free drink fund — please log a replacement'), true);
-      setTimeout(function(){ switchTabByName('replace'); }, 1600);
+        ? 'Kein Freibier-Vorrat — wird im Ersatz-Tab eingetragen'
+        : 'No free drink fund — logging for replacement'), true);
+      // Auto-insert a replacement record so it shows in Replace tab immediately
+      var replObj = {
+        for_date: STATE.logDate||td(),
+        drink: loggedDrink,
+        quantity: insertObj.quantity||1,
+        replaced_by: loggedPerson,
+        note: LANG==='de'?'Automatisch erfasst — kein Freibier-Vorrat':'Auto-logged — no free drink fund',
+        added_by: CURRENT_NAME
+      };
+      if (IS_ADMIN && CURRENT_USER) replObj.user_id = CURRENT_USER.id;
+      if (IS_GUEST) replObj.guest_token = GUEST_TOKEN;
+      SB.from('replacements').insert(replObj).then(function(){
+        loadAll().then(function(){ switchTabByName('replace'); });
+      });
     } else if (avail2 <= 3) {
       notify('⚠️ '+(LANG==='de'
         ? 'Nur noch '+avail2+' '+loggedDrink.replace(/^.+? /,'')+' im Freibier-Vorrat!'
@@ -2412,15 +2426,29 @@ function getSessionLogs(){
 
 // ── DRINK COUNT CELEBRATION POPUP ───────────────────────────
 function showDrinkCountPopup(person, drink){
-  // Only count drinks in the current unsettled session (not all-time history)
+  // Count from session logs — but fall back to all logs if session returns nothing
+  // (prevents showing "0" when settlement date coincides with today)
   var sessionLogs = getSessionLogs();
   var drinkCount = sessionLogs
     .filter(function(l){ return l.person===person && l.drink===drink; })
     .reduce(function(s,l){ return s + (l.quantity||0); }, 0);
-
   var totalCount = sessionLogs
     .filter(function(l){ return l.person===person; })
     .reduce(function(s,l){ return s + (l.quantity||0); }, 0);
+
+  // If session filter returned 0 (e.g. just settled today), count from all logs today
+  if (drinkCount === 0){
+    var today = td();
+    drinkCount = STATE.logs
+      .filter(function(l){ return l.person===person && l.drink===drink && l.date===today; })
+      .reduce(function(s,l){ return s+(l.quantity||0); }, 0);
+    totalCount = STATE.logs
+      .filter(function(l){ return l.person===person && l.date===today; })
+      .reduce(function(s,l){ return s+(l.quantity||0); }, 0);
+  }
+
+  // Still 0 means nothing logged — skip popup
+  if (drinkCount === 0) return;
 
   var drinkName = drink.replace(/^.+? /, '');
   var icon = emoji(drink);
