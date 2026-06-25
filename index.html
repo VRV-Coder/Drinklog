@@ -218,6 +218,7 @@
     </div>
     <nav id="main-nav">
       <button class="active" onclick="switchTab('log',this)"><span id="nav-log-label">📋 Log</span></button>
+      <button onclick="switchTab('freedrinks',this)"><span id="nav-freedrinks-label">🍾 Free</span></button>
       <button onclick="switchTab('payments',this)"><span id="nav-payments-label">💶 Payments</span></button>
       <button onclick="switchTab('history',this)" id="nav-history-btn" style="display:none"><span id="nav-history-label">📅 History</span></button>
       <button onclick="switchTab('replace',this)"><span id="nav-replace-label">🔄 Replace</span></button>
@@ -234,6 +235,7 @@
   </div>
   <div class="content">
     <div id="tab-log"></div>
+    <div id="tab-freedrinks" style="display:none"></div>
     <div id="tab-stats"    style="display:none"></div>
     <div id="tab-dashboard" style="display:none"></div>
     <div id="tab-payments" style="display:none"></div>
@@ -288,6 +290,11 @@ var STATE = {
   payPayers:[], payNonDrinkers:[], payAmount:'', payDate:td(), payNote:'',
   undoStack:[], showAdvancedLog:false
 };
+
+// Free drink contributions — stored in localStorage (no Supabase table needed)
+function _freeContribKey(){ return 'boc_free_contrib'; }
+function loadFreeContribs(){ return JSON.parse(localStorage.getItem(_freeContribKey())||'[]'); }
+function saveFreeContribs(arr){ localStorage.setItem(_freeContribKey(), JSON.stringify(arr)); }
 
 // ── LANGUAGE / TRANSLATIONS ──────────────────────────────────
 var LANG = localStorage.getItem('app_lang') || 'en';
@@ -1062,7 +1069,7 @@ function switchTab(tab, btn){
   }
   document.querySelectorAll('nav button').forEach(function(b){b.classList.remove('active');});
   btn.classList.add('active');
-  ['log','stats','dashboard','payments','history','replace','audit','people'].forEach(function(t){
+  ['log','freedrinks','stats','dashboard','payments','history','replace','audit','people'].forEach(function(t){
     document.getElementById('tab-'+t).style.display = t===tab?'':'none';
   });
   STATE.tab = tab;
@@ -1070,8 +1077,9 @@ function switchTab(tab, btn){
 }
 function renderTab(t){
   try {
-    if(t==='log')      renderLog();
-    if(t==='stats')    renderStats();
+    if(t==='log')        renderLog();
+    if(t==='freedrinks') renderFreeDrinks();
+    if(t==='stats')      renderStats();
     if(t==='dashboard') renderDashboard();
     if(t==='payments') renderPayments();
     if(t==='history')  renderHistory();
@@ -1220,12 +1228,16 @@ function renderRunningTodayTab(){
     }, 0);
     var moneySettled = todayPriced > 0 && totalPaid >= todayPriced - 0.005;
 
-    // Bottles: which free drinks have been replaced today
-    var replacedDrinksToday = {};
+    // Bottles: which free drinks have been replaced — communal pool (anyone's replacement covers everyone)
+    var totalFreeCommunalToday = {};
+    var totalReplacedCommunalToday = {};
+    STATE.logs.filter(function(l){ return l.date === today; }).forEach(function(l){
+      if ((parseFloat(l.unit_price)||0) === 0)
+        totalFreeCommunalToday[l.drink] = (totalFreeCommunalToday[l.drink]||0) + (l.quantity||0);
+    });
     STATE.replacements.forEach(function(r){
-      if (r.for_date === today && (r.replaced_by === person || r.logged_by === person)){
-        replacedDrinksToday[r.drink] = (replacedDrinksToday[r.drink]||0) + (r.quantity||0);
-      }
+      if (r.for_date === today)
+        totalReplacedCommunalToday[r.drink] = (totalReplacedCommunalToday[r.drink]||0) + (r.quantity||0);
     });
 
     // Consolidate drink counts per type + track free vs priced
@@ -1248,11 +1260,16 @@ function renderRunningTodayTab(){
         badge = '<span style="font-size:10px;background:#d4f5e2;color:#1f8a4f;border-radius:5px;padding:1px 5px;font-weight:700">✅ '+(isDE?'bezahlt':'paid')+'</span>';
       }
       if (info.freeQty > 0){
-        var replaced = replacedDrinksToday[d]||0;
-        if (replaced >= info.freeQty){
+        var communalFree = totalFreeCommunalToday[d]||0;
+        var communalReplaced = totalReplacedCommunalToday[d]||0;
+        // Person's share is settled if overall replacement covers the full communal pool
+        var myFree = info.freeQty;
+        var coverRatio = communalFree > 0 ? Math.min(1, communalReplaced/communalFree) : 0;
+        var myCovered = Math.min(myFree, Math.floor(coverRatio*myFree+0.5));
+        if (myCovered >= myFree){
           badge += '<span style="font-size:10px;background:#d4f5e2;color:#1f8a4f;border-radius:5px;padding:1px 5px;font-weight:700">✅ '+(isDE?'ersetzt':'replaced')+'</span>';
         } else {
-          badge += '<span style="font-size:10px;background:#fef3cd;color:#7a5200;border-radius:5px;padding:1px 5px;font-weight:700">🍾 '+(isDE?'offen':'to replace')+'</span>';
+          badge += '<span style="font-size:10px;background:#fef3cd;color:#7a5200;border-radius:5px;padding:1px 5px;font-weight:700">🍾 '+(myCovered>0?myCovered+'/'+myFree+' ':'')+(isDE?'offen':'to replace')+'</span>';
         }
       }
 
@@ -1330,6 +1347,19 @@ async function quickAddDrink(person, drink, event){
   if (error){ notify('Error: '+error.message,true); return; }
   await audit('LOG_DRINK','drink_logs',data.id,{person:person,drink:drink,qty:1,total:price});
   await loadAll();
+  // Free drink fund check for zero-price quick-adds
+  if (price === 0) {
+    var CRATE_SIZE=20, contribsQ=loadFreeContribs(), contrQ={}, consQ={};
+    contribsQ.forEach(function(c){ var k=c.drink||'🍺 Beer (Pils)'; contrQ[k]=(contrQ[k]||0)+(c.crates||0)*CRATE_SIZE+(c.extraBottles||0); });
+    STATE.logs.forEach(function(l){ if((parseFloat(l.unit_price)||0)===0) consQ[l.drink]=(consQ[l.drink]||0)+(l.quantity||0); });
+    var availQ=(contrQ[drink]||0)-(consQ[drink]||0);
+    if ((contrQ[drink]||0)===0 || availQ<0){
+      notify('🔄 '+(LANG==='de'?'Kein Freibier-Vorrat — bitte in Ersatz-Tab':'No free drink fund — please log replacement'),true);
+      setTimeout(function(){ switchTabByName('replace'); },1600);
+    } else if (availQ<=3){
+      notify('⚠️ '+(LANG==='de'?'Nur noch '+availQ+' frei!':'Only '+availQ+' free left!'));
+    }
+  }
   showDrinkCountPopup(person, drink);
 }
 
@@ -1627,25 +1657,42 @@ function renderConsolidatedToday(){
     var moneyPending = moneyOwed - moneyPaid;
     var moneySettled = moneyPending <= 0.005;
 
-    // Bottles owed: free (€0) drinks minus replacements credited to this person
+    // Bottles owed: free (€0) drinks per person vs total communal replacements
+    // A replacement covers ALL free drinks of that type across everyone —
+    // not just the person who clicked Replace.
     var bottlesOwedByDrink = {};
     pLogs.forEach(function(l){
-      var unitPrice = parseFloat(l.unit_price)||0;
-      if (unitPrice > 0) return;
+      if ((parseFloat(l.unit_price)||0) > 0) return;
       bottlesOwedByDrink[l.drink] = (bottlesOwedByDrink[l.drink]||0) + (l.quantity||0);
     });
-    var bottlesReplacedByDrink = {};
-    STATE.replacements.forEach(function(r){
-      if (r.replaced_by === person || r.logged_by === person) {
-        bottlesReplacedByDrink[r.drink] = (bottlesReplacedByDrink[r.drink]||0) + (r.quantity||0);
-      }
+
+    // Total FREE consumed by ALL people per drink type (communal pool)
+    var totalFreeCommunal = {};
+    STATE.logs.forEach(function(l){
+      if ((parseFloat(l.unit_price)||0) > 0) return;
+      totalFreeCommunal[l.drink] = (totalFreeCommunal[l.drink]||0) + (l.quantity||0);
     });
+
+    // Total communal replacements per drink type (anyone who replaced counts)
+    var totalReplacedCommunal = {};
+    STATE.replacements.forEach(function(r){
+      totalReplacedCommunal[r.drink] = (totalReplacedCommunal[r.drink]||0) + (r.quantity||0);
+    });
+
+    // Per drink: what fraction of communal free drinks has been replaced?
+    // If total replaced >= total free consumed → this person's share is fully covered
     var totalBottlesOwed = Object.values(bottlesOwedByDrink).reduce(function(s,v){return s+v;},0);
     var totalBottlesReplaced = Object.keys(bottlesOwedByDrink).reduce(function(s,drink){
-      return s + Math.min(bottlesReplacedByDrink[drink]||0, bottlesOwedByDrink[drink]);
+      var communalFree = totalFreeCommunal[drink]||0;
+      var communalReplaced = totalReplacedCommunal[drink]||0;
+      var myFree = bottlesOwedByDrink[drink]||0;
+      // If fully replaced communally, this person's share is settled
+      if (communalFree <= 0) return s + myFree;
+      var coverRatio = Math.min(1, communalReplaced / communalFree);
+      return s + Math.min(myFree, Math.floor(coverRatio * myFree + 0.5));
     }, 0);
-    var bottlesRemaining = totalBottlesOwed - totalBottlesReplaced;
-    var bottlesSettled = bottlesRemaining === 0;
+    var bottlesRemaining = Math.max(0, totalBottlesOwed - totalBottlesReplaced);
+    var bottlesSettled = totalBottlesOwed === 0 || bottlesRemaining === 0;
 
     var isSettled = moneySettled && bottlesSettled;
 
@@ -2010,7 +2057,39 @@ async function saveLog(){
   if(error){notify('Error: '+error.message,true);return;}
   await audit('LOG_DRINK','drink_logs',data.id,{person:loggedPerson,drink:loggedDrink,qty:STATE.logQty,total:total});
   STATE.logQty=1;STATE.logPrice='';STATE.logNote='';
-  notify(t('drinkLogged')+' '+loggedPerson+' ✓');
+
+  // ── Free drink fund check ──
+  if (unit === 0) {
+    await loadAll(); // reload so consumed counts are fresh
+    var CRATE_SIZE = 20;
+    var contribs2 = loadFreeContribs();
+    var contributed2 = {};
+    contribs2.forEach(function(c){
+      var k = c.drink||'🍺 Beer (Pils)';
+      contributed2[k] = (contributed2[k]||0) + (c.crates||0)*CRATE_SIZE + (c.extraBottles||0);
+    });
+    var consumed2 = {};
+    STATE.logs.forEach(function(l){
+      if ((parseFloat(l.unit_price)||0)===0) consumed2[l.drink]=(consumed2[l.drink]||0)+(l.quantity||0);
+    });
+    var avail2 = (contributed2[loggedDrink]||0) - (consumed2[loggedDrink]||0);
+    if ((contributed2[loggedDrink]||0) === 0 || avail2 < 0) {
+      // No fund for this drink — nudge toward Replace tab
+      notify('🔄 '+(LANG==='de'
+        ? 'Kein Freibier-Vorrat — bitte in Ersatz-Tab eintragen'
+        : 'No free drink fund — please log a replacement'), true);
+      setTimeout(function(){ switchTabByName('replace'); }, 1600);
+    } else if (avail2 <= 3) {
+      notify('⚠️ '+(LANG==='de'
+        ? 'Nur noch '+avail2+' '+loggedDrink.replace(/^.+? /,'')+' im Freibier-Vorrat!'
+        : 'Only '+avail2+' free '+loggedDrink.replace(/^.+? /,'')+' left in the fund!'));
+    } else {
+      notify(t('drinkLogged')+' '+loggedPerson+' 🍾 ('+avail2+' '+(LANG==='de'?'noch frei':'free left')+')');
+    }
+  } else {
+    notify(t('drinkLogged')+' '+loggedPerson+' ✓');
+  }
+
   await loadAll();
   showDrinkCountPopup(loggedPerson, loggedDrink);
 }
@@ -2355,6 +2434,236 @@ function buildDashBuckets(period){
     b.topDrinkerCount = top ? top[1] : 0;
     return b;
   });
+}
+
+// ══════════════════════════════════════════════════════════════
+// 🍾 FREE DRINKS TAB
+// ══════════════════════════════════════════════════════════════
+function renderFreeDrinks(){
+  var el = document.getElementById('tab-freedrinks');
+  var isDE = LANG==='de';
+  var contribs = loadFreeContribs();
+
+  // ── Compute total contributed bottles per drink type ──
+  // A crate of beer = 20 bottles (standard German crate)
+  var CRATE_SIZE = 20;
+  var contributed = {}; // drink → total bottles contributed
+  contribs.forEach(function(c){
+    var key = c.drink || '🍺 Beer (Pils)';
+    contributed[key] = (contributed[key]||0) + (c.crates||0)*CRATE_SIZE + (c.extraBottles||0);
+  });
+
+  // ── Compute consumed free drinks (unit_price=0) from logs ──
+  var consumed = {};
+  STATE.logs.forEach(function(l){
+    if ((parseFloat(l.unit_price)||0) === 0){
+      consumed[l.drink] = (consumed[l.drink]||0) + (l.quantity||0);
+    }
+  });
+
+  // ── Available balance per drink type ──
+  var allDrinks = Array.from(new Set(Object.keys(contributed).concat(Object.keys(consumed))));
+  var available = {};
+  allDrinks.forEach(function(d){ available[d] = Math.max(0,(contributed[d]||0)-(consumed[d]||0)); });
+
+  var html = '';
+
+  // ── BALANCE SUMMARY ──
+  html += '<div class="card" style="background:linear-gradient(135deg,#1a4a2a,#2a6a3a);color:#fff;margin-bottom:14px">';
+  html += '<div style="font-size:13px;font-weight:800;letter-spacing:.5px;opacity:.8;margin-bottom:8px">🍾 '+(isDE?'FREIBIER SALDO':'FREE DRINKS BALANCE')+'</div>';
+  if (!allDrinks.length){
+    html += '<div style="opacity:.7;font-size:13px">'+(isDE?'Noch keine Beiträge':'No contributions yet — add one below')+'</div>';
+  } else {
+    html += '<div style="display:flex;flex-wrap:wrap;gap:8px">';
+    allDrinks.forEach(function(d){
+      var avail = available[d]||0;
+      var tot   = contributed[d]||0;
+      var used  = consumed[d]||0;
+      var pct   = tot > 0 ? Math.min(1, used/tot) : 0;
+      var color = avail > 5 ? '#4adf7a' : avail > 0 ? '#f8d878' : '#ff6b6b';
+      html += '<div style="background:rgba(255,255,255,0.12);border-radius:12px;padding:10px 14px;min-width:120px">';
+      html += '<div style="font-size:18px;margin-bottom:2px">'+emoji(d)+'</div>';
+      html += '<div style="font-size:13px;font-weight:700;opacity:.8">'+esc(d.replace(/^.+? /,''))+'</div>';
+      html += '<div style="font-size:22px;font-weight:900;color:'+color+'">'+avail+'</div>';
+      html += '<div style="font-size:10px;opacity:.65">'+used+' / '+tot+' '+(isDE?'genutzt':'used')+'</div>';
+      // Progress bar
+      html += '<div style="background:rgba(255,255,255,0.15);border-radius:4px;height:4px;margin-top:6px">';
+      html += '<div style="background:'+color+';height:4px;border-radius:4px;width:'+Math.round(pct*100)+'%;transition:width .4s"></div>';
+      html += '</div></div>';
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // ── ADD CONTRIBUTION FORM ──
+  html += '<div class="card" style="margin-bottom:14px">';
+  html += '<div style="font-size:13px;font-weight:800;color:#1f8a4f;margin-bottom:12px">➕ '+(isDE?'Beitrag hinzufügen':'Add Contribution')+'</div>';
+
+  html += '<div style="display:flex;flex-direction:column;gap:10px">';
+
+  // Name
+  html += '<div><div style="font-size:11px;font-weight:700;color:#7a5200;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">'+(isDE?'Dein Name':'Your Name')+'</div>';
+  html += '<input id="fc-name" type="text" placeholder="'+esc(CURRENT_NAME||'e.g. Maria')+'" value="'+esc(CURRENT_NAME||'')+'" '+
+    'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 12px;font-size:15px;font-weight:700;color:#1a0e08;background:#fff"/></div>';
+
+  // Drink type
+  html += '<div><div style="font-size:11px;font-weight:700;color:#7a5200;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">'+(isDE?'Getränkeart':'Drink Type')+'</div>';
+  html += '<select id="fc-drink" style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 12px;font-size:15px;font-weight:700;color:#1a0e08;background:#fff">';
+  DRINK_TYPES.forEach(function(d){
+    html += '<option value="'+esc(d)+'">'+emoji(d)+' '+esc(d.replace(/^.+? /,''))+'</option>';
+  });
+  html += '</select></div>';
+
+  // Crates + extra bottles
+  html += '<div style="display:flex;gap:10px">';
+  html += '<div style="flex:1"><div style="font-size:11px;font-weight:700;color:#7a5200;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">'+(isDE?'Kisten (×20)':'Crates (×20)')+'</div>';
+  html += '<input id="fc-crates" type="number" min="0" value="0" style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 12px;font-size:15px;font-weight:700;color:#1a0e08;text-align:center;background:#fff"/></div>';
+  html += '<div style="flex:1"><div style="font-size:11px;font-weight:700;color:#7a5200;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">'+(isDE?'Extra Flaschen':'Extra Bottles')+'</div>';
+  html += '<input id="fc-extra" type="number" min="0" value="0" style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 12px;font-size:15px;font-weight:700;color:#1a0e08;text-align:center;background:#fff"/></div>';
+  html += '</div>';
+
+  // Paid to + amount
+  html += '<div style="display:flex;gap:10px">';
+  html += '<div style="flex:1"><div style="font-size:11px;font-weight:700;color:#7a5200;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">'+(isDE?'Bezahlt an':'Paid To')+'</div>';
+  html += '<input id="fc-paidto" type="text" placeholder="'+(isDE?'z.B. Kassierer / Shop':'e.g. Cashier / Shop')+'" '+
+    'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 12px;font-size:14px;color:#1a0e08;background:#fff"/></div>';
+  html += '<div style="flex:1"><div style="font-size:11px;font-weight:700;color:#7a5200;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">'+(isDE?'Betrag €':'Amount €')+'</div>';
+  html += '<input id="fc-amount" type="number" min="0" step="0.01" placeholder="0.00" '+
+    'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 12px;font-size:15px;font-weight:700;color:#b5481f;background:#fff"/></div>';
+  html += '</div>';
+
+  // Date
+  html += '<div><div style="font-size:11px;font-weight:700;color:#7a5200;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">'+(isDE?'Datum':'Date')+'</div>';
+  html += '<input id="fc-date" type="date" value="'+td()+'" style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 12px;font-size:14px;color:#1a0e08;background:#fff"/></div>';
+
+  // Note
+  html += '<div><div style="font-size:11px;font-weight:700;color:#7a5200;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">'+(isDE?'Notiz':'Note (optional)')+'</div>';
+  html += '<input id="fc-note" type="text" placeholder="'+(isDE?'z.B. Tennisclub-Turniervorrat':'e.g. Tournament stock')+'" '+
+    'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 12px;font-size:14px;color:#1a0e08;background:#fff"/></div>';
+
+  html += '<button onclick="addFreeContrib()" style="width:100%;background:#1f8a4f;border:none;border-radius:12px;color:#fff;font-size:16px;font-weight:800;padding:14px;cursor:pointer;margin-top:4px">'+
+    '🍾 '+(isDE?'Beitrag speichern':'Save Contribution')+'</button>';
+  html += '</div></div>';
+
+  // ── CONTRIBUTIONS LIST ──
+  if (contribs.length) {
+    html += '<div class="card" style="margin-bottom:14px">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
+    html += '<div style="font-size:13px;font-weight:800;color:#5a3a28">📋 '+(isDE?'Alle Beiträge':'All Contributions')+'</div>';
+    html += '</div>';
+    contribs.slice().reverse().forEach(function(c, ri){
+      var idx = contribs.length-1-ri;
+      var bottles = (c.crates||0)*CRATE_SIZE + (c.extraBottles||0);
+      html += '<div class="entry" style="margin-bottom:8px">';
+      html += '<div class="entry-l">';
+      html += '<span style="font-size:22px">'+emoji(c.drink)+'</span>';
+      html += '<div>';
+      html += '<div class="en">'+esc(c.person)+'</div>';
+      html += '<div class="es">'+esc(fmtDate(c.date))+(c.note?' · '+esc(c.note):'')+'</div>';
+      html += '<div class="es"><span style="background:#d4f5e2;color:#1f8a4f;border-radius:6px;padding:1px 7px;font-weight:700">'+
+        (c.crates?c.crates+' '+(isDE?'Kiste(n)':'crate(s)')+' ':'')+(c.extraBottles?' +'+c.extraBottles+' '+(isDE?'Fl.':'btl'):'')+'= '+bottles+' '+(isDE?'Fl.':'btl')+'</span>'+
+        (c.paidTo?' · '+(isDE?'an':'to')+' '+esc(c.paidTo):'')+(c.amount?' · €'+parseFloat(c.amount).toFixed(2):'')+'</div>';
+      html += '</div></div>';
+      if (c.person===CURRENT_NAME || IS_ADMIN){
+        html += '<button onclick="deleteFreeContrib('+idx+')" style="background:none;border:none;font-size:18px;color:#c4392b;cursor:pointer;padding:4px 8px">🗑</button>';
+      }
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  // ── CONSUMPTION LOG PER PERSON ──
+  html += '<div class="card">';
+  html += '<div style="font-size:13px;font-weight:800;color:#5a3a28;margin-bottom:10px">🧾 '+(isDE?'Verbrauch (kostenlose Getränke)':'Free Drinks Consumption Log')+'</div>';
+
+  // Group free drinks from STATE.logs by person
+  var byPerson2 = {};
+  STATE.logs.forEach(function(l){
+    if ((parseFloat(l.unit_price)||0) !== 0) return;
+    if (!byPerson2[l.person]) byPerson2[l.person] = {total:0, byDate:{}, byDrink:{}};
+    byPerson2[l.person].total += (l.quantity||0);
+    var dk = l.date;
+    if (!byPerson2[l.person].byDate[dk]) byPerson2[l.person].byDate[dk] = {};
+    byPerson2[l.person].byDate[dk][l.drink] = (byPerson2[l.person].byDate[dk][l.drink]||0)+(l.quantity||0);
+    byPerson2[l.person].byDrink[l.drink] = (byPerson2[l.person].byDrink[l.drink]||0)+(l.quantity||0);
+  });
+
+  if (!Object.keys(byPerson2).length){
+    html += '<div style="font-size:13px;color:#7a5200;opacity:.7">'+(isDE?'Noch keine kostenlosen Getränke geloggt':'No free drinks logged yet')+'</div>';
+  } else {
+    Object.keys(byPerson2).sort().forEach(function(person){
+      var pd2 = byPerson2[person];
+      html += '<div style="border:1.5px solid #e8dccc;border-radius:12px;overflow:hidden;margin-bottom:10px">';
+      // Person header
+      html += '<div style="background:#f5ede4;padding:10px 14px;display:flex;align-items:center;gap:10px;cursor:pointer" '+
+        'onclick="var el=document.getElementById(\'fdc-'+esc(person.replace(/\W/g,'_'))+'\');el.style.display=el.style.display===\'none\'?\'\':\'none\'">';
+      html += '<div style="background:'+colorFor(person)+';color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">'+person[0].toUpperCase()+'</div>';
+      html += '<div style="flex:1"><div style="font-size:14px;font-weight:800;color:#1a0e08">'+esc(person)+'</div>';
+      // Per-drink totals inline
+      html += '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:3px">';
+      Object.entries(pd2.byDrink).forEach(function(e){
+        html += '<span style="font-size:11px;background:#d4f5e2;color:#1f6a3f;border-radius:6px;padding:1px 7px;font-weight:700">'+emoji(e[0])+'×'+e[1]+'</span>';
+      });
+      html += '</div></div>';
+      html += '<div style="text-align:right"><div style="font-size:20px;font-weight:900;color:#1f8a4f">'+pd2.total+'</div>';
+      html += '<div style="font-size:10px;color:#7a5200">'+(isDE?'gesamt':'total')+'</div></div>';
+      html += '</div>';
+
+      // Expandable date-wise log
+      html += '<div id="fdc-'+esc(person.replace(/\W/g,'_'))+'" style="display:none">';
+      var cumulative = 0;
+      Object.keys(pd2.byDate).sort().forEach(function(date){
+        var drinks2 = pd2.byDate[date];
+        var dayTotal = Object.values(drinks2).reduce(function(s,v){return s+v;},0);
+        cumulative += dayTotal;
+        html += '<div style="padding:8px 14px;border-top:1px solid #f0e8dc;display:flex;align-items:center;gap:8px">';
+        html += '<div style="font-size:11px;color:#7a5200;min-width:75px">'+fmtDate(date)+'</div>';
+        html += '<div style="flex:1;display:flex;flex-wrap:wrap;gap:4px">';
+        Object.entries(drinks2).forEach(function(e2){
+          html += '<span style="font-size:12px;background:#fce4d0;border-radius:6px;padding:2px 7px;font-weight:700;color:#b5481f">'+emoji(e2[0])+' ×'+e2[1]+'</span>';
+        });
+        html += '</div>';
+        html += '<div style="text-align:right;font-size:11px;color:#1f8a4f;font-weight:700;min-width:50px">∑ '+cumulative+'</div>';
+        html += '</div>';
+      });
+      html += '</div></div>';
+    });
+  }
+  html += '</div>';
+
+  el.innerHTML = html;
+}
+
+function addFreeContrib(){
+  var isDE = LANG==='de';
+  var name   = (document.getElementById('fc-name').value||'').trim();
+  var drink  = document.getElementById('fc-drink').value;
+  var crates = parseInt(document.getElementById('fc-crates').value)||0;
+  var extra  = parseInt(document.getElementById('fc-extra').value)||0;
+  var paidTo = (document.getElementById('fc-paidto').value||'').trim();
+  var amount = parseFloat(document.getElementById('fc-amount').value)||0;
+  var date   = document.getElementById('fc-date').value || td();
+  var note   = (document.getElementById('fc-note').value||'').trim();
+
+  if (!name){ notify(isDE?'Bitte Namen eingeben':'Please enter your name',true); return; }
+  if (crates===0 && extra===0){ notify(isDE?'Bitte Kisten oder Flaschen eingeben':'Please enter crates or bottles',true); return; }
+
+  var contribs = loadFreeContribs();
+  contribs.push({id:Date.now(), person:name, drink:drink, crates:crates, extraBottles:extra,
+    paidTo:paidTo, amount:amount, date:date, note:note, addedAt:new Date().toISOString()});
+  saveFreeContribs(contribs);
+  notify('🍾 '+(isDE?'Beitrag gespeichert':'Contribution saved')+' · '+(crates*20+extra)+' '+(isDE?'Fl.':'btl'));
+  renderFreeDrinks();
+}
+
+function deleteFreeContrib(idx){
+  var isDE = LANG==='de';
+  if (!confirm(isDE?'Beitrag löschen?':'Delete this contribution?')) return;
+  var contribs = loadFreeContribs();
+  contribs.splice(idx,1);
+  saveFreeContribs(contribs);
+  notify(isDE?'Beitrag gelöscht':'Contribution deleted');
+  renderFreeDrinks();
 }
 
 function renderStats(){
