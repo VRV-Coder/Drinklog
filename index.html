@@ -2894,23 +2894,68 @@ function renderFreeDrinks(){
   // ── CONTRIBUTIONS LIST ──
   if (contribs.length) {
     html += '<div class="card" style="margin-bottom:14px">';
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">';
-    html += '<div style="font-size:13px;font-weight:800;color:#5a3a28">📋 '+(isDE?'Alle Beiträge':'All Contributions')+'</div>';
-    html += '</div>';
+    html += '<div style="font-size:13px;font-weight:800;color:#5a3a28;margin-bottom:10px">📋 '+(isDE?'Alle Beiträge':'All Contributions')+'</div>';
     contribs.slice().reverse().forEach(function(c){
       var bottles = (c.crates||0)*CRATE_SIZE + (c.extra_bottles||0);
-      html += '<div class="entry" style="margin-bottom:8px">';
-      html += '<div class="entry-l">';
-      html += '<span style="font-size:22px">'+emoji(c.drink)+'</span>';
-      html += '<div>';
-      html += '<div class="en">'+esc(c.person)+'</div>';
+      // Ownership: the person who ENTERED the contribution (added_by), not the beneficiary
+      var isMineContrib = (c.added_by && c.added_by === CURRENT_NAME) || IS_ADMIN;
+      var cid = c.id;
+      html += '<div class="entry" style="margin-bottom:8px;flex-direction:column;align-items:stretch">';
+      // Main row
+      html += '<div style="display:flex;align-items:center;gap:10px">';
+      html += '<span style="font-size:22px;flex-shrink:0">'+emoji(c.drink)+'</span>';
+      html += '<div style="flex:1;min-width:0">';
+      html += '<div class="en">'+esc(c.person)+(c.added_by&&c.added_by!==c.person?' <span style="font-size:10px;color:#7a5200;font-weight:400">by '+esc(c.added_by)+'</span>':'')+'</div>';
       html += '<div class="es">'+esc(fmtDate(c.date))+(c.note?' · '+esc(c.note):'')+'</div>';
       html += '<div class="es"><span style="background:#d4f5e2;color:#1f8a4f;border-radius:6px;padding:1px 7px;font-weight:700">'+
-        (c.crates?c.crates+' '+(isDE?'Kiste(n)':'crate(s)')+' ':'')+(c.extra_bottles?' +'+c.extra_bottles+' '+(isDE?'Fl.':'btl'):'')+'= '+bottles+' '+(isDE?'Fl.':'btl')+'</span>'+
+        (c.crates?c.crates+' '+(isDE?'Kiste(n)':'crate(s)')+' ':'')+(c.extra_bottles?'+'+c.extra_bottles+' '+(isDE?'Fl.':'btl'):'')+'= '+bottles+' '+(isDE?'Fl.':'btl')+'</span>'+
         (c.paid_to?' · '+(isDE?'an':'to')+' '+esc(c.paid_to):'')+(c.amount?' · €'+parseFloat(c.amount).toFixed(2):'')+'</div>';
-      html += '</div></div>';
-      if (c.person===CURRENT_NAME || IS_ADMIN){
-        html += '<button onclick="deleteFreeContrib(\''+c.id+'\')" style="background:none;border:none;font-size:18px;color:#c4392b;cursor:pointer;padding:4px 8px">🗑</button>';
+      html += '</div>';
+      if (isMineContrib){
+        html += '<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">';
+        html += '<button onclick="showEditFreeContrib(\''+cid+'\')" '+
+          'style="background:#f5ede4;border:1.5px solid #b5481f;border-radius:8px;color:#b5481f;font-size:13px;font-weight:700;padding:6px 10px;cursor:pointer;min-height:36px">✏️</button>';
+        html += '<button onclick="deleteFreeContrib(\''+cid+'\')" '+
+          'style="background:#fff0f0;border:1.5px solid #c4392b;border-radius:8px;color:#c4392b;font-size:15px;padding:6px 10px;cursor:pointer;min-height:36px">🗑</button>';
+        html += '</div>';
+      }
+      html += '</div>';
+      // Inline edit form (hidden by default)
+      if (isMineContrib){
+        html += '<div id="fcedit-'+cid+'" style="display:none;margin-top:10px;padding-top:10px;border-top:1px dashed #e8dccc">';
+        html += '<div style="display:grid;grid-template-columns:56px 1fr;gap:8px;margin-bottom:8px">';
+        html += '<div><div style="font-size:10px;font-weight:700;color:#7a5200;margin-bottom:3px;text-transform:uppercase">'+esc(isDE?'Drink':'Drink')+'</div>'+
+          '<select id="fcedit-drink-'+cid+'" style="width:100%;border:1.5px solid #e8b870;border-radius:8px;padding:7px 4px;font-size:13px;background:#fff">'+
+          DRINK_TYPES.map(function(d){return '<option value="'+esc(d)+'"'+(d===c.drink?' selected':'')+'>'+d+'</option>';}).join('')+
+          '</select></div>';
+        html += '<div><div style="font-size:10px;font-weight:700;color:#7a5200;margin-bottom:3px;text-transform:uppercase">'+esc(isDE?'Für':'For')+'</div>'+
+          '<input id="fcedit-person-'+cid+'" type="text" value="'+esc(c.person)+'" '+
+            'style="width:100%;border:1.5px solid #e8b870;border-radius:8px;padding:7px 10px;font-size:14px;font-weight:600"/></div>';
+        html += '</div>';
+        html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
+        html += '<div><div style="font-size:10px;font-weight:700;color:#7a5200;margin-bottom:3px;text-transform:uppercase">'+(isDE?'Kisten ×20':'Crates ×20')+'</div>'+
+          '<input id="fcedit-crates-'+cid+'" type="number" min="0" value="'+(c.crates||0)+'" '+
+            'style="width:100%;border:1.5px solid #e8b870;border-radius:8px;padding:7px 10px;font-size:15px;font-weight:700;text-align:center"/></div>';
+        html += '<div><div style="font-size:10px;font-weight:700;color:#7a5200;margin-bottom:3px;text-transform:uppercase">'+(isDE?'Extra Fl.':'Extra Btl')+'</div>'+
+          '<input id="fcedit-extra-'+cid+'" type="number" min="0" value="'+(c.extra_bottles||0)+'" '+
+            'style="width:100%;border:1.5px solid #e8b870;border-radius:8px;padding:7px 10px;font-size:15px;font-weight:700;text-align:center"/></div>';
+        html += '</div>';
+        html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">';
+        html += '<div><div style="font-size:10px;font-weight:700;color:#7a5200;margin-bottom:3px;text-transform:uppercase">'+(isDE?'Bezahlt an':'Paid To')+'</div>'+
+          '<input id="fcedit-paidto-'+cid+'" type="text" value="'+esc(c.paid_to||'')+'" placeholder="'+(isDE?'z.B. Shop':'e.g. Shop')+'" '+
+            'style="width:100%;border:1.5px solid #e8b870;border-radius:8px;padding:7px 10px;font-size:14px"/></div>';
+        html += '<div><div style="font-size:10px;font-weight:700;color:#7a5200;margin-bottom:3px;text-transform:uppercase">€</div>'+
+          '<input id="fcedit-amount-'+cid+'" type="number" min="0" step="0.01" value="'+(c.amount||'')+'" placeholder="0.00" '+
+            'style="width:100%;border:1.5px solid #e8b870;border-radius:8px;padding:7px 10px;font-size:15px;font-weight:700;color:#b5481f"/></div>';
+        html += '</div>';
+        html += '<input id="fcedit-note-'+cid+'" type="text" value="'+esc(c.note||'')+'" placeholder="'+(isDE?'Notiz':'Note')+'" '+
+          'style="width:100%;border:1.5px solid #e8b870;border-radius:8px;padding:7px 10px;font-size:14px;margin-bottom:8px"/>';
+        html += '<div style="display:flex;gap:8px">';
+        html += '<button onclick="saveFreeContribEdit(\''+cid+'\')" '+
+          'style="flex:1;background:#1f8a4f;border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:800;padding:10px;cursor:pointer;min-height:42px">💾 '+(isDE?'Speichern':'Save')+'</button>';
+        html += '<button onclick="document.getElementById(\'fcedit-'+cid+'\').style.display=\'none\'" '+
+          'style="background:#f5ede4;border:1.5px solid #b5481f;border-radius:10px;color:#b5481f;font-size:14px;font-weight:700;padding:10px 16px;cursor:pointer;min-height:42px">'+(isDE?'Abbrechen':'Cancel')+'</button>';
+        html += '</div></div>';
       }
       html += '</div>';
     });
@@ -3039,13 +3084,61 @@ async function addFreeContrib(){
   await loadAll();
 }
 
+function showEditFreeContrib(id){
+  var el = document.getElementById('fcedit-'+id);
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+async function saveFreeContribEdit(id){
+  var isDE = LANG==='de';
+  var drink  = (document.getElementById('fcedit-drink-'+id)||{}).value;
+  var person = ((document.getElementById('fcedit-person-'+id)||{}).value||'').trim();
+  var crates = parseInt((document.getElementById('fcedit-crates-'+id)||{}).value)||0;
+  var extra  = parseInt((document.getElementById('fcedit-extra-'+id)||{}).value)||0;
+  var paidTo = ((document.getElementById('fcedit-paidto-'+id)||{}).value||'').trim();
+  var amount = parseFloat((document.getElementById('fcedit-amount-'+id)||{}).value)||0;
+  var note   = ((document.getElementById('fcedit-note-'+id)||{}).value||'').trim();
+
+  if (!person){ notify(isDE?'Name darf nicht leer sein':'Name cannot be empty',true); return; }
+  if (crates===0 && extra===0){ notify(isDE?'Bitte Kisten oder Flaschen eingeben':'Please enter crates or bottles',true); return; }
+
+  var {error} = await SB.from('free_contributions').update({
+    person: person, drink: drink,
+    crates: crates, extra_bottles: extra,
+    paid_to: paidTo||null, amount: amount||0, note: note||null
+  }).eq('id', id);
+
+  if (error){ notify('Error: '+error.message, true); return; }
+
+  notify('💾 '+(isDE?'Beitrag aktualisiert':'Contribution updated')+' ✓');
+  await loadAll();
+}
+
 async function deleteFreeContrib(id){
   var isDE = LANG==='de';
   if (!confirm(isDE?'Beitrag löschen?':'Delete this contribution?')) return;
-  // Save the row before deleting for undo
-  var {data: snapshot} = await SB.from('free_contributions').select('*').eq('id',id).single();
+
+  // Read before delete (for undo)
+  var {data: snapshot, error: fetchErr} = await SB.from('free_contributions').select('*').eq('id',id).single();
+  if (fetchErr){ notify('Error reading entry: '+fetchErr.message, true); return; }
+
   var {error} = await SB.from('free_contributions').delete().eq('id', id);
-  if (error){ notify('Error: '+error.message, true); return; }
+  if (error){
+    notify('Delete error: '+error.message, true);
+    console.error('deleteFreeContrib error:', error);
+    return;
+  }
+
+  // Verify it was actually deleted (RLS may silently block)
+  var {data: check} = await SB.from('free_contributions').select('id').eq('id',id).maybeSingle();
+  if (check){
+    notify(isDE
+      ? 'Löschen fehlgeschlagen — bitte SQL-Fix ausführen (supabase_free_contrib_fix.sql)'
+      : 'Delete failed — please run supabase_free_contrib_fix.sql in Supabase', true);
+    return;
+  }
+
   await loadAll();
   if (snapshot){
     var restoreObj = Object.assign({}, snapshot);
