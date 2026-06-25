@@ -800,15 +800,16 @@ var FUN_STAT_TEMPLATES = [
   },
   function(){
     if (!STATE.people.length) return null;
-    var counts = {};
     var sessionLogs = getSessionLogs();
     var counts = {};
-    sessionLogs.forEach(function(l){ counts[l.person] = (counts[l.person]||0)+(l.quantity||0); });
+    // Count beers only for the leaderboard
+    sessionLogs.filter(function(l){ return l.drink && l.drink.startsWith('🍺'); })
+      .forEach(function(l){ counts[l.person] = (counts[l.person]||0)+(l.quantity||0); });
     var top = Object.entries(counts).sort(function(a,b){return b[1]-a[1];})[0];
     if (!top) return null;
     return LANG === 'de'
-      ? "🏆 Aktueller Club-Spitzenreiter: <strong>"+esc(top[0])+"<\/strong> mit "+top[1]+" erfassten Getränken. Regierender Champion!"
-      : "🏆 Current club leader: <strong>"+esc(top[0])+"<\/strong> with "+top[1]+" drinks logged. Reigning champion!";
+      ? "🏆 Aktueller Bier-Champion: <strong>"+esc(top[0])+"<\/strong> mit "+top[1]+" Bieren. Regierender Champion!"
+      : "🏆 Current beer leader: <strong>"+esc(top[0])+"<\/strong> with "+top[1]+" beers. Reigning champion!";
   },
   function(){
     var sessionLogs = getSessionLogs();
@@ -2667,19 +2668,53 @@ function renderDashboard(){
   // ── Build buckets ─────────────────────────────────────────
   var buckets = buildDashBuckets(period);
   var labels  = buckets.map(function(b){ return b.label; });
-  var drinks  = buckets.map(function(b){ return b.totalDrinks; });
+  var drinks  = buckets.map(function(b){ return b.totalBeers||0; });  // beers only
   var money   = buckets.map(function(b){ return b.totalMoney; });
-  var bottles = buckets.map(function(b){ return b.totalBottles; });
+  var bottles = buckets.map(function(b){ return b.totalBottles; });    // free beers logged
 
   var totalDrinks  = drinks.reduce(function(s,v){return s+v;},0);
   var totalMoney   = money.reduce(function(s,v){return s+v;},0);
   var totalBottles = bottles.reduce(function(s,v){return s+v;},0);
+  var totalBeers   = buckets.reduce(function(s,b){return s+(b.totalBeers||0);},0);
+
+  // Replaced bottles count (from replacements table)
+  var totalReplaced = STATE.replacements.reduce(function(s,r){ return s+(r.quantity||0); }, 0);
+
+  // Free beers available (fund balance)
+  var CRATE_SIZE_DB = 20;
+  var freeFundTotal = (STATE.freeContributions||[]).reduce(function(s,c){
+    return s + (c.crates||0)*CRATE_SIZE_DB + (c.extra_bottles||0);
+  }, 0);
+  var freeFundUsed = STATE.logs.reduce(function(s,l){
+    return (parseFloat(l.unit_price)||0)===0 ? s+(l.quantity||0) : s;
+  }, 0);
+  var freeFundAvailDash = Math.max(0, freeFundTotal - freeFundUsed + totalReplaced);
+
+  // ── TOP DRINKER per period — shown FIRST ────────────────
+  var topRows = buckets.filter(function(b){return b.topDrinker;}).slice(-10).reverse();
+  if (topRows.length) {
+    html += card(isDE?'🏆 Top-Biertrinker je Zeitraum':'🏆 Top Beer Drinker per Period',
+      topRows.map(function(b){
+        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #ece0d4">'+
+          '<div style="display:flex;align-items:center;gap:8px">'+
+            '<div style="width:24px;height:24px;border-radius:50%;background:'+colorFor(b.topDrinker)+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff">'+b.topDrinker[0].toUpperCase()+'</div>'+
+            '<div>'+
+              '<div style="font-size:13px;font-weight:700;color:#1a0e08">'+esc(b.topDrinker)+'</div>'+
+              '<div style="font-size:11px;color:#7a5200">'+b.label+'</div>'+
+            '</div>'+
+          '</div>'+
+          '<span style="font-size:14px;font-weight:800;color:#b5481f">'+b.topDrinkerCount+' 🍺 '+(isDE?'Biere':'beers')+'</span>'+
+        '</div>';
+      }).join('')
+    );
+  }
 
   // ── Summary KPIs ──────────────────────────────────────────
   html += sg([
-    {v:totalDrinks,  l:isDE?'Getränke':  'Drinks'},
+    {v:totalBeers,  l:isDE?'🍺 Biere gesamt':'🍺 Beers total'},
     {v:'€'+totalMoney.toFixed(2), l:isDE?'Ausgaben':'Spent', c:'g'},
-    {v:totalBottles, l:isDE?'Kostenlos':'Free btl'}
+    {v:totalReplaced, l:isDE?'🔄 Flaschen ersetzt':'🔄 Bottles replaced'},
+    {v:freeFundAvailDash, l:isDE?'🍾 Freie Biere':'🍾 Free beers', c:freeFundAvailDash>0?'g':''}
   ]);
 
   // ── BAR CHART helper ─────────────────────────────────────
@@ -2711,28 +2746,9 @@ function renderDashboard(){
   }
 
   // ── THREE CHARTS ─────────────────────────────────────────
-  html += barChart(drinks,  '#b5481f', '',  '🍺 '+(isDE?'Getränke gesamt':'Total Drinks'));
+  html += barChart(drinks,  '#b5481f', '',  '🍺 '+(isDE?'Biere gesamt':'Total Beers'));
   html += barChart(money,   '#1f8a4f', '€', '💶 '+(isDE?'Ausgaben (€)':'Money Spent (€)'));
-  html += barChart(bottles, '#0e6b8c', '',  '🔄 '+(isDE?'Kostenlose Flaschen':'Free Bottles to Replace'));
-
-  // ── TOP DRINKER per period ──────────────────────────────
-  var topRows = buckets.filter(function(b){return b.topDrinker;}).slice(-10).reverse();
-  if (topRows.length) {
-    html += card(isDE?'🏆 Top-Trinker je Zeitraum':'🏆 Top Drinker per Period',
-      topRows.map(function(b){
-        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #ece0d4">'+
-          '<div style="display:flex;align-items:center;gap:8px">'+
-            '<div style="width:24px;height:24px;border-radius:50%;background:'+colorFor(b.topDrinker)+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff">'+b.topDrinker[0].toUpperCase()+'</div>'+
-            '<div>'+
-              '<div style="font-size:13px;font-weight:700;color:#1a0e08">'+esc(b.topDrinker)+'</div>'+
-              '<div style="font-size:11px;color:#7a5200">'+b.label+'</div>'+
-            '</div>'+
-          '</div>'+
-          '<span style="font-size:14px;font-weight:800;color:#b5481f">'+b.topDrinkerCount+' 🍺</span>'+
-        '</div>';
-      }).join('')
-    );
-  }
+  html += barChart(bottles, '#0e6b8c', '',  '🍾 '+(isDE?'Freie Biere (geloggt)':'Free Beers Logged'));
 
   // ── DRINK TYPE BREAKDOWN (all time) ─────────────────────
   var drinkTotals = {};
@@ -2766,7 +2782,6 @@ function buildDashBuckets(period){
     var d = new Date(l.date+'T00:00:00');
     var key, label;
     if (period === 'weekly'){
-      // ISO week
       var jan4 = new Date(d.getFullYear(), 0, 4);
       var wk = Math.ceil((((d - jan4) / 86400000) + jan4.getDay() + 1) / 7);
       key = d.getFullYear()+'-W'+String(wk).padStart(2,'0');
@@ -2781,19 +2796,23 @@ function buildDashBuckets(period){
       key = ''+d.getFullYear();
       label = ''+d.getFullYear();
     }
-    if (!map[key]) map[key] = {label:label,key:key,totalDrinks:0,totalMoney:0,totalBottles:0,persons:{}};
+    if (!map[key]) map[key] = {label:label,key:key,totalDrinks:0,totalBeers:0,totalMoney:0,totalBottles:0,persons:{},beerPersons:{}};
     var qty = l.quantity||0;
+    var isBeer = l.drink && l.drink.startsWith('🍺');
     map[key].totalDrinks += qty;
     map[key].totalMoney  += parseFloat(l.total_price)||0;
     if ((parseFloat(l.unit_price)||0)===0) map[key].totalBottles += qty;
+    if (isBeer) map[key].totalBeers += qty;
+    // Leaderboard counts beers only
     map[key].persons[l.person] = (map[key].persons[l.person]||0) + qty;
+    if (isBeer) map[key].beerPersons[l.person] = (map[key].beerPersons[l.person]||0) + qty;
   });
 
-  // Sort by key, find top drinker per bucket
   return Object.values(map).sort(function(a,b){ return a.key.localeCompare(b.key); }).map(function(b){
-    var top = Object.entries(b.persons).sort(function(a,c){return c[1]-a[1];})[0];
-    b.topDrinker = top ? top[0] : null;
-    b.topDrinkerCount = top ? top[1] : 0;
+    // Leaderboard: top beer drinker only
+    var topBeer = Object.entries(b.beerPersons).sort(function(a,c){return c[1]-a[1];})[0];
+    b.topDrinker = topBeer ? topBeer[0] : null;
+    b.topDrinkerCount = topBeer ? topBeer[1] : 0;
     return b;
   });
 }
@@ -4918,11 +4937,30 @@ async function saveDrinkType(id){
   var price2 = parseFloat(document.getElementById('dtedit-price-'+id).value)||0;
   var order2 = parseInt(document.getElementById('dtedit-order-'+id).value)||0;
   if (!name2){ notify(isDE?'Name darf nicht leer sein':'Name cannot be empty',true); return; }
+
+  // Save this drink first
   var {error} = await SB.from('drink_types').update({
     emoji:emoji2, name:name2, default_price:price2, sort_order:order2
   }).eq('id',id);
   if (error){ notify('Error: '+error.message,true); return; }
-  notify('💾 '+(isDE?'Gespeichert':'Saved')+': '+emoji2+' '+name2);
+
+  // Auto-adjust all other drink types with sort_order >= new order (shift them down by 1)
+  // so orders stay unique and sequential without manual editing
+  var others = DRINK_TYPE_ROWS
+    .filter(function(r){ return r.id !== id && r.active !== false && (r.sort_order||0) >= order2; })
+    .sort(function(a,b){ return (a.sort_order||0)-(b.sort_order||0); });
+
+  var nextOrder = order2 + 1;
+  for (var i = 0; i < others.length; i++){
+    var r = others[i];
+    if ((r.sort_order||0) !== nextOrder){
+      // Only update if the gap isn't already natural
+      await SB.from('drink_types').update({sort_order: nextOrder}).eq('id', r.id);
+    }
+    nextOrder++;
+  }
+
+  notify('💾 '+(isDE?'Gespeichert':'Saved')+': '+emoji2+' '+name2+(others.length?' · '+(isDE?'Reihenfolge angepasst':'order adjusted'):''));
   await loadAll();
   renderDrinkTypes();
 }
