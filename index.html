@@ -2334,53 +2334,30 @@ async function saveLog(){
   await audit('LOG_DRINK','drink_logs',data.id,{person:loggedPerson,drink:loggedDrink,qty:STATE.logQty,total:total});
   STATE.logQty=1;STATE.logPrice='';STATE.logNote='';
 
-  // ── Free drink fund check ──
+  // ── Free drink fund check — info only, no redirect ──
   if (unit === 0) {
     await loadAll(); // reload so consumed counts are fresh
     var CRATE_SIZE = 20;
-    var contribs2 = STATE.freeContributions;
     var contributed2 = {};
-    contribs2.forEach(function(c){
-      var k = c.drink||'🍺 Beer (Pils)';
+    (STATE.freeContributions||[]).forEach(function(c){
+      var k = c.drink || loggedDrink;
       contributed2[k] = (contributed2[k]||0) + (c.crates||0)*CRATE_SIZE + (c.extra_bottles||0);
     });
     var consumed2 = {};
     STATE.logs.forEach(function(l){
       if ((parseFloat(l.unit_price)||0)===0) consumed2[l.drink]=(consumed2[l.drink]||0)+(l.quantity||0);
     });
-    // Subtract replacements — returned bottles restore the fund
     STATE.replacements.forEach(function(r){
-      if (r.drink && consumed2[r.drink]) consumed2[r.drink]=Math.max(0,consumed2[r.drink]-(r.quantity||0));
+      if (r.drink && (r.quantity||0) > 0 && consumed2[r.drink])
+        consumed2[r.drink]=Math.max(0,consumed2[r.drink]-(r.quantity||0));
     });
     var avail2 = (contributed2[loggedDrink]||0) - (consumed2[loggedDrink]||0);
 
-    if ((contributed2[loggedDrink]||0) === 0 || avail2 < 0) {
-      // No free fund — drink is logged, and a replacement entry is auto-created in Replace tab
-      // Use the quantity from the data row (logQty already reset so use insertObj)
-      var replQty = (insertObj && insertObj.quantity) || STATE.logQty || 1;
-      var replDate = (insertObj && insertObj.date) || td();
-      var replObj = {
-        for_date: replDate,
-        drink: loggedDrink,
-        quantity: replQty,
-        replaced_by: loggedPerson,
-        note: (LANG==='de'?'Kein Freibier-Vorrat':'No free drink fund'),
-        added_by: CURRENT_NAME
-      };
-      if (IS_ADMIN && CURRENT_USER) replObj.user_id = CURRENT_USER.id;
-      if (IS_GUEST) replObj.guest_token = GUEST_TOKEN;
-
-      SB.from('replacements').insert(replObj).then(function(res){
-        if (res.error){
-          notify('Replace log error: '+res.error.message, true);
-          console.error('Auto-replace insert error:', res.error, replObj);
-        } else {
-          notify('🍺 '+(LANG==='de'
-            ? 'Keine Freies Bier verfügbar — im Ersatz-Tab eingetragen'
-            : 'No free beers available — added to Replace tab'));
-        }
-        loadAll().then(function(){ switchTabByName('replace'); });
-      });
+    if ((contributed2[loggedDrink]||0) === 0 || avail2 <= 0) {
+      // No free fund — drink logged, will appear in Replace tab automatically
+      notify('🍾 '+(LANG==='de'
+        ? 'Kein Freibier-Vorrat — Getränk im Ersatz-Tab sichtbar'
+        : 'No free drinks available — drink added to Replace tab'));
     } else if (avail2 <= 3) {
       notify('⚠️ '+(LANG==='de'
         ? 'Nur noch '+avail2+' '+loggedDrink.replace(/^.+? /,'')+' im Freibier-Vorrat!'
@@ -3913,10 +3890,22 @@ function renderReplace(){
   // ── Session cutoff: only show logs AFTER the last closed session ──
   var closedSessions = JSON.parse(localStorage.getItem('boc_closed_replace_sessions')||'[]');
   var lastSession = closedSessions.length ? closedSessions[closedSessions.length-1] : null;
-  // Use full timestamp if available (so logs added after closing today still show)
-  var sessionCutoffTs = lastSession
-    ? (lastSession.closedTimestamp || (lastSession.closedAt + 'T23:59:59.999Z'))
-    : null;
+
+  // Cutoff timestamp: if we have a precise close timestamp, use it.
+  // If only a date (old sessions), use end of the PREVIOUS day — meaning
+  // all logs on the close date itself are always visible in the new session.
+  var sessionCutoffTs = null;
+  if (lastSession) {
+    if (lastSession.closedTimestamp) {
+      sessionCutoffTs = lastSession.closedTimestamp;
+    } else {
+      // Old session stored only a date — treat cutoff as midnight before that date
+      // so everything on closedAt date is visible (conservative, user-friendly)
+      var d = new Date(lastSession.closedAt + 'T00:00:00.000Z');
+      d.setDate(d.getDate() - 1);
+      sessionCutoffTs = d.toISOString().replace('T00:00:00.000Z','T23:59:59.999Z');
+    }
+  }
 
   STATE.logs.forEach(function(l){
     var unitPrice = parseFloat(l.unit_price)||0;
