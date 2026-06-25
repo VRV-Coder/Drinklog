@@ -289,7 +289,7 @@ function getDrinkPrice(drink){ return parseFloat(DRINK_PRICES[drink])||0; }
 function setDrinkPrice(drink, price){ DRINK_PRICES[drink]=parseFloat(price)||0; localStorage.setItem(_priceKey(),JSON.stringify(DRINK_PRICES)); }
 
 var STATE = {
-  tab:'log', people:[], logs:[], payments:[], replacements:[], auditLog:[], freeContributions:[],
+  tab:'log', people:[], logs:[], payments:[], replacements:[], auditLog:[], freeContributions:[], tabCloses:[],
   logPerson:'', logDrink:'🍺 Beer', logQty:1, logPrice:'', logDate:td(), logNote:'',
   payPayers:[], payNonDrinkers:[], payAmount:'', payDate:td(), payNote:'',
   undoStack:[], showAdvancedLog:false
@@ -965,20 +965,22 @@ async function signOut(){
 // ── LOAD DATA ───────────────────────────────────────────────
 async function loadAll(){
   try {
-    var [ppl, l, pay, rep, aud, fc, dt] = await Promise.all([
+    var [ppl, l, pay, rep, aud, fc, dt, tc] = await Promise.all([
       SB.from('people').select('*').order('name'),
       SB.from('drink_logs').select('*').order('date',{ascending:false}).order('logged_at',{ascending:false}),
       SB.from('payments').select('*').order('date',{ascending:false}),
       SB.from('replacements').select('*').order('for_date',{ascending:false}),
       SB.from('audit_log').select('*').order('performed_at',{ascending:false}).limit(100),
       SB.from('free_contributions').select('*').order('date',{ascending:false}),
-      SB.from('drink_types').select('*').order('sort_order')
+      SB.from('drink_types').select('*').order('sort_order'),
+      SB.from('tab_closes').select('*').order('closed_at',{ascending:false})
     ]);
     if(ppl.error) notify('People error: '+ppl.error.message, true);
     if(l.error)   notify('Logs error: '+l.error.message, true);
     if(pay.error) notify('Payments error: '+pay.error.message, true);
     if(rep.error) notify('Replace error: '+rep.error.message, true);
     if(fc.error)  notify('Free drinks error: '+fc.error.message, true);
+    if(tc.error)  console.warn('tab_closes error (run SQL first):', tc.error.message);
     if(dt.data && dt.data.length) buildDrinkTypesFromRows(dt.data);
 
     STATE.logs              = l.data   || [];
@@ -986,6 +988,7 @@ async function loadAll(){
     STATE.replacements      = rep.data || [];
     STATE.auditLog          = aud.data || [];
     STATE.freeContributions = fc.data  || [];
+    STATE.tabCloses         = tc.data  || [];
 
     // People: only active people show in the group list.
     // Inactive (deleted) people's logs/payments still appear in running tabs so debts can be cleared.
@@ -1225,6 +1228,12 @@ function renderRunningTodayTab(){
     }, 0);
     var moneySettled = todayPriced > 0 && totalPaid >= todayPriced - 0.005;
 
+    // Also settled if person closed their tab today (even with €0 priced drinks)
+    var tabClosedToday = (STATE.tabCloses||[]).some(function(c){
+      return c.person === person && c.closed_at === today;
+    });
+    if (tabClosedToday) moneySettled = true;
+
     // Bottles: which free drinks have been replaced — communal pool (anyone's replacement covers everyone)
     var totalFreeCommunalToday = {};
     var totalReplacedCommunalToday = {};
@@ -1312,6 +1321,9 @@ function renderRunningTodayTab(){
         settleLine = '<div style="font-size:11px;color:#c4392b;font-weight:700;margin-top:4px">⏳ €'+(todayPriced-totalPaid).toFixed(2)+' '+(isDE?'noch offen':'still owed')+'</div>';
       }
     }
+    if (tabClosedToday){
+      settleLine += '<div style="font-size:11px;color:#1f8a4f;font-weight:700;margin-top:2px">✅ '+(isDE?'Tab geschlossen':'Tab closed')+'</div>';
+    }
 
     return '<div class="running-tab-row'+(isMe?' mine':'')+'" onclick="showPersonDayDetail(\''+esc(person)+'\',\''+today+'\')">'+
       '<div style="flex:1;min-width:0">'+
@@ -1329,6 +1341,11 @@ function renderRunningTodayTab(){
                 'style="background:#fce4d0;border:1.5px solid #b5481f;border-radius:9px;padding:4px 10px;cursor:pointer;font-weight:800;font-size:16px;color:#b5481f">'+
                 '€'+pd.total.toFixed(2)+' ✏️</button>'
               : '<div class="rtab-total">€'+pd.total.toFixed(2)+'</div>')
+          : '')+
+        (isMe
+          ? '<button onclick="event.stopPropagation();closeMyTab(\''+esc(person)+'\')" '+
+              'style="background:#1f8a4f;border:none;border-radius:9px;padding:5px 10px;cursor:pointer;font-size:12px;font-weight:800;color:#fff;white-space:nowrap;margin-top:2px">'+
+              '✅ '+(isDE?'Tab zu':'Close tab')+'</button>'
           : '')+
         '<div style="font-size:16px;color:#7a5200">👁</div>'+
       '</div>'+
@@ -1939,7 +1956,12 @@ function renderConsolidatedToday(){
             ' <span class="badge">'+b.totalQty+' '+(b.totalQty!==1?t('drinksPlural'):t('drink'))+'</span>'+
             (b.totalSpend>0?' <span style="font-size:11px;color:#b5481f;font-weight:600">€'+b.totalSpend.toFixed(2)+'</span>':'')+
             '</div>'+
-            '<div style="font-size:10px;color:#6a3020;margin-top:1px">'+dateRange+'</div>'+
+            '<div style="font-size:10px;color:#6a3020;margin-top:1px">'+
+            '<button onclick="event.stopPropagation();showPersonDayDetail(\''+esc(b.person)+'\',\''+esc(b.latestDate)+'\')" '+
+              'style="background:none;border:none;color:#b5481f;cursor:pointer;font-size:10px;font-weight:700;text-decoration:underline;padding:0">'+
+              dateRange+
+            '</button>'+
+          '</div>'+
             '<div class="drink-tags">'+b.tags+'</div>'+
             '<div style="display:flex;gap:6px;margin-top:3px">'+statusBits.join('')+'</div>'+
             priceEditHtml+
@@ -2545,19 +2567,104 @@ function showPersonRunningTab(person){
       '</div>';
     }).join('');
     return '<div style="margin-bottom:14px">'+
-      '<div style="font-size:11px;font-weight:700;color:#9c4a22;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">'+fmtDate(d)+'</div>'+
+      '<button onclick="closeModal();showPersonDayDetail(\''+esc(person)+'\',\''+esc(d)+'\')" '+
+        'style="font-size:11px;font-weight:700;color:#b5481f;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;'+
+        'background:#fce4d0;border:1.5px solid #e8b870;border-radius:8px;padding:4px 12px;cursor:pointer;width:100%;text-align:left">'+
+        '📅 '+fmtDate(d)+' <span style="font-size:10px;font-weight:400;opacity:.7">— '+esc(LANG==='de'?'Details':'tap for details')+'</span>'+
+      '</button>'+
       rows+
     '</div>';
   }).join('');
+
+  // Check if this person has any unsettled tab (priced or free)
+  var allPriced = entries.reduce(function(s,l){return s+(parseFloat(l.total_price)||0);},0);
+  var allPaid   = STATE.payments.reduce(function(s,p){
+    var pp=(p.payers||'').split(',').map(function(x){return x.trim();});
+    return pp.indexOf(person)!==-1?s+(parseFloat(p.amount)||0):s;
+  },0);
+  var hasFreeDrinks = entries.some(function(l){return (parseFloat(l.unit_price)||0)===0;});
+  var moneyOwed = Math.max(0, allPriced - allPaid);
+  var isMe = person === CURRENT_NAME;
+  var isDE = LANG === 'de';
+
+  var lastTabClose = (STATE.tabCloses||[])
+    .filter(function(c){ return c.person===person; })
+    .sort(function(a,b){ return (b.closed_at > a.closed_at ? 1 : -1); })[0];
+  var isTabClosed = lastTabClose && lastTabClose.closed_at >= td();
+
+  // Show close tab button only when: it's my tab, tab not already closed today, and I have unsettled free drinks
+  var showCloseBtn = isMe && !isTabClosed && (hasFreeDrinks || moneyOwed < 0.01);
 
   showModal(
     '<h3>🧾 '+esc(person)+esc(t('runningTabTitle'))+'</h3>'+
     '<div style="text-align:center;margin-bottom:14px">'+
       '<span style="font-size:12px;color:#5a3a28">'+totalQty+' '+(totalQty!==1?t('drinksPlural'):t('drink'))+(totalCost>0?' · €'+totalCost.toFixed(2):'')+' '+t('sinceLastSettlement')+'</span>'+
     '</div>'+
-    '<div style="max-height:380px;overflow-y:auto;margin-bottom:10px">'+(sections||'<div class="empty">No entries found.</div>')+'</div>'+
+    '<div style="max-height:320px;overflow-y:auto;margin-bottom:10px">'+(sections||'<div class="empty">No entries found.</div>')+'</div>'+
+    (showCloseBtn
+      ? '<button onclick="closeMyTab(\''+esc(person)+'\')" '+
+          'style="width:100%;background:linear-gradient(135deg,#1f8a4f,#28b866);border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:800;padding:14px;cursor:pointer;margin-bottom:8px">'+
+          '✅ '+(isDE?'Meinen Tab schließen':'Close My Tab')+'</button>'
+      : '')+
     '<button class="modal-close" onclick="closeModal()">'+esc(t('close'))+'</button>'
   );
+}
+
+async function closeMyTab(person){
+  var isDE = LANG==='de';
+  var today = td();
+
+  // Find last tab close for this person to scope what counts as "this session"
+  var lastClose = (STATE.tabCloses||[])
+    .filter(function(c){ return c.person === person; })
+    .sort(function(a,b){ return (b.closed_at > a.closed_at ? 1 : -1); })[0];
+  var sinceDate = lastClose ? lastClose.closed_at : null;
+
+  // Count free drinks since last close
+  var freeLogs = STATE.logs.filter(function(l){
+    return l.person===person && (parseFloat(l.unit_price)||0)===0
+      && (!sinceDate || l.date > sinceDate);
+  });
+  var freeCount = freeLogs.reduce(function(s,l){return s+(l.quantity||0);},0);
+
+  // Check for any unpaid priced drinks
+  var pricedTotal = STATE.logs.reduce(function(s,l){
+    return l.person===person&&(parseFloat(l.unit_price)||0)>0 ? s+(parseFloat(l.total_price)||0) : s;
+  },0);
+  var paidTotal = STATE.payments.reduce(function(s,p){
+    var pp=(p.payers||'').split(',').map(function(x){return x.trim();});
+    return pp.indexOf(person)!==-1?s+(parseFloat(p.amount)||0):s;
+  },0);
+  var moneyOwed = Math.max(0, pricedTotal - paidTotal);
+
+  if (moneyOwed > 0.01){
+    notify('⚠️ '+(isDE?'Bitte zuerst die Rechnung bezahlen: €'+moneyOwed.toFixed(2):'Please pay the outstanding bill first: €'+moneyOwed.toFixed(2)),true);
+    return;
+  }
+
+  var lines = freeCount > 0 ? [freeCount+' '+(isDE?'kostenlose Biere':'free beer'+(freeCount!==1?'s':''))] : [];
+  var msg = isDE
+    ? 'Tab schließen für '+person+'?\n\n'+(lines.length?lines.join('\n')+'\n\n':'')+'Die Getränke bleiben im Log gespeichert.'
+    : 'Close tab for '+person+'?\n\n'+(lines.length?lines.join('\n')+'\n\n':'')+'All drinks stay in the log.';
+  if (!confirm(msg)) return;
+
+  var note = (isDE?'Tab geschlossen':'Tab closed')+(freeCount>0?' · '+freeCount+' free beer'+(freeCount!==1?'s':''):'');
+  var obj = {
+    person: person,
+    closed_at: today,
+    note: note,
+    free_count: freeCount,
+    added_by: CURRENT_NAME
+  };
+  if (IS_ADMIN && CURRENT_USER) obj.user_id = CURRENT_USER.id;
+  if (IS_GUEST) obj.guest_token = GUEST_TOKEN;
+
+  var {error} = await SB.from('tab_closes').insert(obj);
+  if (error){ notify('Error: '+error.message+' — run supabase_tab_closes.sql first',true); return; }
+
+  closeModal();
+  notify('✅ '+(isDE?'Tab geschlossen! Bis zum nächsten Mal 🍺':'Tab closed! See you next time 🍺'));
+  await loadAll();
 }
 
 function showPersonDayDetail(person, date){
@@ -2690,20 +2797,61 @@ function renderDashboard(){
   }, 0);
   var freeFundAvailDash = Math.max(0, freeFundTotal - freeFundUsed + totalReplaced);
 
-  // ── TOP DRINKER per period — shown FIRST ────────────────
-  var topRows = buckets.filter(function(b){return b.topDrinker;}).slice(-10).reverse();
-  if (topRows.length) {
-    html += card(isDE?'🏆 Top-Biertrinker je Zeitraum':'🏆 Top Beer Drinker per Period',
-      topRows.map(function(b){
-        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #ece0d4">'+
-          '<div style="display:flex;align-items:center;gap:8px">'+
-            '<div style="width:24px;height:24px;border-radius:50%;background:'+colorFor(b.topDrinker)+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff">'+b.topDrinker[0].toUpperCase()+'</div>'+
-            '<div>'+
-              '<div style="font-size:13px;font-weight:700;color:#1a0e08">'+esc(b.topDrinker)+'</div>'+
-              '<div style="font-size:11px;color:#7a5200">'+b.label+'</div>'+
+  // ── TOP BEER DRINKERS — all people ranked, shared positions, medals ──
+  // Aggregate beer counts per person across the last bucket period shown
+  var beerTotals = {};
+  buckets.forEach(function(b){
+    Object.keys(b.beerPersons||{}).forEach(function(person){
+      beerTotals[person] = (beerTotals[person]||0) + (b.beerPersons[person]||0);
+    });
+  });
+  var rankedPeople = Object.entries(beerTotals).sort(function(a,b){ return b[1]-a[1]; });
+
+  if (rankedPeople.length) {
+    // Assign ranks with tie handling (same count = same rank)
+    var ranks = [];
+    var currentRank = 1;
+    rankedPeople.forEach(function(entry, i){
+      if (i > 0 && entry[1] < rankedPeople[i-1][1]) currentRank = i + 1;
+      ranks.push({name: entry[0], count: entry[1], rank: currentRank});
+    });
+
+    var medals = {1:'🥇', 2:'🥈', 3:'🥉'};
+    var rankColors = {1:'#FFD700', 2:'#C0C0C0', 3:'#CD7F32'};
+
+    html += card(isDE?'🏆 Bier-Rangliste':'🏆 Beer Leaderboard',
+      '<div style="font-size:11px;color:#7a5200;margin-bottom:10px">'+
+        (isDE?'Zeitraum: ':'Period: ')+'<strong>'+
+        ({weekly:isDE?'Wöchentlich':'Weekly',monthly:isDE?'Monatlich':'Monthly',yearly:isDE?'Jährlich':'Yearly'}[period])+
+        '</strong> · '+(isDE?'Nur Biere 🍺':'Beers only 🍺')+'</div>'+
+      ranks.map(function(r){
+        var medal = medals[r.rank] || '';
+        var isMe = r.name === CURRENT_NAME;
+        var rankColor = rankColors[r.rank] || '#5a3a28';
+        var bg = r.rank === 1 ? 'linear-gradient(135deg,#fffbe6,#fff3b0)' :
+                  r.rank === 2 ? 'linear-gradient(135deg,#f5f5f5,#e8e8e8)' :
+                  r.rank === 3 ? 'linear-gradient(135deg,#fdf0e0,#f5e0c0)' : '#fff';
+        return '<div style="display:flex;align-items:center;gap:10px;padding:9px 10px;margin-bottom:6px;'+
+          'border-radius:10px;background:'+bg+';border:1.5px solid '+(r.rank<=3?rankColor:'#e8dccc')+'">'+
+          // Rank medal or number
+          '<div style="min-width:30px;text-align:center;font-size:'+(medal?'20':'14')+'px;font-weight:900;color:'+rankColor+'">'+
+            (medal||('#'+r.rank))+
+          '</div>'+
+          // Avatar + name
+          '<div style="width:28px;height:28px;border-radius:50%;background:'+colorFor(r.name)+
+            ';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0">'+
+            r.name[0].toUpperCase()+
+          '</div>'+
+          '<div style="flex:1;min-width:0">'+
+            '<div style="font-size:13px;font-weight:'+(r.rank<=3?'800':'600')+';color:#1a0e08">'+
+              esc(r.name)+(isMe?' <span style="font-size:10px;color:#b5481f;background:#fce4d0;border-radius:4px;padding:1px 5px">'+t('youSuffix')+'</span>':'')+
             '</div>'+
           '</div>'+
-          '<span style="font-size:14px;font-weight:800;color:#b5481f">'+b.topDrinkerCount+' 🍺 '+(isDE?'Biere':'beers')+'</span>'+
+          // Count
+          '<div style="text-align:right;flex-shrink:0">'+
+            '<div style="font-size:16px;font-weight:900;color:'+rankColor+'">'+r.count+'</div>'+
+            '<div style="font-size:10px;color:#7a5200">🍺 '+(isDE?'Biere':'beers')+'</div>'+
+          '</div>'+
         '</div>';
       }).join('')
     );
