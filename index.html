@@ -2731,6 +2731,7 @@ function renderStats(){
 // ══════════════════════════════════════════════════════════════
 function renderPayments(){
   var el=document.getElementById('tab-payments');
+  var isDE = LANG==='de';
   var cbd={},pbd={};
   STATE.logs.forEach(function(l){cbd[l.date]=(cbd[l.date]||0)+(parseFloat(l.total_price)||0);});
   STATE.payments.forEach(function(p){pbd[p.date]=(pbd[p.date]||0)+(parseFloat(p.amount)||0);});
@@ -2743,8 +2744,38 @@ function renderPayments(){
     {v:(pend>0.005?'€'+pend.toFixed(2):pend<-0.005?'+€'+Math.abs(pend).toFixed(2):'€0.00'),l:t('pending'),c:pend>0.005?'r':pend<-0.005?'g':''}
   ]);
 
+  // ── Per-person balance — tap name to open payment modal ──
+  var allPeopleNames = [...new Set(STATE.logs.map(function(l){return l.person;}))].sort();
+  if (allPeopleNames.length){
+    html += '<div class="card" style="margin-bottom:14px">';
+    html += '<div style="font-size:13px;font-weight:800;color:#5a3a28;margin-bottom:10px">👤 '+(isDE?'Personen-Guthaben':'Balance per Person')+'</div>';
+    html += '<div style="display:flex;flex-direction:column;gap:6px">';
+    allPeopleNames.forEach(function(person){
+      var spent = STATE.logs.reduce(function(s,l){
+        return l.person===person&&(parseFloat(l.unit_price)||0)>0 ? s+(parseFloat(l.total_price)||0) : s;
+      },0);
+      var paid = STATE.payments.reduce(function(s,p){
+        var pp=(p.payers||'').split(',').map(function(x){return x.trim();});
+        return pp.indexOf(person)!==-1 ? s+(parseFloat(p.amount)||0) : s;
+      },0);
+      var owes = spent - paid;
+      var isMe = person === CURRENT_NAME;
+      var statusColor = owes>0.005?'#c4392b':owes<-0.005?'#1f8a4f':'#5a9a5a';
+      var statusTxt = owes>0.005 ? '💸 €'+owes.toFixed(2) : owes<-0.005 ? '✅ +€'+Math.abs(owes).toFixed(2) : '✓ '+(isDE?'Beglichen':'Settled');
+      html += '<div onclick="showPersonPayModal(\''+esc(person)+'\')" style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:'+(owes>0.005?'#fce8e6':'#f5ede4')+';border-radius:12px;cursor:pointer;border:1.5px solid '+(owes>0.005?'#e8b0a0':'#e8dccc')+'">';
+      html += '<div style="width:36px;height:36px;border-radius:50%;background:'+colorFor(person)+';display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff;flex-shrink:0">'+person[0].toUpperCase()+'</div>';
+      html += '<div style="flex:1;min-width:0">';
+      html += '<div style="font-size:15px;font-weight:700;color:#1a0e08">'+esc(person)+(isMe?' <span style="font-size:11px;color:#b5481f">('+t('youSuffix')+')</span>':'')+'</div>';
+      html += '<div style="font-size:11px;color:#6a3020">'+(isDE?'Getrunken':'Spent')+': €'+spent.toFixed(2)+' · '+(isDE?'Bez.':'Paid')+': €'+paid.toFixed(2)+'</div>';
+      html += '</div>';
+      html += '<div style="text-align:right;flex-shrink:0"><div style="font-size:14px;font-weight:800;color:'+statusColor+'">'+statusTxt+'</div><div style="font-size:10px;color:#9a7060;margin-top:2px">tap to pay ▶</div></div>';
+      html += '</div>';
+    });
+    html += '</div></div>';
+  }
+
   // Settle Bill button
-  html += '<button onclick="showSettleBill()" style="width:100%;background:linear-gradient(135deg,#c4392b,#e85050);border:none;border-radius:12px;padding:14px;color:#fff;font-size:16px;font-weight:800;cursor:pointer;margin-bottom:14px;box-shadow:0 4px 16px rgba(196,57,43,.4);letter-spacing:.3px">🧾 '+esc(LANG==='de'?'Rechnung begleichen':'Settle the Bill')+'</button>';
+  html += '<button onclick="showSettleBill()" style="width:100%;background:linear-gradient(135deg,#c4392b,#e85050);border:none;border-radius:12px;padding:14px;color:#fff;font-size:16px;font-weight:800;cursor:pointer;margin-bottom:14px;box-shadow:0 4px 16px rgba(196,57,43,.4);letter-spacing:.3px">🧾 '+esc(isDE?'Rechnung begleichen':'Settle the Bill')+'</button>';
   html+=card(t('recordPayment'),
     '<div class="grid2">'+
       fld(t('date'),'<input type="date" value="'+STATE.payDate+'" onchange="STATE.payDate=this.value"/>') +
@@ -2780,6 +2811,248 @@ function renderPayments(){
       '</div></div>'+delEditBtns('payments',p.id,'Payment by '+esc(p.payers),canDel,p)+'</div>';
   }).join(''));
   el.innerHTML=html;
+}
+
+// ── PER-PERSON PAYMENT MODAL ────────────────────────────────
+function showPersonPayModal(person){
+  var isDE = LANG==='de';
+
+  // ── Compute this person's balance ──
+  var spent = STATE.logs.reduce(function(s,l){
+    return l.person===person&&(parseFloat(l.unit_price)||0)>0 ? s+(parseFloat(l.total_price)||0) : s;
+  },0);
+  var paid = STATE.payments.reduce(function(s,p){
+    var pp=(p.payers||'').split(',').map(function(x){return x.trim();});
+    return pp.indexOf(person)!==-1 ? s+(parseFloat(p.amount)||0) : s;
+  },0);
+  var owes = Math.max(0, spent-paid);
+
+  // ── Team bill ──
+  var totalBill = STATE.logs.reduce(function(s,l){ return s+(parseFloat(l.total_price)||0); },0);
+  var totalPaidSoFar = STATE.payments.reduce(function(s,p){ return s+(parseFloat(p.amount)||0); },0);
+  var teamOutstanding = Math.max(0, totalBill - totalPaidSoFar);
+
+  // ── Active drinkers (logged priced drinks) ──
+  var activeDrinkers = [...new Set(STATE.logs
+    .filter(function(l){ return (parseFloat(l.unit_price)||0)>0; })
+    .map(function(l){ return l.person; })
+  )].sort();
+
+  // Detect guest drinkers — people not in the people table
+  var knownNames = STATE.people.map(function(p){ return p.display_name; });
+  var guestDrinkers = activeDrinkers.filter(function(n){ return knownNames.indexOf(n)===-1; });
+  var hasGuests = guestDrinkers.length > 0;
+
+  // Equal split of outstanding bill across team (excluding this person once settled)
+  var splitCount = activeDrinkers.length || 1;
+  var equalSplit = teamOutstanding / splitCount;
+
+  var modal =
+    '<h3 style="margin-bottom:4px">💳 '+esc(person)+'</h3>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">'+
+      '<div style="background:#fce8e6;border-radius:10px;padding:10px;text-align:center">'+
+        '<div style="font-size:11px;color:#c4392b;font-weight:700;text-transform:uppercase">'+(isDE?'Dein Tab':'Your Tab')+'</div>'+
+        '<div style="font-size:22px;font-weight:900;color:#c4392b">€'+owes.toFixed(2)+'</div>'+
+        '<div style="font-size:10px;color:#7a5200">'+(isDE?'Getrunken':'Spent')+' €'+spent.toFixed(2)+' · '+(isDE?'Bez.':'Paid')+' €'+paid.toFixed(2)+'</div>'+
+      '</div>'+
+      '<div style="background:#f0f8ff;border-radius:10px;padding:10px;text-align:center">'+
+        '<div style="font-size:11px;color:#1a4a8a;font-weight:700;text-transform:uppercase">'+(isDE?'Team-Rechnung':'Team Bill')+'</div>'+
+        '<div style="font-size:22px;font-weight:900;color:#1a4a8a">€'+teamOutstanding.toFixed(2)+'</div>'+
+        '<div style="font-size:10px;color:#7a5200">'+(isDE?'Noch offen':'Still outstanding')+'</div>'+
+      '</div>'+
+    '</div>'+
+
+    // ── Option 1: Pay own tab ──
+    '<div style="background:#f5ede4;border:1.5px solid #e8dccc;border-radius:12px;padding:14px;margin-bottom:10px">'+
+      '<div style="font-size:13px;font-weight:800;color:#b5481f;margin-bottom:10px">① '+(isDE?'Eigene Rechnung bezahlen':'Pay my own tab')+'</div>'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'+
+        '<span style="font-size:18px;font-weight:800;color:#5a3a28">€</span>'+
+        '<input id="ppm-own-amt" type="number" min="0" step="0.01" value="'+owes.toFixed(2)+'" '+
+          'style="flex:1;font-size:20px;font-weight:800;color:#b5481f;border:1.5px solid #e8b870;border-radius:8px;padding:8px;text-align:center"/>'+
+      '</div>'+
+      '<button onclick="recordPersonPayment(\''+esc(person)+'\',\'own\')" '+
+        'style="width:100%;background:#b5481f;border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:800;padding:12px;cursor:pointer;min-height:48px">'+
+        (isDE?'✓ Meinen Tab bezahlen':'✓ Pay my tab')+'</button>'+
+    '</div>'+
+
+    // ── Option 2: Contribute to team bill ──
+    '<div style="background:#f0f8ff;border:1.5px solid #b0cce8;border-radius:12px;padding:14px;margin-bottom:10px">'+
+      '<div style="font-size:13px;font-weight:800;color:#1a4a8a;margin-bottom:10px">② '+(isDE?'Zum Team-Rechnnung beitragen':'Contribute to team bill')+'</div>'+
+
+      // Split mode selector
+      '<div style="display:flex;gap:6px;margin-bottom:10px">'+
+        '<button id="ppm-split-eq" onclick="ppmSetMode(\'equal\')" '+
+          'style="flex:1;background:#1a4a8a;border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;padding:8px;cursor:pointer;min-height:40px">'+
+          '÷ '+(isDE?'Gleich aufteilen':'Equal split')+'</button>'+
+        '<button id="ppm-split-cu" onclick="ppmSetMode(\'custom\')" '+
+          'style="flex:1;background:#fff;border:2px solid #1a4a8a;border-radius:8px;color:#1a4a8a;font-size:12px;font-weight:700;padding:8px;cursor:pointer;min-height:40px">'+
+          '✏️ '+(isDE?'Eigener Betrag':'Custom amount')+'</button>'+
+      '</div>'+
+
+      // Equal split info
+      '<div id="ppm-equal-info" style="background:#e8f0fc;border-radius:8px;padding:10px;margin-bottom:10px;font-size:13px;color:#1a4a8a">'+
+        (isDE?'Gleichmäßige Aufteilung':'Equal split')+': <strong>€'+equalSplit.toFixed(2)+'</strong> × '+splitCount+' '+(isDE?'Personen':'people')+
+        ' = €'+teamOutstanding.toFixed(2)+' '+(isDE?'gesamt':'total')+
+      '</div>'+
+
+      // Custom amount input (hidden initially)
+      '<div id="ppm-custom-wrap" style="display:none;margin-bottom:10px">'+
+        '<div style="font-size:11px;color:#1a4a8a;font-weight:700;margin-bottom:6px">'+(isDE?'Betrag eingeben:':'Enter amount:')+'</div>'+
+        '<div style="display:flex;align-items:center;gap:6px">'+
+          '<span style="font-size:18px;font-weight:800;color:#1a4a8a">€</span>'+
+          '<input id="ppm-contrib-amt" type="number" min="0" step="0.01" placeholder="0.00" '+
+            'style="flex:1;font-size:20px;font-weight:800;color:#1a4a8a;border:1.5px solid #b0cce8;border-radius:8px;padding:8px;text-align:center" '+
+            'oninput="ppmUpdateRemaining('+teamOutstanding+','+splitCount+')"/>'+
+        '</div>'+
+        '<div id="ppm-remaining" style="font-size:11px;color:#5a7a9a;margin-top:6px;text-align:center"></div>'+
+      '</div>'+
+
+      // Guest toggle (shown only if guests present)
+      (hasGuests
+        ? '<div style="background:#fff8e8;border:1px solid #e8d070;border-radius:8px;padding:8px;margin-bottom:10px">'+
+            '<div style="font-size:11px;font-weight:700;color:#7a5200;margin-bottom:6px">👤 '+(isDE?'Gäste in Aufteilung:':'Guests in split:')+'</div>'+
+            '<div style="display:flex;flex-wrap:wrap;gap:6px">'+
+            guestDrinkers.map(function(g){
+              return '<button id="ppm-guest-'+g.replace(/\W/g,'_')+'" onclick="ppmToggleGuest(\''+esc(g)+'\','+teamOutstanding+','+splitCount+')" '+
+                'style="background:#e8d070;border:2px solid #c8a030;border-radius:8px;color:#5a3a00;font-size:12px;font-weight:700;padding:6px 10px;cursor:pointer;min-height:36px">'+
+                '✓ 👤 '+esc(g)+'</button>';
+            }).join('')+
+            '</div>'+
+            '<div style="font-size:10px;color:#7a5200;margin-top:4px">'+(isDE?'✓ = wird in Aufteilung berücksichtigt':'✓ = included in split')+'</div>'+
+          '</div>'
+        : '')+
+
+      '<button onclick="recordPersonPayment(\''+esc(person)+'\',\'contrib\','+teamOutstanding+','+splitCount+')" '+
+        'style="width:100%;background:#1a4a8a;border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:800;padding:12px;cursor:pointer;min-height:48px">'+
+        (isDE?'✓ Beitrag leisten':'✓ Contribute to team bill')+'</button>'+
+    '</div>'+
+
+    '<button class="modal-close" onclick="closeModal()" style="width:100%;margin-top:4px">'+esc(t('cancel'))+'</button>';
+
+  showModal(modal);
+
+  // Store context for the save functions
+  window._ppmPerson = person;
+  window._ppmOwes = owes;
+  window._ppmMode = 'equal';
+  window._ppmGuestsIncluded = {};
+  guestDrinkers.forEach(function(g){ window._ppmGuestsIncluded[g] = true; }); // included by default
+}
+
+function ppmSetMode(mode){
+  window._ppmMode = mode;
+  var eqBtn = document.getElementById('ppm-split-eq');
+  var cuBtn = document.getElementById('ppm-split-cu');
+  var eqInfo = document.getElementById('ppm-equal-info');
+  var cuWrap = document.getElementById('ppm-custom-wrap');
+  if (mode === 'equal'){
+    if(eqBtn){eqBtn.style.background='#1a4a8a';eqBtn.style.color='#fff';}
+    if(cuBtn){cuBtn.style.background='#fff';cuBtn.style.color='#1a4a8a';}
+    if(eqInfo) eqInfo.style.display='';
+    if(cuWrap) cuWrap.style.display='none';
+  } else {
+    if(eqBtn){eqBtn.style.background='#fff';eqBtn.style.color='#1a4a8a';}
+    if(cuBtn){cuBtn.style.background='#1a4a8a';cuBtn.style.color='#fff';}
+    if(eqInfo) eqInfo.style.display='none';
+    if(cuWrap) cuWrap.style.display='';
+    var inp = document.getElementById('ppm-contrib-amt');
+    if(inp) inp.focus();
+  }
+}
+
+function ppmToggleGuest(name, teamOutstanding, splitCount){
+  if (!window._ppmGuestsIncluded) window._ppmGuestsIncluded = {};
+  window._ppmGuestsIncluded[name] = !window._ppmGuestsIncluded[name];
+  var btn = document.getElementById('ppm-guest-'+name.replace(/\W/g,'_'));
+  if (btn){
+    var on = window._ppmGuestsIncluded[name];
+    btn.textContent = (on?'✓ ':'✗ ')+'👤 '+name;
+    btn.style.background = on?'#e8d070':'#f0f0f0';
+    btn.style.borderColor = on?'#c8a030':'#ccc';
+    btn.style.color = on?'#5a3a00':'#888';
+  }
+  // Recompute equal split with updated guest inclusion
+  var excluded = Object.keys(window._ppmGuestsIncluded).filter(function(g){ return !window._ppmGuestsIncluded[g]; }).length;
+  var newCount = Math.max(1, splitCount - excluded);
+  var eqInfo = document.getElementById('ppm-equal-info');
+  if (eqInfo){
+    eqInfo.innerHTML = (LANG==='de'?'Gleichmäßige Aufteilung':'Equal split')+': <strong>€'+(teamOutstanding/newCount).toFixed(2)+'</strong> × '+newCount+' '+(LANG==='de'?'Personen':'people');
+  }
+  window._ppmAdjustedCount = newCount;
+}
+
+function ppmUpdateRemaining(teamOutstanding, splitCount){
+  var inp = document.getElementById('ppm-contrib-amt');
+  var rem = document.getElementById('ppm-remaining');
+  if (!inp || !rem) return;
+  var val = parseFloat(inp.value)||0;
+  var left = teamOutstanding - val;
+  rem.textContent = left > 0.005
+    ? '€'+left.toFixed(2)+' '+(LANG==='de'?'verbleibend für das Team':'remaining for the team')
+    : left < -0.005
+    ? '⚠️ '+(LANG==='de'?'Überbezahlt um':'Overpaying by')+' €'+Math.abs(left).toFixed(2)
+    : '✅ '+(LANG==='de'?'Rechnung vollständig beglichen!':'Full bill covered!');
+  rem.style.color = left > 0.005 ? '#7a5200' : left < -0.005 ? '#c4392b' : '#1f8a4f';
+}
+
+async function recordPersonPayment(person, mode, teamOutstanding, splitCount){
+  var isDE = LANG==='de';
+  var amount = 0;
+  var note = '';
+
+  if (mode === 'own'){
+    var inp = document.getElementById('ppm-own-amt');
+    amount = parseFloat(inp ? inp.value : 0)||0;
+    note = isDE?'Eigene Rechnung':'Own tab';
+
+  } else if (mode === 'contrib'){
+    var ppmMode = window._ppmMode || 'equal';
+    if (ppmMode === 'equal'){
+      var adjCount = window._ppmAdjustedCount || splitCount;
+      amount = teamOutstanding / Math.max(1, adjCount);
+      var excluded = window._ppmGuestsIncluded
+        ? Object.keys(window._ppmGuestsIncluded).filter(function(g){ return !window._ppmGuestsIncluded[g]; })
+        : [];
+      note = (isDE?'Gleichmäßige Aufteilung':'Equal split')+
+        (excluded.length?' ('+(isDE?'ohne':'excl.')+' '+excluded.join(', ')+')':'');
+    } else {
+      var custInp = document.getElementById('ppm-contrib-amt');
+      amount = parseFloat(custInp ? custInp.value : 0)||0;
+      note = isDE?'Eigener Beitrag zur Team-Rechnung':'Custom contribution to team bill';
+    }
+  }
+
+  if (amount <= 0){ notify(isDE?'Bitte Betrag eingeben':'Please enter an amount', true); return; }
+
+  var obj = {
+    date: td(), payers: person, non_drinkers: '',
+    amount: amount, note: note,
+    added_by: CURRENT_NAME, logged_by: CURRENT_NAME
+  };
+  if (IS_ADMIN && CURRENT_USER) obj.user_id = CURRENT_USER.id;
+  if (IS_GUEST) obj.guest_token = GUEST_TOKEN;
+
+  var {error} = await SB.from('payments').insert(obj);
+  if (error){ notify('Error: '+error.message, true); return; }
+  await audit('ADD_PAYMENT','payments',null,{person:person,amount:amount,mode:mode,note:note});
+  closeModal();
+
+  // Check if person's tab is now settled
+  var newPaid = STATE.payments.reduce(function(s,p){
+    var pp=(p.payers||'').split(',').map(function(x){return x.trim();});
+    return pp.indexOf(person)!==-1?s+(parseFloat(p.amount)||0):s;
+  },0) + amount;
+  var spent = STATE.logs.reduce(function(s,l){
+    return l.person===person&&(parseFloat(l.unit_price)||0)>0 ? s+(parseFloat(l.total_price)||0) : s;
+  },0);
+
+  if (newPaid >= spent - 0.005){
+    notify('✅ '+(isDE?esc(person)+' Tab beglichen!':esc(person)+'\'s tab is settled!'));
+  } else {
+    notify('💳 €'+amount.toFixed(2)+' '+(isDE?'erfasst':'recorded')+' · '+(isDE?'noch offen':'still owed')+': €'+(spent-newPaid).toFixed(2));
+  }
+  await loadAll();
+  renderTab('payments');
 }
 
 // ── SETTLE BILL MODAL ───────────────────────────────────────
