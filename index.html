@@ -290,6 +290,7 @@ function setDrinkPrice(drink, price){ DRINK_PRICES[drink]=parseFloat(price)||0; 
 
 var STATE = {
   tab:'log', people:[], logs:[], payments:[], replacements:[], auditLog:[], freeContributions:[], tabCloses:[],
+  dashPeriod:'weekly', dashDrinkFilter:'🍺*', dashSortDir:'desc',
   logPerson:'', logDrink:'🍺 Beer', logQty:1, logPrice:'', logDate:td(), logNote:'',
   payPayers:[], payNonDrinkers:[], payAmount:'', payDate:td(), payNote:'',
   undoStack:[], showAdvancedLog:false
@@ -1258,7 +1259,7 @@ function renderRunningTodayTab(){
 
     var drinkItems = Object.entries(drinkTotals).map(function(e){
       var d=e[0], info=e[1];
-      var canEdit = info.entries.some(function(l){ return isMine(l); });
+      var canEdit = info.entries.some(function(l){ return isMine(l); }) || IS_ADMIN;
 
       // Settlement badge for this drink
       var badge = '';
@@ -1275,7 +1276,6 @@ function renderRunningTodayTab(){
         if (myCovered >= myFree){
           badge += '<span style="font-size:10px;background:#d4f5e2;color:#1f8a4f;border-radius:5px;padding:1px 5px;font-weight:700">✅ '+(isDE?'ersetzt':'replaced')+'</span>';
         } else {
-          // Check if free drink fund covers the uncovered portion
           var CRATE_SIZE=20, contrF={}, consF={};
           (STATE.freeContributions||[]).forEach(function(c){ var k=c.drink; contrF[k]=(contrF[k]||0)+(c.crates||0)*CRATE_SIZE+(c.extra_bottles||0); });
           STATE.logs.forEach(function(ll){ if((parseFloat(ll.unit_price)||0)===0) consF[ll.drink]=(consF[ll.drink]||0)+(ll.quantity||0); });
@@ -1293,9 +1293,9 @@ function renderRunningTodayTab(){
         }
       }
 
-      // "Add price" button for my own free drinks — opens full group+individual modal
+      // "Add price" button — own entries or admin
       var addPriceBtn = '';
-      if (isMe && info.freeQty > 0 && info.entries.some(function(l){ return isMine(l) && (parseFloat(l.unit_price)||0)===0; })){
+      if ((isMe || IS_ADMIN) && info.freeQty > 0){
         addPriceBtn = '<button class="plus" style="font-size:11px;padding:3px 7px;background:#d4f5e2;border:1.5px solid #1f8a4f;color:#1f8a4f;border-radius:6px;font-weight:800;min-height:26px" '+
           'onclick="event.stopPropagation();showTodayFreePriceModal(\''+esc(person)+'\',\''+esc(d)+'\',\''+today+'\')" '+
           'title="'+(isDE?'Preis hinzufügen':'Add price')+'">€+</button>';
@@ -1325,24 +1325,29 @@ function renderRunningTodayTab(){
       settleLine += '<div style="font-size:11px;color:#1f8a4f;font-weight:700;margin-top:2px">✅ '+(isDE?'Tab geschlossen':'Tab closed')+'</div>';
     }
 
+    // Admin badge on other people's rows
+    var adminBadge = IS_ADMIN && !isMe
+      ? ' <span style="font-size:9px;background:#1a4a8a;color:#fff;border-radius:4px;padding:1px 5px;font-weight:700">ADMIN</span>'
+      : '';
+
     return '<div class="running-tab-row'+(isMe?' mine':'')+'" onclick="showPersonDayDetail(\''+esc(person)+'\',\''+today+'\')">'+
       '<div style="flex:1;min-width:0">'+
         '<div style="display:flex;align-items:center;gap:8px">'+
           '<div class="pbs-avatar" style="background:'+colorFor(person)+';width:28px;height:28px;font-size:13px">'+person[0].toUpperCase()+'</div>'+
-          '<span class="rtab-name">'+esc(person)+(isMe?' <span style="font-size:12px;color:#b5481f">'+t('youSuffix')+'</span>':'')+'</span>'+
+          '<span class="rtab-name">'+esc(person)+(isMe?' <span style="font-size:12px;color:#b5481f">'+t('youSuffix')+'</span>':'')+adminBadge+'</span>'+
         '</div>'+
         '<div class="rtab-drinks" style="margin-top:6px;align-items:flex-start">'+drinkItems+'</div>'+
         settleLine+
       '</div>'+
       '<div style="text-align:right;padding-left:10px;display:flex;flex-direction:column;align-items:flex-end;gap:4px">'+
         (pd.total>0
-          ? (isMe
+          ? ((isMe || IS_ADMIN)
               ? '<button onclick="event.stopPropagation();editRunningAmount(\''+esc(person)+'\',\''+today+'\')" '+
                 'style="background:#fce4d0;border:1.5px solid #b5481f;border-radius:9px;padding:4px 10px;cursor:pointer;font-weight:800;font-size:16px;color:#b5481f">'+
                 '€'+pd.total.toFixed(2)+' ✏️</button>'
               : '<div class="rtab-total">€'+pd.total.toFixed(2)+'</div>')
           : '')+
-        (isMe
+        ((isMe || IS_ADMIN) && !tabClosedToday
           ? '<button onclick="event.stopPropagation();closeMyTab(\''+esc(person)+'\')" '+
               'style="background:#1f8a4f;border:none;border-radius:9px;padding:5px 10px;cursor:pointer;font-size:12px;font-weight:800;color:#fff;white-space:nowrap;margin-top:2px">'+
               '✅ '+(isDE?'Tab zu':'Close tab')+'</button>'
@@ -1394,7 +1399,7 @@ async function quickRemoveDrink(person, drink, event){
   event.stopPropagation();
   var today = td();
   var match = STATE.logs
-    .filter(function(l){ return l.person===person && l.drink===drink && l.date===today && isMine(l); })
+    .filter(function(l){ return l.person===person && l.drink===drink && l.date===today && (isMine(l)||IS_ADMIN); })
     .sort(function(a,b){ return new Date(b.logged_at)-new Date(a.logged_at); })[0];
   if (!match){ notify(LANG==='de'?'Nichts zu entfernen':'Nothing to remove',true); return; }
   // Save snapshot for undo
@@ -2614,20 +2619,33 @@ async function closeMyTab(person){
   var isDE = LANG==='de';
   var today = td();
 
-  // Find last tab close for this person to scope what counts as "this session"
+  // ── Find session start: last time this person closed their tab ──
+  // If they closed at 11pm Friday, only count drinks after that.
+  // If never closed, count drinks from the last 36 hours (covers overnight sessions).
   var lastClose = (STATE.tabCloses||[])
     .filter(function(c){ return c.person === person; })
-    .sort(function(a,b){ return (b.closed_at > a.closed_at ? 1 : -1); })[0];
-  var sinceDate = lastClose ? lastClose.closed_at : null;
+    .sort(function(a,b){ return (b.created_at||b.closed_at) > (a.created_at||a.closed_at) ? 1 : -1; })[0];
 
-  // Count free drinks since last close
+  var sessionStartTs = lastClose
+    ? (lastClose.created_at || (lastClose.closed_at + 'T23:59:59Z'))
+    : new Date(Date.now() - 36*60*60*1000).toISOString(); // 36h window
+
+  // Count free drinks logged AFTER the session start
   var freeLogs = STATE.logs.filter(function(l){
-    return l.person===person && (parseFloat(l.unit_price)||0)===0
-      && (!sinceDate || l.date > sinceDate);
+    var logTs = l.logged_at || (l.date + 'T00:00:00Z');
+    return l.person === person
+      && (parseFloat(l.unit_price)||0) === 0
+      && logTs > sessionStartTs;
   });
   var freeCount = freeLogs.reduce(function(s,l){return s+(l.quantity||0);},0);
 
-  // Check for any unpaid priced drinks
+  // Date range label for the confirmation
+  var sessionDates = [...new Set(freeLogs.map(function(l){return l.date;}))].sort();
+  var dateLabel = sessionDates.length > 1
+    ? fmtDate(sessionDates[0])+' → '+fmtDate(sessionDates[sessionDates.length-1])
+    : sessionDates.length === 1 ? fmtDate(sessionDates[0]) : fmtDate(today);
+
+  // Check for any unpaid priced drinks (all-time)
   var pricedTotal = STATE.logs.reduce(function(s,l){
     return l.person===person&&(parseFloat(l.unit_price)||0)>0 ? s+(parseFloat(l.total_price)||0) : s;
   },0);
@@ -2642,13 +2660,28 @@ async function closeMyTab(person){
     return;
   }
 
-  var lines = freeCount > 0 ? [freeCount+' '+(isDE?'kostenlose Biere':'free beer'+(freeCount!==1?'s':''))] : [];
-  var msg = isDE
-    ? 'Tab schließen für '+person+'?\n\n'+(lines.length?lines.join('\n')+'\n\n':'')+'Die Getränke bleiben im Log gespeichert.'
-    : 'Close tab for '+person+'?\n\n'+(lines.length?lines.join('\n')+'\n\n':'')+'All drinks stay in the log.';
-  if (!confirm(msg)) return;
+  var note = (isDE?'Tab geschlossen':'Tab closed')
+    +(freeCount>0?' · '+freeCount+' free beer'+(freeCount!==1?'s':''):'')
+    +' · '+dateLabel;
 
-  var note = (isDE?'Tab geschlossen':'Tab closed')+(freeCount>0?' · '+freeCount+' free beer'+(freeCount!==1?'s':''):'');
+  showModal(
+    '<h3 style="margin-bottom:8px">✅ '+(isDE?'Tab schließen?':'Close Tab?')+'</h3>'+
+    '<div style="background:#d4f5e2;border-radius:10px;padding:14px;margin-bottom:14px;font-size:14px;color:#1a4a2a">'+
+      '<div style="font-weight:800;margin-bottom:6px">'+esc(person)+'</div>'+
+      '<div style="font-size:12px;color:#1f6a3f;margin-bottom:6px">📅 '+dateLabel+'</div>'+
+      (freeCount>0?'<div>🍾 '+freeCount+' '+(isDE?'kostenlose Biere in dieser Sitzung':'free beer'+(freeCount!==1?'s':'')+' this session')+'</div>':
+        '<div style="color:#1f6a3f">'+(isDE?'Keine kostenlosen Biere in dieser Sitzung':'No free beers this session')+'</div>')+
+      '<div style="font-size:12px;opacity:.8;margin-top:6px">'+(isDE?'Alle Getränke bleiben im Log gespeichert.':'All drinks stay in the log.')+'</div>'+
+    '</div>'+
+    '<button onclick="doCloseMyTab(\''+esc(person)+'\',\''+esc(note)+'\','+freeCount+')" '+
+      'style="width:100%;background:linear-gradient(135deg,#1f8a4f,#28b866);border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:800;padding:14px;cursor:pointer;margin-bottom:8px">'+
+      '✅ '+(isDE?'Ja, Tab schließen':'Yes, Close My Tab')+'</button>'+
+    '<button class="modal-close" onclick="closeModal()" style="width:100%">'+esc(t('cancel'))+'</button>'
+  );
+}
+
+async function doCloseMyTab(person, note, freeCount){
+  var today = td();
   var obj = {
     person: person,
     closed_at: today,
@@ -2663,7 +2696,7 @@ async function closeMyTab(person){
   if (error){ notify('Error: '+error.message+' — run supabase_tab_closes.sql first',true); return; }
 
   closeModal();
-  notify('✅ '+(isDE?'Tab geschlossen! Bis zum nächsten Mal 🍺':'Tab closed! See you next time 🍺'));
+  notify('✅ '+(LANG==='de'?'Tab geschlossen! Bis zum nächsten Mal 🍺':'Tab closed! See you next time 🍺'));
   await loadAll();
 }
 
@@ -2728,7 +2761,7 @@ async function editDrinkQty(logId, delta, person, date){
 
   var newQty = (entry.quantity||1) + delta;
   if (newQty <= 0) {
-    if (!confirm('This will remove the entry entirely. Continue?')) return;
+    if (!await appConfirm('This will remove the entry entirely. Continue?')) return;
     var {error} = await SB.from('drink_logs').delete().eq('id', logId);
     if (error) { notify('Error: '+error.message, true); return; }
     await audit('DELETE_DRINK_LOGS','drink_logs',logId,{person:person,drink:entry.drink,reason:'qty reduced to 0'});
@@ -2763,99 +2796,204 @@ function renderDashboard(){
   var isDE = LANG === 'de';
   var html = '';
 
-  // ── Period selector ──────────────────────────────────────
+  // ── Period selector — includes Today ─────────────────────
   var period = STATE.dashPeriod || 'weekly';
-  html += '<div style="display:flex;gap:8px;margin-bottom:14px">';
-  ['weekly','monthly','yearly'].forEach(function(p){
-    var label = isDE ? {weekly:'Wöchentlich',monthly:'Monatlich',yearly:'Jährlich'}[p] : {weekly:'Weekly',monthly:'Monthly',yearly:'Yearly'}[p];
-    html += '<button onclick="STATE.dashPeriod=\''+p+'\';renderTab(\'dashboard\')" style="flex:1;padding:10px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid '+(period===p?'#b5481f':'#e8dccc')+';background:'+(period===p?'#fce4d0':'#fff')+';color:'+(period===p?'#7a2e10':'#5a3a28')+'">'+label+'</button>';
+  html += '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">';
+  var periods = ['today','weekly','monthly','yearly'];
+  var periodLabels = isDE
+    ? {today:'Heute',weekly:'Wöchentlich',monthly:'Monatlich',yearly:'Jährlich'}
+    : {today:'Today',weekly:'Weekly',monthly:'Monthly',yearly:'Yearly'};
+  periods.forEach(function(p){
+    html += '<button onclick="STATE.dashPeriod=\''+p+'\';renderTab(\'dashboard\')" '+
+      'style="flex:1;padding:8px 4px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;min-width:60px;'+
+      'border:2px solid '+(period===p?'#b5481f':'#e8dccc')+';background:'+(period===p?'#fce4d0':'#fff')+';color:'+(period===p?'#7a2e10':'#5a3a28')+'">'+
+      periodLabels[p]+'</button>';
   });
   html += '</div>';
 
-  // ── Build buckets ─────────────────────────────────────────
-  var buckets = buildDashBuckets(period);
-  var labels  = buckets.map(function(b){ return b.label; });
-  var drinks  = buckets.map(function(b){ return b.totalBeers||0; });  // beers only
-  var money   = buckets.map(function(b){ return b.totalMoney; });
-  var bottles = buckets.map(function(b){ return b.totalBottles; });    // free beers logged
-
-  var totalDrinks  = drinks.reduce(function(s,v){return s+v;},0);
-  var totalMoney   = money.reduce(function(s,v){return s+v;},0);
-  var totalBottles = bottles.reduce(function(s,v){return s+v;},0);
-  var totalBeers   = buckets.reduce(function(s,b){return s+(b.totalBeers||0);},0);
-
-  // Replaced bottles count (from replacements table)
-  var totalReplaced = STATE.replacements.reduce(function(s,r){ return s+(r.quantity||0); }, 0);
-
-  // Free beers available (fund balance)
-  var CRATE_SIZE_DB = 20;
-  var freeFundTotal = (STATE.freeContributions||[]).reduce(function(s,c){
-    return s + (c.crates||0)*CRATE_SIZE_DB + (c.extra_bottles||0);
-  }, 0);
-  var freeFundUsed = STATE.logs.reduce(function(s,l){
-    return (parseFloat(l.unit_price)||0)===0 ? s+(l.quantity||0) : s;
-  }, 0);
-  var freeFundAvailDash = Math.max(0, freeFundTotal - freeFundUsed + totalReplaced);
-
-  // ── TOP BEER DRINKERS — all people ranked, shared positions, medals ──
-  // Aggregate beer counts per person across the last bucket period shown
-  var beerTotals = {};
-  buckets.forEach(function(b){
-    Object.keys(b.beerPersons||{}).forEach(function(person){
-      beerTotals[person] = (beerTotals[person]||0) + (b.beerPersons[person]||0);
-    });
+  // ── Drink type filter ─────────────────────────────────────
+  var drinkFilter = STATE.dashDrinkFilter || '🍺*';
+  var filterOptions = [['🍺*', isDE?'Alle Biere 🍺':'All Beers 🍺']];
+  // Add each active beer-type drink
+  DRINK_TYPES.forEach(function(d){
+    if (d.startsWith('🍺')) filterOptions.push([d, emoji(d)+' '+d.replace(/^.+? /,'')]);
   });
-  var rankedPeople = Object.entries(beerTotals).sort(function(a,b){ return b[1]-a[1]; });
+  // Add "All drinks" option
+  filterOptions.push(['*', isDE?'Alle Getränke':'All Drinks']);
 
-  if (rankedPeople.length) {
-    // Assign ranks with tie handling (same count = same rank)
-    var ranks = [];
-    var currentRank = 1;
-    rankedPeople.forEach(function(entry, i){
-      if (i > 0 && entry[1] < rankedPeople[i-1][1]) currentRank = i + 1;
-      ranks.push({name: entry[0], count: entry[1], rank: currentRank});
+  html += '<div style="margin-bottom:14px">';
+  html += '<div style="font-size:11px;font-weight:700;color:#7a5200;margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px">'+
+    (isDE?'Getränk-Filter:':'Drink filter:')+'</div>';
+  html += '<div style="display:flex;gap:5px;flex-wrap:wrap">';
+  filterOptions.forEach(function(opt){
+    var isActive = drinkFilter === opt[0];
+    html += '<button onclick="STATE.dashDrinkFilter=\''+esc(opt[0])+'\';renderTab(\'dashboard\')" '+
+      'style="padding:5px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;'+
+      'border:1.5px solid '+(isActive?'#b5481f':'#e8dccc')+';background:'+(isActive?'#b5481f':'#fff')+';color:'+(isActive?'#fff':'#5a3a28')+'">'+
+      opt[1]+'</button>';
+  });
+  html += '</div></div>';
+
+  // ── Build session logs for the selected period ────────────
+  var now = new Date();
+  var sessionLogs;
+  if (period === 'today'){
+    // 36-hour window to capture overnight sessions (e.g. Fri 8pm → Sat 4am)
+    var cutoff = new Date(now.getTime() - 36*60*60*1000).toISOString();
+    sessionLogs = STATE.logs.filter(function(l){
+      var ts = l.logged_at || (l.date+'T00:00:00Z');
+      return ts >= cutoff;
     });
-
-    var medals = {1:'🥇', 2:'🥈', 3:'🥉'};
-    var rankColors = {1:'#FFD700', 2:'#C0C0C0', 3:'#CD7F32'};
-
-    html += card(isDE?'🏆 Bier-Rangliste':'🏆 Beer Leaderboard',
-      '<div style="font-size:11px;color:#7a5200;margin-bottom:10px">'+
-        (isDE?'Zeitraum: ':'Period: ')+'<strong>'+
-        ({weekly:isDE?'Wöchentlich':'Weekly',monthly:isDE?'Monatlich':'Monthly',yearly:isDE?'Jährlich':'Yearly'}[period])+
-        '</strong> · '+(isDE?'Nur Biere 🍺':'Beers only 🍺')+'</div>'+
-      ranks.map(function(r){
-        var medal = medals[r.rank] || '';
-        var isMe = r.name === CURRENT_NAME;
-        var rankColor = rankColors[r.rank] || '#5a3a28';
-        var bg = r.rank === 1 ? 'linear-gradient(135deg,#fffbe6,#fff3b0)' :
-                  r.rank === 2 ? 'linear-gradient(135deg,#f5f5f5,#e8e8e8)' :
-                  r.rank === 3 ? 'linear-gradient(135deg,#fdf0e0,#f5e0c0)' : '#fff';
-        return '<div style="display:flex;align-items:center;gap:10px;padding:9px 10px;margin-bottom:6px;'+
-          'border-radius:10px;background:'+bg+';border:1.5px solid '+(r.rank<=3?rankColor:'#e8dccc')+'">'+
-          // Rank medal or number
-          '<div style="min-width:30px;text-align:center;font-size:'+(medal?'20':'14')+'px;font-weight:900;color:'+rankColor+'">'+
-            (medal||('#'+r.rank))+
-          '</div>'+
-          // Avatar + name
-          '<div style="width:28px;height:28px;border-radius:50%;background:'+colorFor(r.name)+
-            ';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0">'+
-            r.name[0].toUpperCase()+
-          '</div>'+
-          '<div style="flex:1;min-width:0">'+
-            '<div style="font-size:13px;font-weight:'+(r.rank<=3?'800':'600')+';color:#1a0e08">'+
-              esc(r.name)+(isMe?' <span style="font-size:10px;color:#b5481f;background:#fce4d0;border-radius:4px;padding:1px 5px">'+t('youSuffix')+'</span>':'')+
-            '</div>'+
-          '</div>'+
-          // Count
-          '<div style="text-align:right;flex-shrink:0">'+
-            '<div style="font-size:16px;font-weight:900;color:'+rankColor+'">'+r.count+'</div>'+
-            '<div style="font-size:10px;color:#7a5200">🍺 '+(isDE?'Biere':'beers')+'</div>'+
-          '</div>'+
-        '</div>';
-      }).join('')
-    );
+  } else {
+    sessionLogs = STATE.logs; // all logs, bucketed by buildDashBuckets
   }
+
+  // ── Filter by drink type ──────────────────────────────────
+  function matchesDrinkFilter(drink){
+    if (drinkFilter === '*') return true;
+    if (drinkFilter === '🍺*') return drink && drink.startsWith('🍺');
+    return drink === drinkFilter;
+  }
+
+  // ── Build per-person totals ───────────────────────────────
+  var personTotals = {};
+  sessionLogs.forEach(function(l){
+    if (!matchesDrinkFilter(l.drink)) return;
+    if (!personTotals[l.person]) personTotals[l.person] = 0;
+    personTotals[l.person] += (l.quantity||0);
+  });
+
+  // If period != today, also aggregate from buckets for consistency
+  if (period !== 'today'){
+    personTotals = {};
+    var buckets2 = buildDashBuckets(period);
+    buckets2.forEach(function(b){
+      // Use beerPersons for beer filter, or build custom
+      if (drinkFilter === '🍺*'){
+        Object.keys(b.beerPersons||{}).forEach(function(p){
+          personTotals[p] = (personTotals[p]||0) + (b.beerPersons[p]||0);
+        });
+      } else {
+        // Filter STATE.logs by period bucket and drink
+        STATE.logs.forEach(function(l){
+          if (!matchesDrinkFilter(l.drink)) return;
+          var d = new Date(l.date+'T00:00:00');
+          var key;
+          if (period==='weekly'){
+            var jan4=new Date(d.getFullYear(),0,4);
+            var wk=Math.ceil((((d-jan4)/86400000)+jan4.getDay()+1)/7);
+            key=d.getFullYear()+'-W'+String(wk).padStart(2,'0');
+          } else if (period==='monthly'){
+            key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+          } else {
+            key=''+d.getFullYear();
+          }
+          if (key === b.key){
+            personTotals[l.person] = (personTotals[l.person]||0)+(l.quantity||0);
+          }
+        });
+      }
+    });
+  }
+
+  // ── Sort direction ────────────────────────────────────────
+  var sortDir = STATE.dashSortDir || 'desc';
+  var rankedPeople = Object.entries(personTotals)
+    .filter(function(e){ return e[1] > 0; })
+    .sort(function(a,b){ return sortDir==='desc' ? b[1]-a[1] : a[1]-b[1]; });
+
+  // ── Render leaderboard ────────────────────────────────────
+  var drinkLabel = drinkFilter==='*' ? (isDE?'Getränke':'drinks') :
+                   drinkFilter==='🍺*' ? (isDE?'Biere':'beers') :
+                   drinkFilter.replace(/^.+? /,'').toLowerCase();
+  var periodLabel = periodLabels[period] || period;
+
+  var ranks = [];
+  var cur = 1;
+  rankedPeople.forEach(function(entry, i){
+    if (i>0 && entry[1] !== rankedPeople[i-1][1]) cur = i+1;
+    ranks.push({name:entry[0], count:entry[1], rank: sortDir==='desc'?cur:rankedPeople.length-i});
+  });
+  // Re-rank for asc: lowest gets #1
+  if (sortDir==='asc'){
+    cur=1;
+    rankedPeople.forEach(function(entry,i){
+      if(i>0&&entry[1]!==rankedPeople[i-1][1])cur=i+1;
+      ranks[i].rank=cur;
+    });
+  }
+
+  var medals = {1:'🥇',2:'🥈',3:'🥉'};
+  var rankColors = {1:'#FFD700',2:'#C0C0C0',3:'#CD7F32'};
+
+  var lbInner =
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
+      '<div style="font-size:11px;color:#7a5200">'+
+        (isDE?'Zeitraum: ':'Period: ')+'<strong>'+periodLabel+'</strong>'+
+        ' · '+emoji(drinkFilter==='*'?'🍹':drinkFilter==='🍺*'?'🍺':drinkFilter)+' '+esc(drinkLabel)+
+      '</div>'+
+      '<button onclick="STATE.dashSortDir=STATE.dashSortDir===\'desc\'?\'asc\':\'desc\';renderTab(\'dashboard\')" '+
+        'style="background:#f5ede4;border:1.5px solid #b5481f;border-radius:8px;color:#b5481f;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer">'+
+        (sortDir==='desc'?'▼ '+(isDE?'Höchste':'Highest'):'▲ '+(isDE?'Niedrigste':'Lowest'))+
+      '</button>'+
+    '</div>';
+
+  if (!ranks.length){
+    lbInner += '<div style="color:#7a5200;font-size:13px;text-align:center;padding:20px 0">'+
+      (isDE?'Keine Daten für diesen Zeitraum':'No data for this period')+'</div>';
+  } else {
+    lbInner += ranks.map(function(r){
+      var medal = (sortDir==='desc'&&medals[r.rank]) ? medals[r.rank] : '';
+      var rankColor = (sortDir==='desc'&&rankColors[r.rank]) ? rankColors[r.rank] : '#5a3a28';
+      var bg = sortDir==='desc' && r.rank===1 ? 'linear-gradient(135deg,#fffbe6,#fff3b0)' :
+               sortDir==='desc' && r.rank===2 ? 'linear-gradient(135deg,#f5f5f5,#e8e8e8)' :
+               sortDir==='desc' && r.rank===3 ? 'linear-gradient(135deg,#fdf0e0,#f5e0c0)' : '#fff';
+      var isMe = r.name === CURRENT_NAME;
+      return '<div onclick="showLeaderboardPersonDetail(\''+esc(r.name)+'\',\''+esc(drinkFilter)+'\',\''+esc(period)+'\')" '+
+        'style="display:flex;align-items:center;gap:10px;padding:9px 10px;margin-bottom:6px;'+
+        'border-radius:10px;background:'+bg+';border:1.5px solid '+(r.rank<=3&&sortDir==='desc'?rankColor:'#e8dccc')+';cursor:pointer">'+
+        '<div style="min-width:30px;text-align:center;font-size:'+(medal?'20':'13')+'px;font-weight:900;color:'+rankColor+'">'+
+          (medal||('#'+r.rank))+
+        '</div>'+
+        '<div style="width:28px;height:28px;border-radius:50%;background:'+colorFor(r.name)+
+          ';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0">'+
+          r.name[0].toUpperCase()+
+        '</div>'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:13px;font-weight:'+(r.rank<=3?'800':'600')+';color:#1a0e08">'+
+            esc(r.name)+(isMe?' <span style="font-size:10px;color:#b5481f;background:#fce4d0;border-radius:4px;padding:1px 5px">'+t('youSuffix')+'</span>':'')+
+          '</div>'+
+          '<div style="font-size:10px;color:#9a7060">👆 '+(isDE?'Details':'tap for details')+'</div>'+
+        '</div>'+
+        '<div style="text-align:right;flex-shrink:0">'+
+          '<div style="font-size:18px;font-weight:900;color:'+rankColor+'">'+r.count+'</div>'+
+          '<div style="font-size:10px;color:#7a5200">'+emoji(drinkFilter==='*'?'🍹':drinkFilter==='🍺*'?'🍺':drinkFilter)+' '+esc(drinkLabel)+'</div>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+  }
+
+  html += card(isDE?'🏆 Rangliste':'🏆 Leaderboard', lbInner);
+
+  // ── Build buckets for charts (period != today) ────────────
+  var buckets = period==='today' ? [] : buildDashBuckets(period);
+  var labels  = buckets.map(function(b){ return b.label; });
+  var drinks  = buckets.map(function(b){ return b.totalBeers||0; });
+  var money   = buckets.map(function(b){ return b.totalMoney; });
+  var bottles = buckets.map(function(b){ return b.totalBottles; });
+
+  // Totals — for 'today' use sessionLogs directly
+  var totalBeers = period==='today'
+    ? sessionLogs.filter(function(l){return l.drink&&l.drink.startsWith('🍺');}).reduce(function(s,l){return s+(l.quantity||0);},0)
+    : buckets.reduce(function(s,b){return s+(b.totalBeers||0);},0);
+  var totalMoney = period==='today'
+    ? sessionLogs.reduce(function(s,l){return s+(parseFloat(l.total_price)||0);},0)
+    : money.reduce(function(s,v){return s+v;},0);
+  var totalReplaced = STATE.replacements.reduce(function(s,r){ return s+(r.quantity||0); }, 0);
+  var CRATE_SIZE_DB = 20;
+  var freeFundTotal = (STATE.freeContributions||[]).reduce(function(s,c){ return s+(c.crates||0)*CRATE_SIZE_DB+(c.extra_bottles||0); },0);
+  var freeFundUsed  = STATE.logs.reduce(function(s,l){ return (parseFloat(l.unit_price)||0)===0?s+(l.quantity||0):s; },0);
+  var freeFundAvailDash = Math.max(0, freeFundTotal - freeFundUsed + totalReplaced);
 
   // ── Summary KPIs ──────────────────────────────────────────
   html += sg([
@@ -2867,23 +3005,21 @@ function renderDashboard(){
 
   // ── BAR CHART helper ─────────────────────────────────────
   function barChart(values, color, unit, title){
+    if (!values.length) return '';
     var max = Math.max.apply(null, values) || 1;
     var W = 300, H = 120, pad = 30, barW = Math.max(4, Math.floor((W - pad) / values.length) - 3);
     var svg = '<svg viewBox="0 0 '+W+' '+(H+40)+'" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto">';
-    // Y gridlines
     [0,0.25,0.5,0.75,1].forEach(function(t){
       var y = pad + (H - H*t);
       svg += '<line x1="'+pad+'" y1="'+y+'" x2="'+W+'" y2="'+y+'" stroke="#ece0d4" stroke-width="1"/>';
       if(t>0) svg += '<text x="'+(pad-4)+'" y="'+(y+4)+'" text-anchor="end" font-size="8" fill="#a8978a">'+(unit==='€'?'€':'')+(max*t).toFixed(unit==='€'?0:0)+(unit!=='€'?unit:'')+'</text>';
     });
-    // Bars
     values.forEach(function(v,i){
       var bh = Math.max(2, (v/max)*H);
       var x = pad + i * ((W-pad)/values.length) + 2;
       var y = pad + H - bh;
       svg += '<rect x="'+x+'" y="'+y+'" width="'+barW+'" height="'+bh+'" rx="3" fill="'+color+'" opacity="0.85"/>';
       if (v > 0) svg += '<text x="'+(x+barW/2)+'" y="'+(y-3)+'" text-anchor="middle" font-size="8" fill="'+color+'" font-weight="700">'+(unit==='€'?'€'+v.toFixed(0):v)+'</text>';
-      // X label — every nth to avoid clutter
       var nth = values.length > 12 ? 3 : values.length > 6 ? 2 : 1;
       if (i % nth === 0) {
         svg += '<text x="'+(x+barW/2)+'" y="'+(pad+H+14)+'" text-anchor="middle" font-size="7.5" fill="#7a5200" transform="rotate(-35,'+(x+barW/2)+','+(pad+H+14)+')">'+(labels[i]||'')+'</text>';
@@ -2893,10 +3029,12 @@ function renderDashboard(){
     return card(title, svg);
   }
 
-  // ── THREE CHARTS ─────────────────────────────────────────
-  html += barChart(drinks,  '#b5481f', '',  '🍺 '+(isDE?'Biere gesamt':'Total Beers'));
-  html += barChart(money,   '#1f8a4f', '€', '💶 '+(isDE?'Ausgaben (€)':'Money Spent (€)'));
-  html += barChart(bottles, '#0e6b8c', '',  '🍾 '+(isDE?'Freie Biere (geloggt)':'Free Beers Logged'));
+  // ── THREE CHARTS (hidden for 'today') ─────────────────────
+  if (period !== 'today'){
+    html += barChart(drinks,  '#b5481f', '',  '🍺 '+(isDE?'Biere gesamt':'Total Beers'));
+    html += barChart(money,   '#1f8a4f', '€', '💶 '+(isDE?'Ausgaben (€)':'Money Spent (€)'));
+    html += barChart(bottles, '#0e6b8c', '',  '🍾 '+(isDE?'Freie Biere (geloggt)':'Free Beers Logged'));
+  }
 
   // ── DRINK TYPE BREAKDOWN (all time) ─────────────────────
   var drinkTotals = {};
@@ -2922,6 +3060,108 @@ function renderDashboard(){
 
   el.innerHTML = html;
 }
+
+function showLeaderboardPersonDetail(person, drinkFilter, period){
+  var isDE = LANG==='de';
+
+  // Determine session logs same way as leaderboard
+  var logsToUse;
+  if (period === 'today'){
+    var cutoff = new Date(Date.now() - 36*60*60*1000).toISOString();
+    logsToUse = STATE.logs.filter(function(l){
+      var ts = l.logged_at || (l.date+'T00:00:00Z');
+      return l.person===person && ts>=cutoff;
+    });
+  } else {
+    logsToUse = STATE.logs.filter(function(l){ return l.person===person; });
+  }
+
+  // Filter by drink type
+  logsToUse = logsToUse.filter(function(l){
+    if (drinkFilter==='*') return true;
+    if (drinkFilter==='🍺*') return l.drink&&l.drink.startsWith('🍺');
+    return l.drink===drinkFilter;
+  });
+
+  // Group by date
+  var byDate = {};
+  logsToUse.forEach(function(l){
+    if (!byDate[l.date]) byDate[l.date]={qty:0,drinks:{}};
+    byDate[l.date].qty += (l.quantity||0);
+    byDate[l.date].drinks[l.drink] = (byDate[l.date].drinks[l.drink]||0)+(l.quantity||0);
+  });
+
+  var sortState = {dir:'desc'};
+
+  function renderRows(){
+    var dates = Object.keys(byDate).sort(function(a,b){
+      return sortState.dir==='desc' ? (byDate[b].qty-byDate[a].qty) : (byDate[a].qty-byDate[b].qty);
+    });
+    if (!dates.length) return '<div style="color:#7a5200;text-align:center;padding:20px">'+(isDE?'Keine Daten':'No data')+'</div>';
+    return dates.map(function(d){
+      var row = byDate[d];
+      var drinkTags = Object.entries(row.drinks).map(function(e){
+        return '<span style="background:#fce4d0;border-radius:6px;padding:2px 7px;font-size:12px;font-weight:700;color:#b5481f">'+emoji(e[0])+'×'+e[1]+'</span>';
+      }).join(' ');
+      return '<div onclick="closeModal();showPersonDayDetail(\''+esc(person)+'\',\''+esc(d)+'\')" '+
+        'style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;margin-bottom:6px;background:#f5ede4;cursor:pointer">'+
+        '<div style="min-width:72px;font-size:12px;font-weight:700;color:#5a3a28">'+fmtDate(d)+'</div>'+
+        '<div style="flex:1;display:flex;flex-wrap:wrap;gap:4px">'+drinkTags+'</div>'+
+        '<div style="font-size:18px;font-weight:900;color:#b5481f;min-width:28px;text-align:right">'+row.qty+'</div>'+
+      '</div>';
+    }).join('');
+  }
+
+  var total = logsToUse.reduce(function(s,l){return s+(l.quantity||0);},0);
+  var drinkLabel = drinkFilter==='*'?(isDE?'Getränke':'drinks'):drinkFilter==='🍺*'?(isDE?'Biere':'beers'):drinkFilter.replace(/^.+? /,'').toLowerCase();
+
+  var modalId = 'lb-detail-rows';
+
+  showModal(
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'+
+      '<div style="width:36px;height:36px;border-radius:50%;background:'+colorFor(person)+
+        ';display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff">'+
+        person[0].toUpperCase()+'</div>'+
+      '<div>'+
+        '<div style="font-size:16px;font-weight:800;color:#1a0e08">'+esc(person)+'</div>'+
+        '<div style="font-size:11px;color:#7a5200">'+total+' '+esc(drinkLabel)+' · '+esc(periodLabels&&periodLabels[period]||period)+'</div>'+
+      '</div>'+
+    '</div>'+
+    // Sort controls
+    '<div style="display:flex;gap:8px;margin-bottom:10px">'+
+      '<button id="lb-sort-desc" onclick="(function(){document.getElementById(\'lb-sort-desc\').style.background=\'#b5481f\';document.getElementById(\'lb-sort-desc\').style.color=\'#fff\';document.getElementById(\'lb-sort-asc\').style.background=\'#fff\';document.getElementById(\'lb-sort-asc\').style.color=\'#b5481f\';'+
+        'var rows=document.getElementById(\'lb-detail-rows\');rows.innerHTML=\'\';'+
+        // inline sort desc
+        'var dates=Object.keys('+JSON.stringify(byDate)+').sort(function(a,b){return '+JSON.stringify(byDate)+'[b].qty-'+JSON.stringify(byDate)+'[a].qty;});'+
+        'rows.innerHTML=dates.map(function(d){var r='+JSON.stringify(byDate)+'[d];return \'<div style="padding:8px 0;border-bottom:1px solid #e8dccc;display:flex;gap:10px"><span style=\\"min-width:80px;font-size:12px\\">\'+(d)+\'</span><span style=\\"font-weight:800;color:#b5481f\\">\'+(r.qty)+\'</span></div>\';}).join(\'\');})()" '+
+        'style="flex:1;background:#b5481f;border:1.5px solid #b5481f;border-radius:8px;color:#fff;font-size:12px;font-weight:700;padding:7px;cursor:pointer">▼ '+(isDE?'Höchste zuerst':'Highest first')+'</button>'+
+      '<button id="lb-sort-asc" onclick="(function(){document.getElementById(\'lb-sort-asc\').style.background=\'#b5481f\';document.getElementById(\'lb-sort-asc\').style.color=\'#fff\';document.getElementById(\'lb-sort-desc\').style.background=\'#fff\';document.getElementById(\'lb-sort-desc\').style.color=\'#b5481f\';})()" '+
+        'style="flex:1;background:#fff;border:1.5px solid #b5481f;border-radius:8px;color:#b5481f;font-size:12px;font-weight:700;padding:7px;cursor:pointer">▲ '+(isDE?'Niedrigste zuerst':'Lowest first')+'</button>'+
+    '</div>'+
+    '<div id="'+modalId+'" style="max-height:350px;overflow-y:auto;margin-bottom:10px">'+renderRows()+'</div>'+
+    '<div style="font-size:11px;color:#7a5200;text-align:center;margin-bottom:8px">'+
+      (isDE?'Auf Datum tippen für Details':'Tap a date for full detail')+'</div>'+
+    '<button class="modal-close" onclick="closeModal()" style="width:100%">'+esc(t('close'))+'</button>'
+  );
+
+  // Wire sort buttons properly after modal renders
+  setTimeout(function(){
+    var descBtn = document.getElementById('lb-sort-desc');
+    var ascBtn  = document.getElementById('lb-sort-asc');
+    var rowsEl  = document.getElementById(modalId);
+    if (!descBtn||!ascBtn||!rowsEl) return;
+
+    function rebuildRows(dir){
+      sortState.dir = dir;
+      rowsEl.innerHTML = renderRows();
+    }
+    descBtn.onclick = function(){ descBtn.style.background='#b5481f';descBtn.style.color='#fff'; ascBtn.style.background='#fff';ascBtn.style.color='#b5481f'; rebuildRows('desc'); };
+    ascBtn.onclick  = function(){ ascBtn.style.background='#b5481f'; ascBtn.style.color='#fff'; descBtn.style.background='#fff';descBtn.style.color='#b5481f'; rebuildRows('asc'); };
+  }, 80);
+}
+
+// Period labels helper for modal
+var periodLabels = {today:'Today',weekly:'Weekly',monthly:'Monthly',yearly:'Yearly'};
 
 function buildDashBuckets(period){
   // Group logs by week/month/year bucket
@@ -3330,7 +3570,7 @@ async function saveFreeContribEdit(id){
 
 async function deleteFreeContrib(id){
   var isDE = LANG==='de';
-  if (!confirm(isDE?'Beitrag löschen?':'Delete this contribution?')) return;
+  if (!await appConfirm(isDE?'Beitrag löschen?':'Delete this contribution?')) return;
 
   // Read before delete (for undo)
   var {data: snapshot, error: fetchErr} = await SB.from('free_contributions').select('*').eq('id',id).single();
@@ -4469,9 +4709,9 @@ function doCloseReplaceSession(){
   renderReplace();
 }
 
-function reopenReplaceSession(idx){
+async function reopenReplaceSession(idx){
   var isDE = LANG==='de';
-  if (!confirm(isDE?'Sitzung wieder öffnen? Die Sitzung wird aus der abgeschlossenen Liste entfernt.':'Reopen this session? It will be removed from the closed list.')) return;
+  if (!await appConfirm(isDE?'Sitzung wieder öffnen? Die Sitzung wird aus der abgeschlossenen Liste entfernt.':'Reopen this session? It will be removed from the closed list.')) return;
   var sessions = JSON.parse(localStorage.getItem('boc_closed_replace_sessions')||'[]');
   // Also reverse-sorted display, so idx 0 = last item
   var realIdx = sessions.length - 1 - idx;
@@ -4907,7 +5147,7 @@ async function sendBackupNow(){
 
 async function clearAllAuditLogs(){
   if (!IS_ADMIN) return;
-  if (!confirm('Delete ALL audit logs? This cannot be undone.')) return;
+  if (!await appConfirm('Delete ALL audit logs? This cannot be undone.')) return;
   var {error} = await SB.from('audit_log').delete().neq('id','00000000-0000-0000-0000-000000000000');
   if (error) { notify('Error: '+error.message, true); return; }
   notify('All audit logs cleared ✓');
@@ -5115,7 +5355,7 @@ async function saveDrinkType(id){
 
 async function deactivateDrinkType(id, label){
   var isDE = LANG==='de';
-  if (!confirm((isDE?'"'+label+'" deaktivieren?\n\nWird aus dem Log-Tab entfernt. Alle bisherigen Logs bleiben erhalten.':
+  if (!await appConfirm((isDE?'"'+label+'" deaktivieren?\n\nWird aus dem Log-Tab entfernt. Alle bisherigen Logs bleiben erhalten.':
     'Deactivate "'+label+'"?\n\nWill be removed from the Log tab. All historical records are preserved.'))) return;
   var {error} = await SB.from('drink_types').update({active:false}).eq('id',id);
   if (error){ notify('Error: '+error.message,true); return; }
@@ -5135,7 +5375,7 @@ async function reactivateDrinkType(id){
 
 async function hardDeleteDrinkType(id, name2){
   var isDE = LANG==='de';
-  if (!confirm((isDE?'"'+name2+'" dauerhaft löschen? Diese Aktion kann nicht rückgängig gemacht werden.':
+  if (!await appConfirm((isDE?'"'+name2+'" dauerhaft löschen? Diese Aktion kann nicht rückgängig gemacht werden.':
     'Permanently delete "'+name2+'"? This cannot be undone.'))) return;
   var {error} = await SB.from('drink_types').delete().eq('id',id);
   if (error){ notify('Error: '+error.message,true); return; }
@@ -5220,7 +5460,7 @@ async function deletePerson(name){
   } else {
     msg += isDE?'Alle Rechnungen sind beglichen. Die Person wird aus der Gruppe entfernt.':'All bills are settled. Person will be removed from the group.';
   }
-  if (!confirm(msg)) return;
+  if (!await appConfirm(msg)) return;
 
   // Soft-delete: set active=false (preserves all log data)
   var {data: row, error} = await SB.from('people').select('id').eq('name', name).maybeSingle();
@@ -5357,6 +5597,38 @@ function notifyWithUndo(msg, undoFn){
   el.appendChild(p);
   setTimeout(function(){ p.remove(); delete _undoCbs[uid]; }, 6000);
 }
+// In-app confirm — avoids browser dialog showing domain name
+// Returns a Promise<boolean> for use with await
+function appConfirm(msg, onYes, onNo){
+  var isDE = LANG==='de';
+  var parts = msg.split('\n\n');
+  var heading = parts[0];
+  var body = parts.slice(1).join('\n\n');
+  return new Promise(function(resolve){
+    showModal(
+      '<div style="font-size:15px;font-weight:800;color:#1a0e08;margin-bottom:'+(body?'8':'16')+'px">'+esc(heading)+'</div>'+
+      (body?'<div style="font-size:13px;color:#5a3a28;margin-bottom:16px;white-space:pre-wrap">'+esc(body)+'</div>':'')+
+      '<div style="display:flex;gap:10px">'+
+        '<button onclick="closeModal();document.getElementById(\'_appConfirmYes\').click()" '+
+          'style="flex:1;background:#c4392b;border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:800;padding:13px;cursor:pointer;min-height:48px">'+
+          (isDE?'✓ Ja':'✓ Yes')+'</button>'+
+        '<button onclick="closeModal();document.getElementById(\'_appConfirmNo\').click()" '+
+          'style="flex:1;background:#f5ede4;border:1.5px solid #b5481f;border-radius:10px;color:#b5481f;font-size:15px;font-weight:700;padding:13px;cursor:pointer;min-height:48px">'+
+          esc(t('cancel'))+'</button>'+
+      '</div>'+
+      '<button id="_appConfirmYes" style="display:none" onclick=""></button>'+
+      '<button id="_appConfirmNo"  style="display:none" onclick=""></button>'
+    );
+    // Wire up hidden buttons to resolve the promise
+    setTimeout(function(){
+      var y = document.getElementById('_appConfirmYes');
+      var n = document.getElementById('_appConfirmNo');
+      if (y) y.onclick = function(){ resolve(true); };
+      if (n) n.onclick = function(){ resolve(false); };
+    }, 50);
+  });
+}
+
 function notify(msg,err){var el=document.getElementById('notif');var p=document.createElement('div');p.className='np'+(err?' err':'');p.textContent=msg;el.appendChild(p);setTimeout(function(){p.remove();},2600);}
 function td(){return new Date().toISOString().split('T')[0];}
 function fmtDate(d){if(!d)return '';var dt=new Date(String(d).includes('T')?d:d+'T00:00:00');return dt.toLocaleDateString('en-GB',{weekday:'short',month:'short',day:'numeric'});}
