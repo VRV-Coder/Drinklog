@@ -1357,16 +1357,14 @@ async function quickAddDrink(person, drink, event){
   if (error){ notify('Error: '+error.message,true); return; }
   await audit('LOG_DRINK','drink_logs',data.id,{person:person,drink:drink,qty:1,total:price});
   await loadAll();
-  // Free drink fund check for zero-price quick-adds
   if (price === 0) {
     var CRATE_SIZE=20, contribsQ=STATE.freeContributions, contrQ={}, consQ={};
-    contribsQ.forEach(function(c){ var k=c.drink||'🍺 Beer (Pils)'; contrQ[k]=(contrQ[k]||0)+(c.crates||0)*CRATE_SIZE+(c.extra_bottles||0); });
+    contribsQ.forEach(function(c){ var k=c.drink; if(!k)return; contrQ[k]=(contrQ[k]||0)+(c.crates||0)*CRATE_SIZE+(c.extra_bottles||0); });
     STATE.logs.forEach(function(l){ if((parseFloat(l.unit_price)||0)===0) consQ[l.drink]=(consQ[l.drink]||0)+(l.quantity||0); });
-    STATE.replacements.forEach(function(r){ if(r.drink&&consQ[r.drink]) consQ[r.drink]=Math.max(0,consQ[r.drink]-(r.quantity||0)); });
-    var availQ=(contrQ[drink]||0)-(consQ[drink]||0);
-    if ((contrQ[drink]||0)===0 || availQ<0){
-      notify('🔄 '+(LANG==='de'?'Kein Freibier-Vorrat — bitte in Ersatz-Tab':'No free drink fund — please log replacement'),true);
-      setTimeout(function(){ switchTabByName('replace'); },1600);
+    STATE.replacements.forEach(function(r){ if(r.drink&&(r.quantity||0)>0&&consQ[r.drink]) consQ[r.drink]=Math.max(0,consQ[r.drink]-(r.quantity||0)); });
+    var availQ=Math.max(0,(contrQ[drink]||0)-(consQ[drink]||0));
+    if ((contrQ[drink]||0)===0 || availQ<=0){
+      notify('🍾 '+(LANG==='de'?'Kein Freibier-Vorrat — im Ersatz-Tab sichtbar':'No free drinks — appears in Replace tab'));
     } else if (availQ<=3){
       notify('⚠️ '+(LANG==='de'?'Nur noch '+availQ+' frei!':'Only '+availQ+' free left!'));
     }
@@ -4121,14 +4119,38 @@ function renderReplace(){
   // All-done check for the whole section
   var allDone = activeDrinks.length > 0 && activeDrinks.every(function(d){ return ob[d].remaining === 0; });
 
+  // Auto-close: if all done and no existing closed session with today's timestamp, close automatically
+  if (allDone) {
+    var alreadyClosedToday = closedSessions.some(function(s){
+      return s.closedAt === td() && s.autoClose;
+    });
+    if (!alreadyClosedToday) {
+      // Schedule auto-close after a short delay so the user sees the green state first
+      setTimeout(function(){
+        var now = new Date().toISOString();
+        var sessions2 = JSON.parse(localStorage.getItem('boc_closed_replace_sessions')||'[]');
+        // Only auto-close if still all done (user may have added more)
+        var stillDone = activeDrinks.every(function(d){ return ob[d].remaining === 0; });
+        if (stillDone && !sessions2.some(function(s){ return s.closedTimestamp && s.closedTimestamp >= now.slice(0,10); })){
+          sessions2.push({ closedAt: td(), closedTimestamp: now, note: '', closedBy: 'auto', autoClose: true });
+          localStorage.setItem('boc_closed_replace_sessions', JSON.stringify(sessions2));
+          notify('✅ '+(LANG==='de'?'Alle ersetzt — Sitzung automatisch abgeschlossen!':'All replaced — session auto-closed! 🎉'));
+          renderReplace();
+        }
+      }, 2200);
+    }
+  }
+
   html += '<div class="card">';
   html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">';
   html += '<div style="font-size:13px;font-weight:800;color:#5a3a28">'+(isDE?'Alle Getränke — Gesamt':'All Drinks — Running Total')+'</div>';
   if (allDone){
+    html += '<span style="background:#d4f5e2;color:#1f8a4f;border-radius:8px;padding:4px 12px;font-size:12px;font-weight:800">✅ '+(isDE?'Alle ersetzt!':'All replaced!')+'</span>';
+  } else {
     html += '<button onclick="closeReplaceSession()" '+
-      'style="background:linear-gradient(135deg,#1f8a4f,#28b866);border:none;border-radius:10px;color:#fff;'+
-      'font-size:13px;font-weight:800;padding:8px 16px;cursor:pointer;min-height:38px">'+
-      '✅ '+(isDE?'Sitzung abschließen':'Close This Session')+'</button>';
+      'style="background:#f5ede4;border:1.5px solid #b5481f;border-radius:10px;color:#b5481f;'+
+      'font-size:12px;font-weight:700;padding:6px 12px;cursor:pointer;min-height:34px">'+
+      '🗄 '+(isDE?'Sitzung schließen':'Close Session')+'</button>';
   }
   html += '</div>';
 
@@ -4205,14 +4227,11 @@ function renderReplace(){
       '</div>';
     }).join('');
 
-  // If all done — show big close prompt
+  // If all done — show subtle done note (auto-close already scheduled)
   if (allDone){
-    html += '<div style="background:#d4f5e2;border:1.5px solid #1f8a4f;border-radius:12px;padding:14px;text-align:center;margin-top:4px">'+
-      '<div style="font-size:15px;font-weight:800;color:#1f8a4f;margin-bottom:6px">🎉 '+(isDE?'Alle Flaschen ersetzt!':'All bottles replaced!')+'</div>'+
-      '<div style="font-size:12px;color:#1a4a2a;margin-bottom:10px">'+(isDE?'Sitzung abschließen um den Log zu archivieren und neu zu starten.':'Close the session to archive this log and start fresh.')+'</div>'+
-      '<button onclick="closeReplaceSession()" '+
-        'style="background:#1f8a4f;border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:800;padding:10px 28px;cursor:pointer">'+
-        '✅ '+(isDE?'Sitzung abschließen':'Close Session')+'</button>'+
+    html += '<div style="background:#d4f5e2;border-radius:10px;padding:10px 14px;text-align:center;margin-top:4px">'+
+      '<div style="font-size:14px;font-weight:800;color:#1f8a4f">🎉 '+(isDE?'Alle Flaschen ersetzt!':'All bottles replaced!')+'</div>'+
+      '<div style="font-size:11px;color:#1a4a2a;margin-top:3px">'+(isDE?'Sitzung wird automatisch abgeschlossen…':'Session will auto-close shortly…')+'</div>'+
     '</div>';
   }
   html += '</div>';
