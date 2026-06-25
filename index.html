@@ -2671,8 +2671,13 @@ async function addFreeContrib(){
   if (IS_ADMIN && CURRENT_USER) obj.user_id = CURRENT_USER.id;
   if (IS_GUEST) obj.guest_token = GUEST_TOKEN;
 
-  var {error} = await SB.from('free_contributions').insert(obj);
-  if (error){ notify('Error: '+error.message, true); return; }
+  var {data: fcData, error} = await SB.from('free_contributions').insert(obj).select().single();
+  if (error){
+    var msg = error.message || error.details || error.hint || JSON.stringify(error);
+    notify('Save error: '+msg, true);
+    console.error('free_contributions insert error:', error, 'obj:', obj);
+    return;
+  }
 
   notify('🍾 '+(isDE?'Beitrag gespeichert':'Contribution saved')+' · '+(crates*20+extra)+' '+(isDE?'Fl.':'btl'));
   await loadAll();
