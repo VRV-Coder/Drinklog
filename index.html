@@ -4758,6 +4758,17 @@ function renderDrinkTypes(){
   var isDE = LANG==='de';
   var rows = DRINK_TYPE_ROWS.slice().sort(function(a,b){return (a.sort_order||0)-(b.sort_order||0);});
 
+  // ── Save all current input/select values before re-render ──
+  var saved = {};
+  el.querySelectorAll('input[id], select[id], textarea[id]').forEach(function(inp){
+    if (inp.value !== undefined) saved[inp.id] = inp.value;
+  });
+  // Also save which edit panels are open
+  var openEdits = {};
+  el.querySelectorAll('[id^="dtedit-"]').forEach(function(div){
+    if (div.style.display !== 'none') openEdits[div.id] = true;
+  });
+
   var html = '';
 
   // ── Add new drink type form ──
@@ -4861,6 +4872,21 @@ function renderDrinkTypes(){
   html += '</div>';
 
   el.innerHTML = html;
+
+  // ── Restore values typed before re-render ──
+  Object.keys(saved).forEach(function(id){
+    var inp = document.getElementById(id);
+    if (!inp || saved[id] === undefined) return;
+    // Don't restore unchanged default values for the add-form
+    var isDefault = (id === 'dt-emoji' && saved[id] === '🍺') ||
+                    (id === 'dt-order' && saved[id] === String(rows.length + 1));
+    if (!isDefault && saved[id] !== '') inp.value = saved[id];
+  });
+  // Re-open any edit panels that were open
+  Object.keys(openEdits).forEach(function(id){
+    var div = document.getElementById(id);
+    if (div) div.style.display = '';
+  });
 }
 
 function toggleDrinkTypeEdit(id){
