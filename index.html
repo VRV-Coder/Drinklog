@@ -3912,23 +3912,29 @@ function renderReplace(){
 
   // ── Session cutoff: only show logs AFTER the last closed session ──
   var closedSessions = JSON.parse(localStorage.getItem('boc_closed_replace_sessions')||'[]');
-  var sessionCutoff = closedSessions.length
-    ? closedSessions[closedSessions.length-1].closedAt
+  var lastSession = closedSessions.length ? closedSessions[closedSessions.length-1] : null;
+  // Use full timestamp if available (so logs added after closing today still show)
+  var sessionCutoffTs = lastSession
+    ? (lastSession.closedTimestamp || (lastSession.closedAt + 'T23:59:59.999Z'))
     : null;
 
-  // Only drinks logged at €0 unit price count toward bottle replacement.
-  // Priced drinks are settled via the Payments tab instead.
-  // Only include logs AFTER the last closed session (or all if never closed).
   STATE.logs.forEach(function(l){
     var unitPrice = parseFloat(l.unit_price)||0;
     if (unitPrice > 0) return;
-    if (sessionCutoff && l.date <= sessionCutoff) return; // archived in closed session
+    // Compare using logged_at timestamp if available, otherwise date only
+    if (sessionCutoffTs){
+      var logTs = l.logged_at || (l.date + 'T00:00:00.000Z');
+      if (logTs <= sessionCutoffTs) return;
+    }
     if(!cdd[l.date])cdd[l.date]={};
     cdd[l.date][l.drink]=(cdd[l.date][l.drink]||0)+(l.quantity||0);
   });
   STATE.replacements.forEach(function(r){
     if(!r.quantity || r.drink === '_SESSION_CLOSED_') return;
-    if (sessionCutoff && r.for_date <= sessionCutoff) return; // archived
+    if (sessionCutoffTs){
+      var repTs = r.logged_at || (r.for_date + 'T00:00:00.000Z');
+      if (repTs <= sessionCutoffTs) return;
+    }
     if(!rdd[r.for_date])rdd[r.for_date]={};
     rdd[r.for_date][r.drink]=(rdd[r.for_date][r.drink]||0)+(r.quantity||0);
   });
@@ -3959,9 +3965,11 @@ function renderReplace(){
     emptyHtml += '<div style="font-size:48px;margin-bottom:12px">✅</div>';
     emptyHtml += '<div style="font-size:16px;font-weight:800;color:#1f8a4f;margin-bottom:6px">'+esc(t('allSettledUp'))+'</div>';
     emptyHtml += '<div style="font-size:13px;color:#5a3a28;margin-bottom:16px">'+esc(t('noUnsettledDays'))+'</div>';
-    if (sessionCutoff){
+    if (lastSession){
       emptyHtml += '<div style="font-size:12px;background:#d4f5e2;border-radius:8px;padding:8px 14px;color:#1a4a2a;margin-bottom:14px">'+
-        '🗄 '+(LANG==='de'?'Letzte Sitzung abgeschlossen am':'Last session closed on')+' <strong>'+fmtDate(sessionCutoff)+'</strong></div>';
+        '🗄 '+(LANG==='de'?'Letzte Sitzung abgeschlossen am':'Last session closed on')+' <strong>'+fmtDate(lastSession.closedAt)+'</strong>'+
+        (lastSession.note?' · '+esc(lastSession.note):'')+
+      '</div>';
     }
     emptyHtml += '</div>';
     // Still show closed sessions and replacement log even when running total is empty
@@ -4207,10 +4215,10 @@ function doCloseReplaceSession(){
   var isDE = LANG==='de';
   var noteEl = document.getElementById('close-sess-note');
   var note = noteEl ? noteEl.value.trim() : '';
+  var now = new Date().toISOString(); // full timestamp so same-day logs after closing still show
   var today = td();
-  // Store in localStorage only — no Supabase insert needed
   var sessions = JSON.parse(localStorage.getItem('boc_closed_replace_sessions')||'[]');
-  sessions.push({ closedAt: today, note: note, closedBy: CURRENT_NAME });
+  sessions.push({ closedAt: today, closedTimestamp: now, note: note, closedBy: CURRENT_NAME });
   localStorage.setItem('boc_closed_replace_sessions', JSON.stringify(sessions));
   closeModal();
   notify('✅ '+(isDE?'Sitzung abgeschlossen':'Session closed')+(note?' · '+note:''));
