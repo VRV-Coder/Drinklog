@@ -2355,22 +2355,30 @@ async function saveLog(){
     var avail2 = (contributed2[loggedDrink]||0) - (consumed2[loggedDrink]||0);
 
     if ((contributed2[loggedDrink]||0) === 0 || avail2 < 0) {
-      // No fund — auto-log as a replacement needed and navigate to Replace tab
-      notify('🔄 '+(LANG==='de'
-        ? 'Kein Freibier-Vorrat — wird im Ersatz-Tab eingetragen'
-        : 'No free drink fund — logging for replacement'), true);
-      // Auto-insert a replacement record so it shows in Replace tab immediately
+      // No free fund — drink is logged, and a replacement entry is auto-created in Replace tab
+      // Use the quantity from the data row (logQty already reset so use insertObj)
+      var replQty = (insertObj && insertObj.quantity) || STATE.logQty || 1;
+      var replDate = (insertObj && insertObj.date) || td();
       var replObj = {
-        for_date: STATE.logDate||td(),
+        for_date: replDate,
         drink: loggedDrink,
-        quantity: insertObj.quantity||1,
+        quantity: replQty,
         replaced_by: loggedPerson,
-        note: LANG==='de'?'Automatisch erfasst — kein Freibier-Vorrat':'Auto-logged — no free drink fund',
+        note: (LANG==='de'?'Kein Freibier-Vorrat':'No free drink fund'),
         added_by: CURRENT_NAME
       };
       if (IS_ADMIN && CURRENT_USER) replObj.user_id = CURRENT_USER.id;
       if (IS_GUEST) replObj.guest_token = GUEST_TOKEN;
-      SB.from('replacements').insert(replObj).then(function(){
+
+      SB.from('replacements').insert(replObj).then(function(res){
+        if (res.error){
+          notify('Replace log error: '+res.error.message, true);
+          console.error('Auto-replace insert error:', res.error, replObj);
+        } else {
+          notify('🍺 '+(LANG==='de'
+            ? 'Keine Freies Bier verfügbar — im Ersatz-Tab eingetragen'
+            : 'No free beers available — added to Replace tab'));
+        }
         loadAll().then(function(){ switchTabByName('replace'); });
       });
     } else if (avail2 <= 3) {
