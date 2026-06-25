@@ -2449,6 +2449,18 @@ function renderFreeDrinks(){
   var isDE = LANG==='de';
   var contribs = STATE.freeContributions || [];
 
+  // ── Preserve form values across re-renders (realtime / loadAll wipes the DOM) ──
+  var saved = {
+    name:   (document.getElementById('fc-name')   || {}).value,
+    drink:  (document.getElementById('fc-drink')  || {}).value,
+    crates: (document.getElementById('fc-crates') || {}).value,
+    extra:  (document.getElementById('fc-extra')  || {}).value,
+    paidto: (document.getElementById('fc-paidto') || {}).value,
+    amount: (document.getElementById('fc-amount') || {}).value,
+    date:   (document.getElementById('fc-date')   || {}).value,
+    note:   (document.getElementById('fc-note')   || {}).value,
+  };
+
   // ── Compute total contributed bottles per drink type ──
   // A crate of beer = 20 bottles (standard German crate)
   var CRATE_SIZE = 20;
@@ -2645,6 +2657,16 @@ function renderFreeDrinks(){
   html += '</div>';
 
   el.innerHTML = html;
+
+  // ── Restore form values that were typed before re-render ──
+  if (saved.name)   { var n=document.getElementById('fc-name');   if(n) n.value=saved.name; }
+  if (saved.drink)  { var d=document.getElementById('fc-drink');  if(d) d.value=saved.drink; }
+  if (saved.crates && saved.crates!=='0') { var cr=document.getElementById('fc-crates'); if(cr) cr.value=saved.crates; }
+  if (saved.extra  && saved.extra!=='0')  { var ex=document.getElementById('fc-extra');  if(ex) ex.value=saved.extra; }
+  if (saved.paidto) { var pt=document.getElementById('fc-paidto'); if(pt) pt.value=saved.paidto; }
+  if (saved.amount) { var am=document.getElementById('fc-amount'); if(am) am.value=saved.amount; }
+  if (saved.date)   { var dt=document.getElementById('fc-date');   if(dt) dt.value=saved.date; }
+  if (saved.note)   { var nt=document.getElementById('fc-note');   if(nt) nt.value=saved.note; }
 }
 
 async function addFreeContrib(){
@@ -2680,6 +2702,13 @@ async function addFreeContrib(){
   }
 
   notify('🍾 '+(isDE?'Beitrag gespeichert':'Contribution saved')+' · '+(crates*20+extra)+' '+(isDE?'Fl.':'btl'));
+
+  // Clear quantity/money fields but keep name and drink for next quick entry
+  ['fc-crates','fc-extra','fc-paidto','fc-amount','fc-note'].forEach(function(id){
+    var el2 = document.getElementById(id);
+    if (el2) el2.value = id==='fc-crates'||id==='fc-extra' ? '0' : '';
+  });
+
   await loadAll();
 }
 
