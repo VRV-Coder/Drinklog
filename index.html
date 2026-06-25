@@ -2340,7 +2340,8 @@ async function saveLog(){
     var CRATE_SIZE = 20;
     var contributed2 = {};
     (STATE.freeContributions||[]).forEach(function(c){
-      var k = c.drink || loggedDrink;
+      var k = c.drink;
+      if (!k) return;
       contributed2[k] = (contributed2[k]||0) + (c.crates||0)*CRATE_SIZE + (c.extra_bottles||0);
     });
     var consumed2 = {};
@@ -2351,13 +2352,36 @@ async function saveLog(){
       if (r.drink && (r.quantity||0) > 0 && consumed2[r.drink])
         consumed2[r.drink]=Math.max(0,consumed2[r.drink]-(r.quantity||0));
     });
-    var avail2 = (contributed2[loggedDrink]||0) - (consumed2[loggedDrink]||0);
+    var avail2 = Math.max(0, (contributed2[loggedDrink]||0) - (consumed2[loggedDrink]||0));
 
-    if ((contributed2[loggedDrink]||0) === 0 || avail2 <= 0) {
-      // No free fund — drink logged, will appear in Replace tab automatically
+    // Also check if there are already pending replacements for this drink
+    // (fund covers those first before needing new replacements)
+    var pendingReplace = 0;
+    STATE.logs.forEach(function(l){
+      if ((parseFloat(l.unit_price)||0)===0 && l.drink===loggedDrink)
+        pendingReplace += (l.quantity||0);
+    });
+    STATE.replacements.forEach(function(r){
+      if (r.drink===loggedDrink && (r.quantity||0)>0) pendingReplace-=(r.quantity||0);
+    });
+    pendingReplace = Math.max(0, pendingReplace);
+    // How much of the pending replacement does the fund now cover?
+    var fundCoversExisting = Math.min(pendingReplace, avail2);
+    var netAvail = avail2 - fundCoversExisting; // what's left after covering existing pending
+
+    if ((contributed2[loggedDrink]||0) === 0 && pendingReplace === 0) {
+      // No fund at all, no existing pending — goes straight to Replace tab
       notify('🍾 '+(LANG==='de'
-        ? 'Kein Freibier-Vorrat — Getränk im Ersatz-Tab sichtbar'
-        : 'No free drinks available — drink added to Replace tab'));
+        ? 'Kein Freibier-Vorrat — erscheint im Ersatz-Tab'
+        : 'No free drinks available — appears in Replace tab'));
+    } else if (netAvail <= 0 && (contributed2[loggedDrink]||0) === 0) {
+      notify('🍾 '+(LANG==='de'
+        ? 'Kein Freibier-Vorrat — erscheint im Ersatz-Tab'
+        : 'No free drinks available — appears in Replace tab'));
+    } else if (avail2 <= 0) {
+      notify('🍾 '+(LANG==='de'
+        ? 'Freibier-Vorrat aufgebraucht — erscheint im Ersatz-Tab'
+        : 'Free drink fund empty — appears in Replace tab'));
     } else if (avail2 <= 3) {
       notify('⚠️ '+(LANG==='de'
         ? 'Nur noch '+avail2+' '+loggedDrink.replace(/^.+? /,'')+' im Freibier-Vorrat!'
@@ -2801,7 +2825,8 @@ function renderFreeDrinks(){
   var CRATE_SIZE = 20;
   var contributed = {}; // drink → total bottles contributed
   contribs.forEach(function(c){
-    var key = c.drink || '🍺 Beer (Pils)';
+    var key = c.drink;
+    if (!key) return; // skip if drink type was not set
     contributed[key] = (contributed[key]||0) + (c.crates||0)*CRATE_SIZE + (c.extra_bottles||0);
   });
 
@@ -2868,10 +2893,16 @@ function renderFreeDrinks(){
     'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 12px;font-size:15px;font-weight:700;color:#1a0e08;background:#fff"/></div>';
 
   // Drink type
+  // Drink type selector — use DRINK_TYPES if loaded, else hardcoded fallback
+  var drinkOptions = (DRINK_TYPES && DRINK_TYPES.length ? DRINK_TYPES : [
+    '🍺 Beer (Weizen)','🍺 Beer (Pils)','🍺 Radler','🍷 Wine','🥃 Spirits',
+    '🍹 Cocktail','🧃 Juice','💧 Water','☕ Coffee','🧋 Other'
+  ]);
   html += '<div><div style="font-size:11px;font-weight:700;color:#7a5200;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">'+(isDE?'Getränkeart':'Drink Type')+'</div>';
   html += '<select id="fc-drink" style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 12px;font-size:15px;font-weight:700;color:#1a0e08;background:#fff">';
-  DRINK_TYPES.forEach(function(d){
-    html += '<option value="'+esc(d)+'">'+emoji(d)+' '+esc(d.replace(/^.+? /,''))+'</option>';
+  html += '<option value="" disabled selected>'+(isDE?'Getränk wählen...':'Select drink type...')+'</option>';
+  drinkOptions.forEach(function(d){
+    html += '<option value="'+esc(d)+'">'+esc(d)+'</option>';
   });
   html += '</select></div>';
 
@@ -3040,7 +3071,7 @@ function renderFreeDrinks(){
 
   // ── Restore form values that were typed before re-render ──
   if (saved.name)   { var n=document.getElementById('fc-name');   if(n) n.value=saved.name; }
-  if (saved.drink)  { var d=document.getElementById('fc-drink');  if(d) d.value=saved.drink; }
+  if (saved.drink)  { var d2=document.getElementById('fc-drink');  if(d2 && saved.drink) d2.value=saved.drink; }
   if (saved.crates && saved.crates!=='0') { var cr=document.getElementById('fc-crates'); if(cr) cr.value=saved.crates; }
   if (saved.extra  && saved.extra!=='0')  { var ex=document.getElementById('fc-extra');  if(ex) ex.value=saved.extra; }
   if (saved.paidto) { var pt=document.getElementById('fc-paidto'); if(pt) pt.value=saved.paidto; }
@@ -3052,7 +3083,8 @@ function renderFreeDrinks(){
 async function addFreeContrib(){
   var isDE = LANG==='de';
   var name   = (document.getElementById('fc-name').value||'').trim();
-  var drink  = document.getElementById('fc-drink').value;
+  var drinkEl = document.getElementById('fc-drink');
+  var drink  = drinkEl ? drinkEl.value.trim() : '';
   var crates = parseInt(document.getElementById('fc-crates').value)||0;
   var extra  = parseInt(document.getElementById('fc-extra').value)||0;
   var paidTo = (document.getElementById('fc-paidto').value||'').trim();
@@ -3061,6 +3093,7 @@ async function addFreeContrib(){
   var note   = (document.getElementById('fc-note').value||'').trim();
 
   if (!name){ notify(isDE?'Bitte Namen eingeben':'Please enter your name',true); return; }
+  if (!drink){ notify(isDE?'Bitte Getränkeart wählen':'Please select a drink type',true); return; }
   if (crates===0 && extra===0){ notify(isDE?'Bitte Kisten oder Flaschen eingeben':'Please enter crates or bottles',true); return; }
 
   var obj = {
@@ -3929,6 +3962,31 @@ function renderReplace(){
   });
 
   // Build ALL-TIME per-drink totals (not day-scoped)
+  // Free drink fund balance also offsets the replacement owed count:
+  // if someone bought crates for the fund, those cover the replacement debt first.
+  var CRATE_SIZE_FREE = 20;
+  var freeFundContrib = {}; // drink → total bottles in free fund
+  (STATE.freeContributions||[]).forEach(function(c){
+    if (!c.drink) return;
+    freeFundContrib[c.drink] = (freeFundContrib[c.drink]||0) + (c.crates||0)*CRATE_SIZE_FREE + (c.extra_bottles||0);
+  });
+  // Free fund consumed = zero-price logs already covered by the fund
+  // (all zero-price logs, minus replacements already logged)
+  var freeFundConsumed = {};
+  STATE.logs.forEach(function(l){
+    if ((parseFloat(l.unit_price)||0) === 0)
+      freeFundConsumed[l.drink] = (freeFundConsumed[l.drink]||0) + (l.quantity||0);
+  });
+  STATE.replacements.forEach(function(r){
+    if (r.drink && (r.quantity||0) > 0 && freeFundConsumed[r.drink])
+      freeFundConsumed[r.drink] = Math.max(0, freeFundConsumed[r.drink] - (r.quantity||0));
+  });
+  // Available free fund per drink (unused bottles in fund)
+  var freeFundAvail = {};
+  Object.keys(freeFundContrib).forEach(function(d){
+    freeFundAvail[d] = Math.max(0, (freeFundContrib[d]||0) - (freeFundConsumed[d]||0));
+  });
+
   var ob={};
   Object.keys(cdd).forEach(function(d){
     Object.keys(cdd[d]).forEach(function(drink){
@@ -3940,6 +3998,16 @@ function renderReplace(){
       ob[drink].remaining += Math.max(0, owed - repd);
       ob[drink].byDate[d] = {owed:owed, replaced:repd, remaining:Math.max(0,owed-repd)};
     });
+  });
+
+  // Apply free fund: fund available reduces the remaining owed in Replace tab
+  Object.keys(ob).forEach(function(drink){
+    var fundCovers = Math.min(ob[drink].remaining, freeFundAvail[drink]||0);
+    if (fundCovers > 0){
+      ob[drink].replaced += fundCovers;
+      ob[drink].remaining = Math.max(0, ob[drink].remaining - fundCovers);
+      ob[drink].fundCovers = fundCovers; // track for display
+    }
   });
 
   // Filter to drinks that still have something owed
@@ -4105,6 +4173,7 @@ function renderReplace(){
               (isDone?'✅ '+(isDE?'Erledigt':'Done'):remLabel+' '+(isDE?'offen':'left'))+
             '</div>'+
             '<div style="font-size:12px;color:#7a5200">'+owedLabel+'</div>'+
+            (v.fundCovers?'<div style="font-size:10px;color:#1f8a4f;font-weight:700">🍾 '+v.fundCovers+' '+(isDE?'vom Freibier':'from free fund')+'</div>':'')+
           '</div>'+
         '</div>'+
         '<div class="prog" style="margin-bottom:8px"><div class="prog-fill'+(isDone?' done':'')+'" style="width:'+pct+'%"></div></div>'+
