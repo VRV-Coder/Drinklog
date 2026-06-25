@@ -2379,21 +2379,23 @@ async function saveLog(){
 // This prevents yesterday's settled drinks mixing into today's counts/leaderboard.
 function getLastSettlementDate(){
   // Walk through dates chronologically and find the most recent date
-  // after which the cumulative bill was fully paid
+  // where the cumulative PRICED bill was fully paid.
+  // Free (zero-price) drinks are excluded — they don't create a money debt.
   var allDates = [...new Set(STATE.logs.map(function(l){return l.date;}))].sort();
   var lastSettled = null;
 
   for (var i = 0; i < allDates.length; i++){
     var upToDate = allDates[i];
-    // Total bill up to and including this date
+    // Only count priced (non-free) drinks in the bill
     var bill = STATE.logs.reduce(function(s,l){
-      return l.date <= upToDate ? s+(parseFloat(l.total_price)||0) : s;
-    },0);
+      return l.date <= upToDate && (parseFloat(l.unit_price)||0) > 0
+        ? s + (parseFloat(l.total_price)||0) : s;
+    }, 0);
     // Total paid up to this date
     var paid = STATE.payments.reduce(function(s,p){
-      return p.date <= upToDate ? s+(parseFloat(p.amount)||0) : s;
-    },0);
-    // If fully settled (within 1 cent), record this as a settlement point
+      return p.date <= upToDate ? s + (parseFloat(p.amount)||0) : s;
+    }, 0);
+    // Settled = there is a real bill and it is fully covered
     if (bill > 0.01 && paid >= bill - 0.01){
       lastSettled = upToDate;
     }
@@ -3874,6 +3876,7 @@ function renderReplace(){
     cdd[l.date][l.drink]=(cdd[l.date][l.drink]||0)+(l.quantity||0);
   });
   STATE.replacements.forEach(function(r){
+    if(!r.quantity || r.drink === '_SESSION_CLOSED_') return; // skip notes and session markers
     if(!rdd[r.for_date])rdd[r.for_date]={};
     rdd[r.for_date][r.drink]=(rdd[r.for_date][r.drink]||0)+(r.quantity||0);
   });
@@ -3953,33 +3956,56 @@ function renderReplace(){
   }
 
   // ── PER-DRINK ALL-TIME CARDS (not date-scoped) ──────────
-  html += card(isDE?'Alle Getränke — Gesamt':'All Drinks — Running Total',
-    allDrinks.map(function(drink){
+  // Closed sessions: store cutoff dates in localStorage
+  var closedSessions = JSON.parse(localStorage.getItem('boc_closed_replace_sessions')||'[]');
+  // Active: only drinks with activity AFTER the last closed date
+  var lastClosed = closedSessions.length ? closedSessions[closedSessions.length-1].closedAt : null;
+
+  // Filter allDrinks to only those with remaining owed (already done above)
+  // but also allow showing "Done" ones if not yet closed
+  var activeDrinks = Object.keys(ob).filter(function(d){ return ob[d].owed > 0; });
+
+  // All-done check for the whole section
+  var allDone = activeDrinks.length > 0 && activeDrinks.every(function(d){ return ob[d].remaining === 0; });
+
+  html += '<div class="card">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">';
+  html += '<div style="font-size:13px;font-weight:800;color:#5a3a28">'+(isDE?'Alle Getränke — Gesamt':'All Drinks — Running Total')+'</div>';
+  if (allDone){
+    html += '<button onclick="closeReplaceSession()" '+
+      'style="background:linear-gradient(135deg,#1f8a4f,#28b866);border:none;border-radius:10px;color:#fff;'+
+      'font-size:13px;font-weight:800;padding:8px 16px;cursor:pointer;min-height:38px">'+
+      '✅ '+(isDE?'Sitzung abschließen':'Close This Session')+'</button>';
+  }
+  html += '</div>';
+
+  html += activeDrinks.map(function(drink){
       var v = ob[drink];
       var cs = crateSize(drink);
       var showCrate = cs > 0 && v.owed >= cs;
       var owedLabel  = showCrate ? fmtCrates(drink,v.replaced,isDE)+' / '+fmtCrates(drink,v.owed,isDE) : v.replaced+'/'+v.owed;
       var remLabel   = showCrate ? fmtCrates(drink,v.remaining,isDE) : v.remaining;
       var pct = v.owed>0?Math.round(v.replaced/v.owed*100):100;
+      var noteId = 'repl-note-'+drink.replace(/\W/g,'_');
 
-      // Build bottle icons (show crate icons then remainder)
+      // Build bottle icons
       var bottles = '';
       if (showCrate) {
         var cratesOwed     = Math.floor(v.owed/cs), remOwed = v.owed%cs;
         var cratesReplaced = Math.floor(v.replaced/cs);
-        for (var c=0;c<cratesOwed;c++) bottles+='<div class="bottle '+(c<cratesReplaced?'done':'empty')+'" style="width:34px;height:34px;font-size:19px;border-radius:8px" title="1 crate ('+cs+')">📦</div>';
-        for (var i=0;i<remOwed;i++) {
-          var idx = cratesOwed*cs+i;
-          bottles+='<div class="bottle '+(idx<v.replaced?'done':'empty')+'">'+emoji(drink)+'</div>';
+        for (var c2=0;c2<cratesOwed;c2++) bottles+='<div class="bottle '+(c2<cratesReplaced?'done':'empty')+'" style="width:34px;height:34px;font-size:19px;border-radius:8px" title="1 crate ('+cs+')">📦</div>';
+        for (var i2=0;i2<remOwed;i2++) {
+          var idx2 = cratesOwed*cs+i2;
+          bottles+='<div class="bottle '+(idx2<v.replaced?'done':'empty')+'">'+emoji(drink)+'</div>';
         }
       } else {
         var cap = Math.min(v.owed, 30);
-        for (var i=0;i<cap;i++) bottles+='<div class="bottle '+(i<v.replaced?'done':'empty')+'">'+emoji(drink)+'</div>';
+        for (var i3=0;i3<cap;i3++) bottles+='<div class="bottle '+(i3<v.replaced?'done':'empty')+'">'+emoji(drink)+'</div>';
         if (v.owed>30) bottles+='<span style="font-size:11px;color:#7a5200;align-self:center"> +'+(v.owed-30)+' more</span>';
       }
 
-      // Count how many dates have entries for this drink
       var datesCount = Object.keys(v.byDate).length;
+      var isDone = v.remaining === 0;
 
       return '<div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #ece0d4">'+
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">'+
@@ -3990,31 +4016,67 @@ function renderReplace(){
             '</div>'+
           '</div>'+
           '<div style="text-align:right">'+
-            '<div style="font-size:14px;font-weight:800;color:'+(v.remaining>0?'#c4392b':'#1f8a4f')+'">'+
-              (v.remaining>0?remLabel+' '+(isDE?'offen':'left'):'✓ '+(isDE?'Erledigt':'Done'))+
+            '<div style="font-size:14px;font-weight:800;color:'+(isDone?'#1f8a4f':'#c4392b')+'">'+
+              (isDone?'✅ '+(isDE?'Erledigt':'Done'):remLabel+' '+(isDE?'offen':'left'))+
             '</div>'+
             '<div style="font-size:12px;color:#7a5200">'+owedLabel+'</div>'+
           '</div>'+
         '</div>'+
-        '<div class="prog" style="margin-bottom:8px"><div class="prog-fill'+(v.remaining===0?' done':'')+'" style="width:'+pct+'%"></div></div>'+
+        '<div class="prog" style="margin-bottom:8px"><div class="prog-fill'+(isDone?' done':'')+'" style="width:'+pct+'%"></div></div>'+
         '<div class="bottles" style="margin-bottom:8px">'+bottles+'</div>'+
-        (v.remaining>0?
-          '<div class="repl-ctrl">'+
-            '<button class="btn-icon" onclick="replBottleAllTime(\''+esc(drink)+'\',-1)" '+(v.replaced<=0?'disabled':'')+'>−</button>'+
-            '<span>'+(showCrate?remLabel:v.remaining)+' '+esc(t('toReplace'))+'</span>'+
-            '<button class="btn-icon" style="border-color:#c75a2a;background:#f3e4d3;color:#b5481f" onclick="replBottleAllTime(\''+esc(drink)+'\',1)">+</button>'+
-            '<span style="color:#b5481f;font-size:12px;font-weight:700">'+esc(t('markReplaced'))+'</span>'+
-          '</div>' :
-          '<div style="display:flex;align-items:center;gap:6px">'+
-            '<span style="font-size:13px;color:#b5481f;font-weight:700">'+esc(t('allReplaced'))+' ✓</span>'+
-            '<button onclick="replBottleAllTime(\''+esc(drink)+'\',-1)" style="background:none;border:none;cursor:pointer;color:#5a3a28;font-size:13px">'+esc(t('undo'))+'</button>'+
-          '</div>')+
-      '</div>';
-    }).join('')
-  );
 
+        // Note field — always visible
+        '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">'+
+          '<input id="'+noteId+'" type="text" placeholder="'+(isDE?'Notiz zu diesem Getränk...':'Add a note for this drink...')+'" '+
+            'style="flex:1;border:1.5px solid #e8dccc;border-radius:8px;padding:7px 10px;font-size:13px;color:#1a0e08;background:#fff"/>'+
+          '<button onclick="saveReplaceNote(\''+esc(drink)+'\',\''+noteId+'\')" '+
+            'style="background:#b5481f;border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;padding:7px 12px;cursor:pointer;white-space:nowrap;min-height:36px">'+
+            (isDE?'+ Notiz':'+ Note')+'</button>'+
+        '</div>'+
+
+        // Controls / status
+        (isDone
+          ? '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
+              '<span style="font-size:13px;color:#1f8a4f;font-weight:800">✅ '+(isDE?'Alle ersetzt':'All replaced')+'</span>'+
+              '<button onclick="replBottleAllTime(\''+esc(drink)+'\',-1)" '+
+                'style="background:#f5ede4;border:1.5px solid #b5481f;border-radius:7px;color:#b5481f;font-size:12px;font-weight:700;padding:5px 10px;cursor:pointer">'+
+                '↩ '+(isDE?'Rückgängig':'Undo')+'</button>'+
+            '</div>'
+          : '<div class="repl-ctrl">'+
+              '<button class="btn-icon" onclick="replBottleAllTime(\''+esc(drink)+'\',-1)" '+(v.replaced<=0?'disabled':'')+'>−</button>'+
+              '<span>'+(showCrate?remLabel:v.remaining)+' '+esc(t('toReplace'))+'</span>'+
+              '<button class="btn-icon" style="border-color:#c75a2a;background:#f3e4d3;color:#b5481f" onclick="replBottleAllTime(\''+esc(drink)+'\',1)">+</button>'+
+              '<span style="color:#b5481f;font-size:12px;font-weight:700">'+esc(t('markReplaced'))+'</span>'+
+            '</div>')+
+      '</div>';
+    }).join('');
+
+  // If all done — show big close prompt
+  if (allDone){
+    html += '<div style="background:#d4f5e2;border:1.5px solid #1f8a4f;border-radius:12px;padding:14px;text-align:center;margin-top:4px">'+
+      '<div style="font-size:15px;font-weight:800;color:#1f8a4f;margin-bottom:6px">🎉 '+(isDE?'Alle Flaschen ersetzt!':'All bottles replaced!')+'</div>'+
+      '<div style="font-size:12px;color:#1a4a2a;margin-bottom:10px">'+(isDE?'Sitzung abschließen um den Log zu archivieren und neu zu starten.':'Close the session to archive this log and start fresh.')+'</div>'+
+      '<button onclick="closeReplaceSession()" '+
+        'style="background:#1f8a4f;border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:800;padding:10px 28px;cursor:pointer">'+
+        '✅ '+(isDE?'Sitzung abschließen':'Close Session')+'</button>'+
+    '</div>';
+  }
+  html += '</div>';
+
+  // ── REPLACEMENT LOG ──────────────────────────────────────
   if(STATE.replacements.length) html+=card(t('replacementLog'),STATE.replacements.map(function(r){
     var canDel=isMine(r);
+    var isClosed = r.drink === '_SESSION_CLOSED_';
+    if (isClosed){
+      return '<div class="entry" style="background:#d4f5e2;border-radius:10px;margin-bottom:6px"><div class="entry-l">'+
+        '<span style="font-size:22px">✅</span>'+
+        '<div>'+
+          '<div class="en" style="color:#1f8a4f">'+(LANG==='de'?'Sitzung abgeschlossen':'Session Closed')+'</div>'+
+          '<div class="es">'+fmtDate(r.for_date)+(r.note?' · '+esc(r.note):'')+'</div>'+
+        '</div></div>'+
+        (canDel?'<button onclick="delEntry(\'replacements\',\''+r.id+'\',\'Session close\')" style="background:none;border:none;color:#c4392b;cursor:pointer;font-size:16px">🗑</button>':'')+
+      '</div>';
+    }
     return '<div class="entry"><div class="entry-l"><span class="ej">'+emoji(r.drink)+'</span><div>'+
       '<div class="en">'+r.quantity+'× '+esc(r.drink.replace(/^.+? /,''))+'</div>'+
       '<div class="es">'+esc(t('forDate'))+' '+fmtDate(r.for_date)+(r.replaced_by?' · by '+esc(r.replaced_by):'')+(r.note?' · '+esc(r.note):'')+'</div>'+
@@ -4022,7 +4084,68 @@ function renderReplace(){
       '</div></div>'+delEditBtns('replacements',r.id,'Replacement for '+fmtDate(r.for_date),canDel,r)+'</div>';
   }).join(''));
 
+  // ── CLOSED SESSIONS archive ──────────────────────────────
+  if (closedSessions.length){
+    html += '<div class="card" style="margin-top:14px">';
+    html += '<div style="font-size:13px;font-weight:800;color:#5a3a28;margin-bottom:10px">🗄 '+(isDE?'Abgeschlossene Sitzungen':'Closed Sessions')+'</div>';
+    closedSessions.slice().reverse().forEach(function(sess, i){
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0e8dc">'+
+        '<span style="font-size:11px;color:#7a5200;flex:1">'+fmtDate(sess.closedAt)+(sess.note?' · '+esc(sess.note):'')+'</span>'+
+        '<span style="font-size:11px;background:#d4f5e2;color:#1f8a4f;border-radius:6px;padding:1px 7px;font-weight:700">✅ '+(isDE?'Abgeschlossen':'Closed')+'</span>'+
+        (IS_ADMIN?'<button onclick="reopenReplaceSession('+i+')" style="background:none;border:none;color:#b5481f;cursor:pointer;font-size:12px;font-weight:700">↩ '+(isDE?'Wieder öffnen':'Reopen')+'</button>':'')+
+      '</div>';
+    });
+    html += '</div>';
+  }
+
   el.innerHTML=html;
+}
+
+async function closeReplaceSession(){
+  var isDE = LANG==='de';
+  var note = prompt(isDE?'Optionale Notiz zur Sitzung (z.B. "Nach Training am Dienstag"):':'Optional note for this session (e.g. "After Tuesday practice"):') || '';
+  var today = td();
+  // Insert a marker row in replacements table so it shows in the log
+  var {error} = await SB.from('replacements').insert({
+    for_date: today, drink: '_SESSION_CLOSED_', quantity: 0,
+    replaced_by: CURRENT_NAME, note: note||null, added_by: CURRENT_NAME
+  });
+  if (error){ notify('Error: '+error.message, true); return; }
+  // Save to localStorage for display
+  var sessions = JSON.parse(localStorage.getItem('boc_closed_replace_sessions')||'[]');
+  sessions.push({ closedAt: today, note: note, closedBy: CURRENT_NAME });
+  localStorage.setItem('boc_closed_replace_sessions', JSON.stringify(sessions));
+  notify('✅ '+(isDE?'Sitzung abgeschlossen':'Session closed')+(note?' · '+note:''));
+  await loadAll();
+}
+
+function reopenReplaceSession(idx){
+  var isDE = LANG==='de';
+  if (!confirm(isDE?'Sitzung wieder öffnen? Die Sitzung wird aus der abgeschlossenen Liste entfernt.':'Reopen this session? It will be removed from the closed list.')) return;
+  var sessions = JSON.parse(localStorage.getItem('boc_closed_replace_sessions')||'[]');
+  // Also reverse-sorted display, so idx 0 = last item
+  var realIdx = sessions.length - 1 - idx;
+  sessions.splice(realIdx, 1);
+  localStorage.setItem('boc_closed_replace_sessions', JSON.stringify(sessions));
+  notify(isDE?'Sitzung wieder geöffnet':'Session reopened');
+  renderReplace();
+}
+
+async function saveReplaceNote(drink, noteInputId){
+  var isDE = LANG==='de';
+  var inp = document.getElementById(noteInputId);
+  var note = inp ? inp.value.trim() : '';
+  if (!note){ notify(isDE?'Bitte Notiz eingeben':'Please enter a note', true); return; }
+  var today = td();
+  // Insert a zero-quantity replacement row with just the note
+  var {error} = await SB.from('replacements').insert({
+    for_date: today, drink: drink, quantity: 0,
+    replaced_by: CURRENT_NAME, note: note, added_by: CURRENT_NAME
+  });
+  if (error){ notify('Error: '+error.message, true); return; }
+  if (inp) inp.value = '';
+  notify('📝 '+(isDE?'Notiz gespeichert':'Note saved')+': '+note);
+  await loadAll();
 }
 
 // Shows the "who is replacing?" popup when + is tapped
