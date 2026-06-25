@@ -1352,6 +1352,7 @@ async function quickAddDrink(person, drink, event){
     var CRATE_SIZE=20, contribsQ=loadFreeContribs(), contrQ={}, consQ={};
     contribsQ.forEach(function(c){ var k=c.drink||'🍺 Beer (Pils)'; contrQ[k]=(contrQ[k]||0)+(c.crates||0)*CRATE_SIZE+(c.extraBottles||0); });
     STATE.logs.forEach(function(l){ if((parseFloat(l.unit_price)||0)===0) consQ[l.drink]=(consQ[l.drink]||0)+(l.quantity||0); });
+    STATE.replacements.forEach(function(r){ if(r.drink&&consQ[r.drink]) consQ[r.drink]=Math.max(0,consQ[r.drink]-(r.quantity||0)); });
     var availQ=(contrQ[drink]||0)-(consQ[drink]||0);
     if ((contrQ[drink]||0)===0 || availQ<0){
       notify('🔄 '+(LANG==='de'?'Kein Freibier-Vorrat — bitte in Ersatz-Tab':'No free drink fund — please log replacement'),true);
@@ -2072,6 +2073,10 @@ async function saveLog(){
     STATE.logs.forEach(function(l){
       if ((parseFloat(l.unit_price)||0)===0) consumed2[l.drink]=(consumed2[l.drink]||0)+(l.quantity||0);
     });
+    // Subtract replacements — returned bottles restore the fund
+    STATE.replacements.forEach(function(r){
+      if (r.drink && consumed2[r.drink]) consumed2[r.drink]=Math.max(0,consumed2[r.drink]-(r.quantity||0));
+    });
     var avail2 = (contributed2[loggedDrink]||0) - (consumed2[loggedDrink]||0);
     if ((contributed2[loggedDrink]||0) === 0 || avail2 < 0) {
       // No fund for this drink — nudge toward Replace tab
@@ -2458,6 +2463,15 @@ function renderFreeDrinks(){
   STATE.logs.forEach(function(l){
     if ((parseFloat(l.unit_price)||0) === 0){
       consumed[l.drink] = (consumed[l.drink]||0) + (l.quantity||0);
+    }
+  });
+
+  // ── Subtract replacements — replaced bottles go back into the fund ──
+  // A replacement means those bottles were physically returned, so they
+  // should not count as "consumed" against the free drink balance.
+  STATE.replacements.forEach(function(r){
+    if (r.drink && consumed[r.drink]){
+      consumed[r.drink] = Math.max(0, consumed[r.drink] - (r.quantity||0));
     }
   });
 
