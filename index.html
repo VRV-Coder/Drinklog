@@ -1214,9 +1214,40 @@ function renderRunningTodayTab(){
     if ((parseFloat(l.unit_price)||0) === 0) byPerson[l.person].freeCount += (l.quantity||0);
   });
 
-  var rows = Object.keys(byPerson).sort().map(function(person){
+  var activeRows = [], closedRows = [];
+  Object.keys(byPerson).sort().forEach(function(person){
     var pd = byPerson[person];
-    var isMe = person === CURRENT_NAME;
+    var tabClosedToday2 = (STATE.tabCloses||[]).some(function(c){ return c.person===person && c.closed_at===today; });
+    if (tabClosedToday2) closedRows.push(person);
+    else activeRows.push(person);
+  });
+
+  var rows = activeRows.map(function(person){ return buildRunningRow(person, byPerson[person], today, isDE); }).join('');
+
+  var closedSection = '';
+  if (closedRows.length){
+    var closedId = 'rtab-closed-'+today;
+    closedSection =
+      '<div style="margin-top:10px">'+
+      '<button onclick="(function(el){el.style.display=el.style.display===\'none\'?\'\':\'none\';})(document.getElementById(\''+closedId+'\'))" '+
+        'style="width:100%;background:#f5ede4;border:1.5px solid #e8dccc;border-radius:10px;padding:8px 14px;'+
+        'font-size:12px;font-weight:700;color:#5a3a28;cursor:pointer;text-align:left">'+
+        '✅ '+(isDE?'Tab geschlossen':'Tab closed')+' ('+closedRows.length+')'+'  ▶'+
+      '</button>'+
+      '<div id="'+closedId+'" style="display:none;margin-top:6px">'+
+        closedRows.map(function(person){ return buildRunningRow(person, byPerson[person], today, isDE); }).join('')+
+      '</div>'+
+      '</div>';
+  }
+
+  return '<div class="card" style="margin-bottom:14px">'+
+    '<div class="card-title">'+(isDE?'HEUTE — LAUFENDE RECHNUNG':'TODAY\'S RUNNING TAB')+'</div>'+
+    rows+
+    closedSection+
+  '</div>';
+}
+
+function buildRunningRow(person, pd, today, isDE){
 
     // ── Compute today's settlement state for this person ──
     // Money: how much they owe today vs what they've paid (all-time payments)
@@ -1355,12 +1386,6 @@ function renderRunningTodayTab(){
         '<div style="font-size:16px;color:#7a5200">👁</div>'+
       '</div>'+
     '</div>';
-  }).join('');
-
-  return '<div class="card" style="margin-bottom:14px">'+
-    '<div class="card-title">'+(isDE?'HEUTE — LAUFENDE RECHNUNG':'TODAY\'S RUNNING TAB')+'</div>'+
-    rows+
-  '</div>';
 }
 
 // Quick add a drink directly from the running tab +/- buttons
@@ -1766,6 +1791,13 @@ function renderConsolidatedToday(){
     var bottlesSettled = totalBottlesOwed === 0 || bottlesRemaining === 0;
 
     var isSettled = moneySettled && bottlesSettled;
+
+    // A tab close by this person also counts as settled —
+    // they've acknowledged their drinks and are done for this session
+    if (!isSettled) {
+      var personTabClosed = (STATE.tabCloses||[]).some(function(c){ return c.person === person; });
+      if (personTabClosed && moneySettled) isSettled = true;
+    }
 
     var totalQty = pLogs.reduce(function(s,l){ return s+(l.quantity||0); }, 0);
     var totalSpend = pLogs.reduce(function(s,l){ return s+(parseFloat(l.total_price)||0); }, 0);
