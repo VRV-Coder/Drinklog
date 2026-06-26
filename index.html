@@ -2070,11 +2070,46 @@ function renderConsolidatedToday(){
 
       var sessTotalBill = sessLogs.reduce(function(s,l){ return s+(parseFloat(l.total_price)||0); }, 0);
       var sessTotalPaid = sessPays.reduce(function(s,p){ return s+(parseFloat(p.amount)||0); }, 0);
-      var sessTotalFree = sessLogs.filter(function(l){ return (parseFloat(l.unit_price)||0)===0; }).reduce(function(s,l){ return s+(l.quantity||0); }, 0);
+
+      // ── Fund-aware bottle calculation (same logic as running tabs) ──
+      var CRATE_SIZE_SESS = 20;
+      // Free contributions fund per drink type (all-time, not session-scoped — fund is communal)
+      var sessFreeFund = {};
+      (STATE.freeContributions||[]).forEach(function(c){
+        if (!c.drink) return;
+        sessFreeFund[c.drink] = (sessFreeFund[c.drink]||0) + (c.crates||0)*CRATE_SIZE_SESS + (c.extra_bottles||0);
+      });
+      // Total free drinks consumed per drink type across ALL logs (communal pool basis)
+      var sessFreeCommunal = {};
+      STATE.logs.forEach(function(l){
+        if ((parseFloat(l.unit_price)||0) > 0) return;
+        sessFreeCommunal[l.drink] = (sessFreeCommunal[l.drink]||0) + (l.quantity||0);
+      });
+      // Total replacements per drink type across ALL replacements
+      var sessReplacedCommunal = {};
+      STATE.replacements.forEach(function(r){
+        sessReplacedCommunal[r.drink] = (sessReplacedCommunal[r.drink]||0) + (r.quantity||0);
+      });
+      // Count free drinks in this session that are NOT covered by fund or replacements
+      var sessBottlesOwed = 0;
+      var sessDrinkFree = {};
+      sessLogs.forEach(function(l){
+        if ((parseFloat(l.unit_price)||0) > 0) return;
+        sessDrinkFree[l.drink] = (sessDrinkFree[l.drink]||0) + (l.quantity||0);
+      });
+      Object.keys(sessDrinkFree).forEach(function(drink){
+        var communalFree = sessFreeCommunal[drink]||0;
+        var fundCover    = sessFreeFund[drink]||0;
+        var replaced     = sessReplacedCommunal[drink]||0;
+        // If fund + replacements cover all communal free drinks, none owed
+        if (communalFree > 0 && (fundCover + replaced) >= communalFree) return;
+        sessBottlesOwed += sessDrinkFree[drink];
+      });
+      var sessTotalFree = Object.values(sessDrinkFree).reduce(function(s,v){return s+v;},0);
       var sessTotalReplaced = sessReps.reduce(function(s,r){ return s+(r.quantity||0); }, 0);
 
       var moneyOk = sessTotalPaid >= sessTotalBill - 0.01;
-      var bottlesOk = sessTotalFree === 0 || sessTotalReplaced >= sessTotalFree;
+      var bottlesOk = sessBottlesOwed === 0;
       var allOk = moneyOk && bottlesOk;
 
       var dateLabel = sess.from === sess.to ? fmtDate(sess.from) : fmtDate(sess.from)+' → '+fmtDate(sess.to);
@@ -2088,7 +2123,7 @@ function renderConsolidatedToday(){
 
       var bottleBadge = sessTotalFree === 0 ? '' : bottlesOk
         ? '<span style="font-size:11px;background:#d4f5e2;color:#1f8a4f;border-radius:5px;padding:1px 6px;font-weight:700">🍾 '+(isDE?'Ersetzt':'Replaced')+'</span>'
-        : '<span style="font-size:11px;background:#fef3cd;color:#7a5200;border-radius:5px;padding:1px 6px;font-weight:700">🍾 '+(sessTotalFree-sessTotalReplaced)+' '+(isDE?'offen':'to replace')+'</span>';
+        : '<span style="font-size:11px;background:#fef3cd;color:#7a5200;border-radius:5px;padding:1px 6px;font-weight:700">🍾 '+sessBottlesOwed+' '+(isDE?'offen':'to replace')+'</span>';
 
       // ── Session header row ──
       settledHtml +=
