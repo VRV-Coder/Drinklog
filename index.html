@@ -2121,8 +2121,20 @@ function renderConsolidatedToday(){
         ? '<span style="font-size:11px;background:#d4f5e2;color:#1f8a4f;border-radius:5px;padding:1px 6px;font-weight:700">💶 '+(isDE?'Bezahlt':'Paid')+'</span>'
         : '<span style="font-size:11px;background:#fce8e6;color:#c4392b;border-radius:5px;padding:1px 6px;font-weight:700">💶 €'+(sessTotalBill-sessTotalPaid).toFixed(2)+' '+(isDE?'ausstehend':'pending')+'</span>';
 
+      // Collect sponsor names for the drinks consumed free in this session
+      var sessSponsors = [];
+      if (sessTotalFree > 0 && bottlesOk) {
+        var sponsorSet = {};
+        Object.keys(sessDrinkFree).forEach(function(drink) {
+          (STATE.freeContributions||[]).forEach(function(c) {
+            if (c.drink === drink && c.person) sponsorSet[c.person] = true;
+          });
+        });
+        sessSponsors = Object.keys(sponsorSet).sort();
+      }
+
       var bottleBadge = sessTotalFree === 0 ? '' : bottlesOk
-        ? '<span style="font-size:11px;background:#d4f5e2;color:#1f8a4f;border-radius:5px;padding:1px 6px;font-weight:700">🍾 '+(isDE?'Ersetzt':'Replaced')+'</span>'
+        ? '<span style="font-size:11px;background:#e8f4ff;color:#1a5a8a;border-radius:5px;padding:2px 8px;font-weight:700">🍺 '+(isDE?'Freibier gesponsert von':'Free beers sponsored by')+' '+esc(sessSponsors.join(', '))+'</span>'
         : '<span style="font-size:11px;background:#fef3cd;color:#7a5200;border-radius:5px;padding:1px 6px;font-weight:700">🍾 '+sessBottlesOwed+' '+(isDE?'offen':'to replace')+'</span>';
 
       // ── Session header row ──
