@@ -1209,6 +1209,33 @@ function renderLog(){
   el.innerHTML = html;
 }
 
+
+// Returns true only if person's latest tab close has NO drinks logged after its timestamp.
+// This means: closing at 8am then ordering at 11am reopens the tab automatically.
+function isTabTrulyClosed(person, forDate){
+  var closesForPerson = (STATE.tabCloses||[]).filter(function(c){ return c.person === person; });
+  if (!closesForPerson.length) return false;
+  // Find the most recent close (by timestamp, fall back to date)
+  closesForPerson.sort(function(a,b){
+    var ta = a.created_at || (a.closed_at+'T23:59:59Z');
+    var tb = b.created_at || (b.closed_at+'T23:59:59Z');
+    return tb > ta ? 1 : -1;
+  });
+  var lastClose = closesForPerson[0];
+  var closeTs = lastClose.created_at || (lastClose.closed_at+'T23:59:59Z');
+  var closeDate = lastClose.closed_at;
+  // If forDate is given, only consider closes on that date
+  if (forDate && closeDate !== forDate) return false;
+  // Check if any drink was logged AFTER this close timestamp
+  var logsAfter = STATE.logs.filter(function(l){
+    if (l.person !== person) return false;
+    if (forDate && l.date !== forDate) return false;
+    var logTs = l.logged_at || (l.date+'T00:00:00Z');
+    return logTs > closeTs;
+  });
+  return logsAfter.length === 0;
+}
+
 // Render today's bar tab (only today, live running)
 function renderRunningTodayTab(){
   var today = td();
@@ -1229,7 +1256,7 @@ function renderRunningTodayTab(){
   var activeRows = [], closedRows = [];
   Object.keys(byPerson).sort().forEach(function(person){
     var pd = byPerson[person];
-    var tabClosedToday2 = (STATE.tabCloses||[]).some(function(c){ return c.person===person && c.closed_at===today; });
+    var tabClosedToday2 = isTabTrulyClosed(person, today);
     if (tabClosedToday2) closedRows.push(person);
     else activeRows.push(person);
   });
@@ -1273,10 +1300,8 @@ function buildRunningRow(person, pd, today, isDE){
     }, 0);
     var moneySettled = todayPriced > 0 && totalPaid >= todayPriced - 0.005;
 
-    // Also settled if person closed their tab today (even with €0 priced drinks)
-    var tabClosedToday = (STATE.tabCloses||[]).some(function(c){
-      return c.person === person && c.closed_at === today;
-    });
+    // Also settled if person closed their tab today AND no new drinks after close time
+    var tabClosedToday = isTabTrulyClosed(person, today);
     if (tabClosedToday) moneySettled = true;
 
     // Bottles: which free drinks have been replaced — communal pool (anyone's replacement covers everyone)
@@ -1395,7 +1420,9 @@ function buildRunningRow(person, pd, today, isDE){
           ? '<button onclick="event.stopPropagation();closeMyTab(\''+esc(person)+'\')" '+
               'style="background:#1f8a4f;border:none;border-radius:9px;padding:5px 10px;cursor:pointer;font-size:12px;font-weight:800;color:#fff;white-space:nowrap;margin-top:2px">'+
               '✅ '+(isDE?'Tab zu':'Close tab')+'</button>'
-          : '')+
+          : (tabClosedToday && (isMe || IS_ADMIN)
+              ? '<div style="font-size:11px;color:#1f8a4f;font-weight:700;margin-top:2px">✅ '+(isDE?'Tab zu':'Tab closed')+'</div>'
+              : ''))+
         '<div style="font-size:16px;color:#7a5200">👁</div>'+
       '</div>'+
     '</div>';
@@ -1817,9 +1844,9 @@ function renderConsolidatedToday(){
 
     var isSettled = moneySettled && bottlesSettled;
 
-    // A tab close by this person also counts as settled
+    // A tab close by this person also counts as settled — only if no new drinks after close
     if (!isSettled) {
-      var personTabClosed = (STATE.tabCloses||[]).some(function(c){ return c.person === person; });
+      var personTabClosed = isTabTrulyClosed(person);
       if (personTabClosed && moneySettled) isSettled = true;
     }
 
@@ -2707,10 +2734,7 @@ function showPersonRunningTab(person){
   var isMe = person === CURRENT_NAME;
   var isDE = LANG === 'de';
 
-  var lastTabClose = (STATE.tabCloses||[])
-    .filter(function(c){ return c.person===person; })
-    .sort(function(a,b){ return (b.closed_at > a.closed_at ? 1 : -1); })[0];
-  var isTabClosed = lastTabClose && lastTabClose.closed_at >= td();
+  var isTabClosed = isTabTrulyClosed(person);
 
   // Show close tab button only when: it's my tab, tab not already closed today, and I have unsettled free drinks
   var showCloseBtn = isMe && !isTabClosed && (hasFreeDrinks || moneyOwed < 0.01);
