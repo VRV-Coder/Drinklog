@@ -2227,7 +2227,14 @@ function renderConsolidatedToday(){
       settledHtml = settled.map(rowHtml).join('');
     }
 
-    html += card(t('settledUpTitle'), settledHtml);
+    var settledId = 'settled-body-'+Date.now();
+    html += '<div class="card">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="(function(){var b=document.getElementById(\'' + settledId + '\');var a=document.getElementById(\'' + settledId + '-arrow\');if(b.style.display===\'none\'){b.style.display=\'\';a.textContent=\'▲\';}else{b.style.display=\'none\';a.textContent=\'▼\';}})()">' +
+        '<div class="card-title" style="margin-bottom:0">' + t('settledUpTitle') + '</div>' +
+        '<span id="' + settledId + '-arrow" style="font-size:12px;color:#8a7568;margin-left:8px">▼</span>' +
+      '</div>' +
+      '<div id="' + settledId + '" style="display:none;margin-top:10px">' + settledHtml + '</div>' +
+    '</div>';
   }
 
   return html;
@@ -3779,6 +3786,7 @@ function renderPayments(){
       var spent = STATE.logs.reduce(function(s,l){
         return l.person===person&&(parseFloat(l.unit_price)||0)>0 ? s+(parseFloat(l.total_price)||0) : s;
       },0);
+      if (spent === 0) return; // skip people with no priced drinks
       var paid = STATE.payments.reduce(function(s,p){
         var pp=(p.payers||'').split(',').map(function(x){return x.trim();});
         return pp.indexOf(person)!==-1 ? s+(parseFloat(p.amount)||0) : s;
