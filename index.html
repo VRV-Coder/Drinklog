@@ -1184,6 +1184,13 @@ function renderLog(){
   html += '<div style="font-size:12px;color:#7a5200;margin-top:8px;text-align:center">'+
     '<span style="background:#fce4d0;border-radius:6px;padding:2px 8px">🔒 '+(isDE?'Deine Preise — nur für dich sichtbar':'Your prices — private to you')+'</span>'+
   '</div>';
+  // ── Quick note field ──
+  html += '<div style="margin-top:10px">'+
+    '<input id="quick-note-field" type="text" value="'+esc(STATE.logNote||'')+'" '+
+      'oninput="STATE.logNote=this.value" '+
+      'placeholder="📝 '+(isDE?'Notiz (optional)…':'Note (optional)…')+'" '+
+      'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:9px 12px;font-size:14px;color:#1a0e08;box-sizing:border-box"/>'+
+  '</div>';
   html += '</div>';
 
   // ── SECTION 4: Today's running tab ──
@@ -2809,11 +2816,11 @@ async function doCloseMyTab(person, note, freeCount){
 }
 
 function showPersonDayDetail(person, date){
+  var isDE = LANG === 'de';
   var entries = STATE.logs
     .filter(function(l){ return l.person===person && l.date===date; })
     .slice()
     .sort(function(a,b){
-      // Sort by logged_at time if available, otherwise by time string, newest first
       var ta = a.logged_at ? new Date(a.logged_at).getTime() : 0;
       var tb = b.logged_at ? new Date(b.logged_at).getTime() : 0;
       return tb - ta;
@@ -2821,7 +2828,52 @@ function showPersonDayDetail(person, date){
 
   var totalQty = entries.reduce(function(s,l){ return s+(l.quantity||0); }, 0);
   var totalCost = entries.reduce(function(s,l){ return s+(parseFloat(l.total_price)||0); }, 0);
+  var canEditAny = entries.some(function(l){ return isMine(l); }) || IS_ADMIN;
 
+  // ── Group by drink type for bulk-price section ──
+  var byDrink = {};
+  entries.forEach(function(l){
+    if (!byDrink[l.drink]) byDrink[l.drink] = [];
+    byDrink[l.drink].push(l);
+  });
+
+  // ── Bulk price section (set one price for all entries of a drink type) ──
+  var bulkSection = '';
+  if (canEditAny) {
+    var drinkTypes = Object.keys(byDrink);
+    var bulkRows = drinkTypes.map(function(drink){
+      var dEntries = byDrink[drink];
+      var editableEntries = dEntries.filter(function(l){ return isMine(l) || IS_ADMIN; });
+      if (!editableEntries.length) return '';
+      var totalQtyD = dEntries.reduce(function(s,l){ return s+(l.quantity||0); },0);
+      var inputId = 'bulk-price-'+drink.replace(/\W/g,'_');
+      return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0e4d8">'+
+        '<span style="font-size:16px">'+emoji(drink)+'</span>'+
+        '<span style="flex:1;font-size:13px;font-weight:700;color:#1a0e08">'+esc(drink.replace(/^.+? /,''))+'</span>'+
+        '<span style="font-size:11px;color:#7a5200;white-space:nowrap">×'+totalQtyD+'</span>'+
+        '<div style="display:flex;align-items:center;gap:4px">'+
+          '<span style="color:#5a3a28;font-weight:700">€</span>'+
+          '<input id="'+inputId+'" type="number" min="0" step="0.01" placeholder="0.00" '+
+            'style="width:70px;border:1.5px solid #e8dccc;border-radius:8px;padding:5px 6px;font-size:14px;font-weight:700;color:#b5481f;text-align:center"/>'+
+        '</div>'+
+        '<button onclick="applyBulkPrice(\''+esc(person)+'\',\''+esc(date)+'\',\''+esc(drink)+'\',\''+inputId+'\')" '+
+          'style="background:#1f8a4f;border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:800;padding:6px 10px;cursor:pointer;white-space:nowrap">'+
+          (isDE?'Alle':'All')+'</button>'+
+      '</div>';
+    }).filter(Boolean).join('');
+
+    if (bulkRows) {
+      bulkSection =
+        '<div style="background:#f5ede4;border-radius:10px;padding:10px 12px;margin-bottom:12px">'+
+          '<div style="font-size:11px;font-weight:800;color:#7a5200;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">'+
+            '💶 '+(isDE?'Preis für alle setzen':'Set price for all of type')+
+          '</div>'+
+          bulkRows+
+        '</div>';
+    }
+  }
+
+  // ── Per-entry rows with individual price editing ──
   var rows = entries.map(function(l){
     var timeStr = l.logged_at
       ? new Date(l.logged_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})
@@ -2830,7 +2882,8 @@ function showPersonDayDetail(person, date){
     var byLine = (loggedBy && loggedBy !== person)
       ? ' · '+t('loggedBy')+' '+esc(loggedBy)
       : '';
-    var canEdit = isMine(l);
+    var canEdit = isMine(l) || IS_ADMIN;
+
     var qtyControl = canEdit
       ? '<div class="stepper" style="margin-top:4px">'+
           '<button class="btn-icon" style="width:26px;height:26px;font-size:14px" onclick="editDrinkQty(\''+l.id+'\',-1,\''+esc(person)+'\',\''+date+'\')">−</button>'+
@@ -2838,6 +2891,21 @@ function showPersonDayDetail(person, date){
           '<button class="btn-icon" style="width:26px;height:26px;font-size:14px" onclick="editDrinkQty(\''+l.id+'\',1,\''+esc(person)+'\',\''+date+'\')">+</button>'+
         '</div>'
       : '';
+
+    // Individual price editor per entry
+    var priceInputId = 'entry-price-'+l.id;
+    var priceEditor = canEdit
+      ? '<div style="display:flex;align-items:center;gap:5px;margin-top:5px">'+
+          '<span style="font-size:11px;color:#7a5200;font-weight:700">€/'+esc(isDE?'Stk':'unit')+':</span>'+
+          '<input id="'+priceInputId+'" type="number" min="0" step="0.01" '+
+            'value="'+(parseFloat(l.unit_price)||0).toFixed(2)+'" '+
+            'style="width:65px;border:1.5px solid #e8dccc;border-radius:7px;padding:3px 6px;font-size:13px;font-weight:700;color:#b5481f;text-align:center"/>'+
+          '<button onclick="saveEntryPrice(\''+l.id+'\',\''+priceInputId+'\',\''+esc(person)+'\',\''+date+'\')" '+
+            'style="background:#b5481f;border:none;border-radius:7px;color:#fff;font-size:11px;font-weight:800;padding:4px 8px;cursor:pointer">'+
+            '✓</button>'+
+        '</div>'
+      : '';
+
     return '<div class="entry">'+
       '<div class="entry-l">'+
         '<span class="ej">'+emoji(l.drink)+'</span>'+
@@ -2846,6 +2914,7 @@ function showPersonDayDetail(person, date){
           '<div class="es">🕐 '+timeStr+(l.total_price>0?' · €'+parseFloat(l.total_price).toFixed(2):' · '+t('free'))+byLine+'</div>'+
           (l.note?'<div class="es" style="font-style:italic">"'+esc(l.note)+'"</div>':'')+
           qtyControl+
+          priceEditor+
         '</div>'+
       '</div>'+
     '</div>';
@@ -2856,9 +2925,51 @@ function showPersonDayDetail(person, date){
     '<div style="text-align:center;margin-bottom:14px">'+
       '<span style="font-size:12px;color:#5a3a28">'+fmtDate(date)+' · '+totalQty+' '+(totalQty!==1?t('drinksPlural'):t('drink'))+(totalCost>0?' · €'+totalCost.toFixed(2):'')+'</span>'+
     '</div>'+
+    bulkSection+
     '<div style="max-height:340px;overflow-y:auto;margin-bottom:10px">'+(rows||'<div class="empty">No entries found.</div>')+'</div>'+
     '<button class="modal-close" onclick="closeModal()">'+esc(t('close'))+'</button>'
   );
+}
+
+// Save individual price for one entry
+async function saveEntryPrice(logId, inputId, person, date){
+  var inputEl = document.getElementById(inputId);
+  if (!inputEl) return;
+  var newUnit = parseFloat(inputEl.value);
+  if (isNaN(newUnit) || newUnit < 0) { notify('Invalid price', true); return; }
+  var entry = STATE.logs.find(function(l){ return l.id === logId; });
+  if (!entry) return;
+  var newTotal = newUnit * (entry.quantity||1);
+  var {error} = await SB.from('drink_logs').update({ unit_price: newUnit, total_price: newTotal }).eq('id', logId);
+  if (error) { notify('Error: '+error.message, true); return; }
+  await audit('EDIT_ENTRY_PRICE','drink_logs',logId,{person:person,drink:entry.drink,unit_price:newUnit,total:newTotal});
+  notify('€'+newUnit.toFixed(2)+'/unit saved ✓');
+  await loadAll();
+  showPersonDayDetail(person, date);
+}
+
+// Apply one price to ALL entries of a drink type for this person/date
+async function applyBulkPrice(person, date, drink, inputId){
+  var inputEl = document.getElementById(inputId);
+  if (!inputEl) return;
+  var newUnit = parseFloat(inputEl.value);
+  if (isNaN(newUnit) || newUnit < 0) { notify('Invalid price', true); return; }
+  var toUpdate = STATE.logs.filter(function(l){
+    return l.person===person && l.date===date && l.drink===drink && (isMine(l)||IS_ADMIN);
+  });
+  if (!toUpdate.length) return;
+  var errors = [];
+  for (var i=0; i<toUpdate.length; i++){
+    var l = toUpdate[i];
+    var newTotal = newUnit * (l.quantity||1);
+    var {error} = await SB.from('drink_logs').update({ unit_price: newUnit, total_price: newTotal }).eq('id', l.id);
+    if (error) errors.push(error.message);
+  }
+  if (errors.length) { notify('Error: '+errors[0], true); return; }
+  await audit('BULK_PRICE','drink_logs',null,{person:person,date:date,drink:drink,unit_price:newUnit,count:toUpdate.length});
+  notify('€'+newUnit.toFixed(2)+' set for all '+toUpdate.length+' × '+drink+' ✓');
+  await loadAll();
+  showPersonDayDetail(person, date);
 }
 
 // ── EDIT DRINK QUANTITY (inline, from the person/day detail popup) ──
@@ -3777,17 +3888,22 @@ function renderPayments(){
   ]);
 
   // ── Per-person balance — tap name to open payment modal ──
-  var allPeopleNames = [...new Set(STATE.logs.map(function(l){return l.person;}))].sort();
+  // Use only current session logs (since last full settlement) so settled history doesn't bleed in
+  var sessionLogsP = getSessionLogs();
+  var sessionPayDate = getLastSettlementDate(); // payments after this date are current session
+  var allPeopleNames = [...new Set(sessionLogsP.map(function(l){return l.person;}))].sort();
   if (allPeopleNames.length){
     html += '<div class="card" style="margin-bottom:14px">';
     html += '<div style="font-size:13px;font-weight:800;color:#5a3a28;margin-bottom:10px">👤 '+(isDE?'Personen-Guthaben':'Balance per Person')+'</div>';
     html += '<div style="display:flex;flex-direction:column;gap:6px">';
     allPeopleNames.forEach(function(person){
-      var spent = STATE.logs.reduce(function(s,l){
+      var spent = sessionLogsP.reduce(function(s,l){
         return l.person===person&&(parseFloat(l.unit_price)||0)>0 ? s+(parseFloat(l.total_price)||0) : s;
       },0);
-      if (spent === 0) return; // skip people with no priced drinks
+      if (spent === 0) return; // skip people with no priced drinks this session
+      // Only count payments made after the last settlement date
       var paid = STATE.payments.reduce(function(s,p){
+        if (sessionPayDate && p.date <= sessionPayDate) return s;
         var pp=(p.payers||'').split(',').map(function(x){return x.trim();});
         return pp.indexOf(person)!==-1 ? s+(parseFloat(p.amount)||0) : s;
       },0);
