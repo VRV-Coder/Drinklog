@@ -1810,16 +1810,11 @@ function renderConsolidatedToday(){
       if (personTabClosed && moneySettled) isSettled = true;
     }
 
-    // DEBUG: show why not settled (remove after fix confirmed)
-    var _debugInfo = '';
-    if (!bottlesSettled && Object.keys(bottlesOwedByDrink).length > 0){
-      _debugInfo = Object.keys(bottlesOwedByDrink).map(function(drink){
-        return '🔍 '+esc(drink.replace(/^.+? /,''))+': communalFree='+( totalFreeCommunal[drink]||0)+
-          ' fundContrib='+(freeFundContribCS[drink]||0)+
-          ' communalReplaced='+(totalReplacedCommunal[drink]||0)+
-          ' myOwed='+(bottlesOwedByDrink[drink]||0);
-      }).join(' | ');
-    }
+    // DEBUG: always show settlement breakdown
+    var _debugInfo = '💰money:'+moneySettled+' 🍾bottles:'+bottlesSettled+
+      ' owed:'+totalBottlesOwed+' repl:'+totalBottlesReplaced+
+      ' | fund keys:['+Object.keys(freeFundContribCS).map(function(k){return k.replace(/^.+? /,'')+':'+freeFundContribCS[k];}).join(',')+']'+
+      ' | free keys:['+Object.keys(totalFreeCommunal).map(function(k){return k.replace(/^.+? /,'')+':'+totalFreeCommunal[k];}).join(',')+']';
 
     var totalQty = pLogs.reduce(function(s,l){ return s+(l.quantity||0); }, 0);
     var totalSpend = pLogs.reduce(function(s,l){ return s+(parseFloat(l.total_price)||0); }, 0);
