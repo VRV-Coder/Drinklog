@@ -1753,13 +1753,14 @@ function renderConsolidatedToday(){
     var moneyPending = moneyOwed - moneyPaid;
     var moneySettled = moneyPending <= 0.005;
 
-    // Bottles owed: free (€0) drinks per person vs total communal replacements
-    // A replacement covers ALL free drinks of that type across everyone —
-    // not just the person who clicked Replace.
-    var bottlesOwedByDrink = {};
-    pLogs.forEach(function(l){
-      if ((parseFloat(l.unit_price)||0) > 0) return;
-      bottlesOwedByDrink[l.drink] = (bottlesOwedByDrink[l.drink]||0) + (l.quantity||0);
+    // Bottles owed: free (€0) drinks per person
+    // BUT exclude drinks where the fund contribution fully covers the communal consumption
+    // (fund was pre-paid to cover these — no physical replacement needed)
+    var CRATE_SIZE_CS = 20;
+    var freeFundContribCS = {};
+    (STATE.freeContributions||[]).forEach(function(c){
+      if (!c.drink) return;
+      freeFundContribCS[c.drink] = (freeFundContribCS[c.drink]||0) + (c.crates||0)*CRATE_SIZE_CS + (c.extra_bottles||0);
     });
 
     // Total FREE consumed by ALL people per drink type (communal pool)
@@ -1769,41 +1770,33 @@ function renderConsolidatedToday(){
       totalFreeCommunal[l.drink] = (totalFreeCommunal[l.drink]||0) + (l.quantity||0);
     });
 
-    // Total communal replacements per drink type (anyone who replaced counts)
+    // Total communal replacements per drink type
     var totalReplacedCommunal = {};
     STATE.replacements.forEach(function(r){
       totalReplacedCommunal[r.drink] = (totalReplacedCommunal[r.drink]||0) + (r.quantity||0);
     });
 
-    // Free fund balance per drink — covers bottles that don't need physical replacement
-    var CRATE_SIZE_CS = 20;
-    var freeFundContribCS = {};
-    (STATE.freeContributions||[]).forEach(function(c){
-      if (!c.drink) return;
-      freeFundContribCS[c.drink] = (freeFundContribCS[c.drink]||0) + (c.crates||0)*CRATE_SIZE_CS + (c.extra_bottles||0);
-    });
-    var freeFundConsumedCS = {};
-    STATE.logs.forEach(function(l){
-      if ((parseFloat(l.unit_price)||0) === 0)
-        freeFundConsumedCS[l.drink] = (freeFundConsumedCS[l.drink]||0) + (l.quantity||0);
-    });
-    STATE.replacements.forEach(function(r){
-      if (r.drink && (r.quantity||0) > 0 && freeFundConsumedCS[r.drink])
-        freeFundConsumedCS[r.drink] = Math.max(0, freeFundConsumedCS[r.drink] - (r.quantity||0));
+    // Only count bottles as "owed" if the communal fund + replacements doesn't cover them
+    var bottlesOwedByDrink = {};
+    pLogs.forEach(function(l){
+      if ((parseFloat(l.unit_price)||0) > 0) return;
+      var drink = l.drink;
+      var communalFree = totalFreeCommunal[drink]||0;
+      var fundContrib  = freeFundContribCS[drink]||0;
+      var communalReplaced = totalReplacedCommunal[drink]||0;
+      // If fund + replacements cover everything communally, no one owes bottles for this drink
+      if (communalFree > 0 && (fundContrib + communalReplaced) >= communalFree) return;
+      bottlesOwedByDrink[drink] = (bottlesOwedByDrink[drink]||0) + (l.quantity||0);
     });
 
-    // Per drink: is this person's share of free drinks covered?
-    // Coverage = physical replacements + total fund contributions (fund = pre-paid stock)
+    // Remaining: any bottles still owed after communal replacements cover proportional share
     var totalBottlesOwed = Object.values(bottlesOwedByDrink).reduce(function(s,v){return s+v;},0);
     var totalBottlesReplaced = Object.keys(bottlesOwedByDrink).reduce(function(s,drink){
-      var communalFree     = totalFreeCommunal[drink]||0;
+      var communalFree = totalFreeCommunal[drink]||0;
       var communalReplaced = totalReplacedCommunal[drink]||0;
-      var fundContrib      = freeFundContribCS[drink]||0; // total bottles PAID INTO the fund
-      var myFree           = bottlesOwedByDrink[drink]||0;
+      var myFree = bottlesOwedByDrink[drink]||0;
       if (communalFree <= 0) return s + myFree;
-      // Effective coverage = physical returns + fund contributions (fund pre-paid for these drinks)
-      var effectiveCovered = Math.min(communalFree, communalReplaced + fundContrib);
-      var coverRatio = Math.min(1, effectiveCovered / communalFree);
+      var coverRatio = Math.min(1, communalReplaced / communalFree);
       return s + Math.min(myFree, Math.floor(coverRatio * myFree + 0.5));
     }, 0);
     var bottlesRemaining = Math.max(0, totalBottlesOwed - totalBottlesReplaced);
