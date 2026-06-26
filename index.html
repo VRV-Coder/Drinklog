@@ -1792,18 +1792,18 @@ function renderConsolidatedToday(){
         freeFundConsumedCS[r.drink] = Math.max(0, freeFundConsumedCS[r.drink] - (r.quantity||0));
     });
 
-    // Per drink: what fraction of communal free drinks has been replaced OR covered by fund?
+    // Per drink: is this person's share of free drinks covered?
+    // Coverage = physical replacements + total fund contributions (fund = pre-paid stock)
     var totalBottlesOwed = Object.values(bottlesOwedByDrink).reduce(function(s,v){return s+v;},0);
     var totalBottlesReplaced = Object.keys(bottlesOwedByDrink).reduce(function(s,drink){
-      var communalFree = totalFreeCommunal[drink]||0;
+      var communalFree     = totalFreeCommunal[drink]||0;
       var communalReplaced = totalReplacedCommunal[drink]||0;
-      var fundAvailForDrink = Math.max(0, (freeFundContribCS[drink]||0) - (freeFundConsumedCS[drink]||0));
-      var myFree = bottlesOwedByDrink[drink]||0;
-      // If fully replaced communally or covered by fund, this person's share is settled
+      var fundContrib      = freeFundContribCS[drink]||0; // total bottles PAID INTO the fund
+      var myFree           = bottlesOwedByDrink[drink]||0;
       if (communalFree <= 0) return s + myFree;
-      // Effective replacements = physical replacements + fund coverage
-      var effectiveReplaced = Math.min(communalFree, communalReplaced + fundAvailForDrink);
-      var coverRatio = Math.min(1, effectiveReplaced / communalFree);
+      // Effective coverage = physical returns + fund contributions (fund pre-paid for these drinks)
+      var effectiveCovered = Math.min(communalFree, communalReplaced + fundContrib);
+      var coverRatio = Math.min(1, effectiveCovered / communalFree);
       return s + Math.min(myFree, Math.floor(coverRatio * myFree + 0.5));
     }, 0);
     var bottlesRemaining = Math.max(0, totalBottlesOwed - totalBottlesReplaced);
@@ -4456,13 +4456,15 @@ function renderReplace(){
     });
   });
 
-  // Apply free fund: fund available reduces the remaining owed in Replace tab
+  // Apply free fund: fund contributions directly cover free drinks (fund = pre-paid stock)
+  // Use total contributed, not net available — the fund was paid to cover these drinks
   Object.keys(ob).forEach(function(drink){
-    var fundCovers = Math.min(ob[drink].remaining, freeFundAvail[drink]||0);
+    var fundContrib = freeFundContrib[drink]||0;
+    var fundCovers = Math.min(ob[drink].remaining, fundContrib);
     if (fundCovers > 0){
       ob[drink].replaced += fundCovers;
       ob[drink].remaining = Math.max(0, ob[drink].remaining - fundCovers);
-      ob[drink].fundCovers = fundCovers; // track for display
+      ob[drink].fundCovers = fundCovers;
     }
   });
 
