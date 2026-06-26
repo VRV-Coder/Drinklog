@@ -1804,11 +1804,21 @@ function renderConsolidatedToday(){
 
     var isSettled = moneySettled && bottlesSettled;
 
-    // A tab close by this person also counts as settled —
-    // they've acknowledged their drinks and are done for this session
+    // A tab close by this person also counts as settled
     if (!isSettled) {
       var personTabClosed = (STATE.tabCloses||[]).some(function(c){ return c.person === person; });
       if (personTabClosed && moneySettled) isSettled = true;
+    }
+
+    // DEBUG: show why not settled (remove after fix confirmed)
+    var _debugInfo = '';
+    if (!bottlesSettled && Object.keys(bottlesOwedByDrink).length > 0){
+      _debugInfo = Object.keys(bottlesOwedByDrink).map(function(drink){
+        return '🔍 '+esc(drink.replace(/^.+? /,''))+': communalFree='+( totalFreeCommunal[drink]||0)+
+          ' fundContrib='+(freeFundContribCS[drink]||0)+
+          ' communalReplaced='+(totalReplacedCommunal[drink]||0)+
+          ' myOwed='+(bottlesOwedByDrink[drink]||0);
+      }).join(' | ');
     }
 
     var totalQty = pLogs.reduce(function(s,l){ return s+(l.quantity||0); }, 0);
@@ -1827,7 +1837,8 @@ function renderConsolidatedToday(){
       person: person, isSettled: isSettled, moneyPending: moneyPending, moneySettled: moneySettled,
       bottlesRemaining: bottlesRemaining, bottlesSettled: bottlesSettled,
       totalQty: totalQty, totalSpend: totalSpend, tags: tags,
-      earliestDate: earliestDate, latestDate: latestDate
+      earliestDate: earliestDate, latestDate: latestDate,
+      _debugInfo: _debugInfo
     };
   });
 
@@ -2013,6 +2024,7 @@ function renderConsolidatedToday(){
           '</div>'+
             '<div class="drink-tags">'+b.tags+'</div>'+
             '<div style="display:flex;gap:6px;margin-top:3px">'+statusBits.join('')+'</div>'+
+          (b._debugInfo?'<div style="font-size:9px;color:#888;margin-top:2px;word-break:break-all">'+b._debugInfo+'</div>':'')+
             priceEditHtml+
           '</div>'+
       '</div>'+
