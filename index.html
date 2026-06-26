@@ -1252,6 +1252,7 @@ function renderRunningTodayTab(){
 }
 
 function buildRunningRow(person, pd, today, isDE){
+    var isMe = person === CURRENT_NAME;
 
     // ── Compute today's settlement state for this person ──
     // Money: how much they owe today vs what they've paid (all-time payments)
