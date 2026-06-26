@@ -54,6 +54,12 @@
     nav button{background:none;border:none;cursor:pointer;padding:10px 14px;font-size:13px;font-weight:700;white-space:nowrap;color:#7da888;border-bottom:3px solid transparent;flex-shrink:0;transition:color .15s,border-color .15s}
     nav button.active{color:#d4f521;border-bottom-color:#d4f521}
     .content{max-width:680px;margin:0 auto;padding:14px}
+
+    /* ── Desktop / laptop layout ── */
+    @media(min-width:720px){
+      #app{width:100%;max-width:700px;margin:0 auto;min-height:100vh;background:rgba(0,0,0,0.1);border-left:1px solid rgba(255,255,255,0.1);border-right:1px solid rgba(255,255,255,0.1);box-shadow:0 0 80px rgba(0,0,0,0.35)}
+      #auth-screen{align-items:center}
+    }
     .card{background:rgba(255,255,255,.97);border:1px solid rgba(255,255,255,.5);border-radius:16px;padding:20px;margin-bottom:14px;box-shadow:0 4px 20px rgba(20,10,0,.2),0 1px 4px rgba(0,0,0,.1);color:#1a0e08}
     .card-title{font-size:13px;font-weight:800;color:#9c4a22;text-transform:uppercase;letter-spacing:1px;margin-bottom:13px}
     .form-label{display:block;font-size:13px;font-weight:700;color:#4a3020;text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px}
@@ -972,16 +978,14 @@ async function loadAll(){
       SB.from('payments').select('*').order('date',{ascending:false}),
       SB.from('replacements').select('*').order('for_date',{ascending:false}),
       SB.from('audit_log').select('*').order('performed_at',{ascending:false}).limit(100),
-      SB.from('free_contributions').select('*').order('date',{ascending:false}),
-      SB.from('drink_types').select('*').order('sort_order'),
-      SB.from('tab_closes').select('*').order('closed_at',{ascending:false})
+      SB.from('free_contributions').select('*').order('date',{ascending:false}).then(function(r){ return r.error ? {data:[],error:null} : r; }),
+      SB.from('drink_types').select('*').order('sort_order').then(function(r){ return r.error ? {data:[],error:null} : r; }),
+      SB.from('tab_closes').select('*').order('closed_at',{ascending:false}).then(function(r){ return r.error ? {data:[],error:null} : r; })
     ]);
-    if(ppl.error) notify('People error: '+ppl.error.message, true);
-    if(l.error)   notify('Logs error: '+l.error.message, true);
-    if(pay.error) notify('Payments error: '+pay.error.message, true);
-    if(rep.error) notify('Replace error: '+rep.error.message, true);
-    if(fc.error)  notify('Free drinks error: '+fc.error.message, true);
-    if(tc.error)  console.warn('tab_closes error (run SQL first):', tc.error.message);
+    if(ppl.error) notify('people: '+ppl.error.message, true);
+    if(l.error)   notify('drink_logs: '+l.error.message, true);
+    if(pay.error) notify('payments: '+pay.error.message, true);
+    if(rep.error) notify('replacements: '+rep.error.message, true);
     if(dt.data && dt.data.length) buildDrinkTypesFromRows(dt.data);
 
     STATE.logs              = l.data   || [];
@@ -1810,15 +1814,7 @@ function renderConsolidatedToday(){
       if (personTabClosed && moneySettled) isSettled = true;
     }
 
-    // DEBUG: log to console
-    console.log('[SETTLE DEBUG]', person, {
-      moneySettled: moneySettled, bottlesSettled: bottlesSettled,
-      totalBottlesOwed: totalBottlesOwed, totalBottlesReplaced: totalBottlesReplaced,
-      bottlesOwedByDrink: JSON.stringify(bottlesOwedByDrink),
-      freeFundContribCS: JSON.stringify(freeFundContribCS),
-      totalFreeCommunal: JSON.stringify(totalFreeCommunal),
-      totalReplacedCommunal: JSON.stringify(totalReplacedCommunal)
-    });
+    // DEBUG removed — use console in browser to check
     var _debugInfo = '';
 
     var totalQty = pLogs.reduce(function(s,l){ return s+(l.quantity||0); }, 0);
