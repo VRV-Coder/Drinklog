@@ -1775,16 +1775,35 @@ function renderConsolidatedToday(){
       totalReplacedCommunal[r.drink] = (totalReplacedCommunal[r.drink]||0) + (r.quantity||0);
     });
 
-    // Per drink: what fraction of communal free drinks has been replaced?
-    // If total replaced >= total free consumed → this person's share is fully covered
+    // Free fund balance per drink — covers bottles that don't need physical replacement
+    var CRATE_SIZE_CS = 20;
+    var freeFundContribCS = {};
+    (STATE.freeContributions||[]).forEach(function(c){
+      if (!c.drink) return;
+      freeFundContribCS[c.drink] = (freeFundContribCS[c.drink]||0) + (c.crates||0)*CRATE_SIZE_CS + (c.extra_bottles||0);
+    });
+    var freeFundConsumedCS = {};
+    STATE.logs.forEach(function(l){
+      if ((parseFloat(l.unit_price)||0) === 0)
+        freeFundConsumedCS[l.drink] = (freeFundConsumedCS[l.drink]||0) + (l.quantity||0);
+    });
+    STATE.replacements.forEach(function(r){
+      if (r.drink && (r.quantity||0) > 0 && freeFundConsumedCS[r.drink])
+        freeFundConsumedCS[r.drink] = Math.max(0, freeFundConsumedCS[r.drink] - (r.quantity||0));
+    });
+
+    // Per drink: what fraction of communal free drinks has been replaced OR covered by fund?
     var totalBottlesOwed = Object.values(bottlesOwedByDrink).reduce(function(s,v){return s+v;},0);
     var totalBottlesReplaced = Object.keys(bottlesOwedByDrink).reduce(function(s,drink){
       var communalFree = totalFreeCommunal[drink]||0;
       var communalReplaced = totalReplacedCommunal[drink]||0;
+      var fundAvailForDrink = Math.max(0, (freeFundContribCS[drink]||0) - (freeFundConsumedCS[drink]||0));
       var myFree = bottlesOwedByDrink[drink]||0;
-      // If fully replaced communally, this person's share is settled
+      // If fully replaced communally or covered by fund, this person's share is settled
       if (communalFree <= 0) return s + myFree;
-      var coverRatio = Math.min(1, communalReplaced / communalFree);
+      // Effective replacements = physical replacements + fund coverage
+      var effectiveReplaced = Math.min(communalFree, communalReplaced + fundAvailForDrink);
+      var coverRatio = Math.min(1, effectiveReplaced / communalFree);
       return s + Math.min(myFree, Math.floor(coverRatio * myFree + 0.5));
     }, 0);
     var bottlesRemaining = Math.max(0, totalBottlesOwed - totalBottlesReplaced);
@@ -4447,8 +4466,9 @@ function renderReplace(){
     }
   });
 
-  // Filter to drinks that still have something owed
-  var allDrinks = Object.keys(ob).filter(function(d){ return ob[d].owed > 0; });
+  // Filter to drinks that still need replacing (remaining > 0 after fund covers them)
+  // Drinks fully covered by the free fund should NOT appear in the replace tab at all
+  var allDrinks = Object.keys(ob).filter(function(d){ return ob[d].remaining > 0; });
 
   var tot_o = allDrinks.reduce(function(s,d){return s+ob[d].owed;},0);
   var tot_r = allDrinks.reduce(function(s,d){return s+ob[d].replaced;},0);
