@@ -1184,13 +1184,6 @@ function renderLog(){
   html += '<div style="font-size:12px;color:#7a5200;margin-top:8px;text-align:center">'+
     '<span style="background:#fce4d0;border-radius:6px;padding:2px 8px">🔒 '+(isDE?'Deine Preise — nur für dich sichtbar':'Your prices — private to you')+'</span>'+
   '</div>';
-  // ── Quick note field ──
-  html += '<div style="margin-top:10px">'+
-    '<input id="quick-note-field" type="text" value="'+esc(STATE.logNote||'')+'" '+
-      'oninput="STATE.logNote=this.value" '+
-      'placeholder="📝 '+(isDE?'Notiz (optional)…':'Note (optional)…')+'" '+
-      'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:9px 12px;font-size:14px;color:#1a0e08;box-sizing:border-box"/>'+
-  '</div>';
   html += '</div>';
 
   // ── SECTION 4: Today's running tab ──
@@ -1445,18 +1438,46 @@ function buildRunningRow(person, pd, today, isDE){
 async function quickAddDrink(person, drink, event){
   if (event) event.stopPropagation();
   if (!person) return;
+  var isDE = LANG === 'de';
+  // Show a small note popup before logging
+  var noteId = 'quick-note-input-'+Date.now();
+  showModal(
+    '<div style="text-align:center;padding:4px">'+
+      '<div style="font-size:48px;margin-bottom:6px">'+emoji(drink)+'</div>'+
+      '<h3 style="margin:0 0 4px 0;font-size:18px">'+esc(drink.replace(/^.+? /,''))+'</h3>'+
+      '<p style="font-size:13px;color:#5a3a28;margin:0 0 14px 0">'+esc(isDE?'für '+person:'for '+person)+'</p>'+
+      '<input id="'+noteId+'" type="text" placeholder="📝 '+(isDE?'Notiz (optional)…':'Note (optional)…')+'" '+
+        'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 12px;font-size:15px;color:#1a0e08;box-sizing:border-box;margin-bottom:14px" '+
+        'onkeydown="if(event.key===\'Enter\'){document.getElementById(\'quick-confirm-btn\').click();}"/>'+
+      '<div style="display:flex;gap:10px">'+
+        '<button onclick="closeModal()" style="flex:1;background:#f5ede4;border:1.5px solid #e8dccc;border-radius:10px;padding:12px;font-size:15px;font-weight:700;color:#5a3a28;cursor:pointer">'+
+          (isDE?'Abbrechen':'Cancel')+'</button>'+
+        '<button id="quick-confirm-btn" onclick="quickAddDrinkConfirm(\''+esc(person)+'\',\''+esc(drink)+'\',\''+noteId+'\')" '+
+          'style="flex:2;background:#b5481f;border:none;border-radius:10px;padding:12px;font-size:16px;font-weight:800;color:#fff;cursor:pointer">'+
+          '✓ '+(isDE?'Erfassen':'Log it')+'</button>'+
+      '</div>'+
+    '</div>'
+  );
+  // Auto-focus the note input
+  setTimeout(function(){ var el=document.getElementById(noteId); if(el) el.focus(); }, 100);
+}
+
+async function quickAddDrinkConfirm(person, drink, noteInputId){
+  var noteEl = document.getElementById(noteInputId);
+  var note = noteEl ? noteEl.value.trim() : '';
+  closeModal();
   await addPersonToTable(person);
   var price = getDrinkPrice(drink);
   var insertObj = {
     date:td(), person:person, drink:drink, quantity:1,
     unit_price:price, total_price:price,
-    note:'', added_by:CURRENT_NAME, logged_by:CURRENT_NAME
+    note:note, added_by:CURRENT_NAME, logged_by:CURRENT_NAME
   };
   if (IS_ADMIN && CURRENT_USER) insertObj.user_id = CURRENT_USER.id;
   if (IS_GUEST) insertObj.guest_token = GUEST_TOKEN;
   var {data,error} = await SB.from('drink_logs').insert(insertObj).select().single();
   if (error){ notify('Error: '+error.message,true); return; }
-  await audit('LOG_DRINK','drink_logs',data.id,{person:person,drink:drink,qty:1,total:price});
+  await audit('LOG_DRINK','drink_logs',data.id,{person:person,drink:drink,qty:1,total:price,note:note});
   await loadAll();
   if (price === 0) {
     // Use session-scoped consumption so old settled rounds don't exhaust the fund
@@ -2294,17 +2315,6 @@ function renderConsolidatedToday(){
         '</div>'+
         '</div>';
     });
-
-    // DEBUG — always show a debug card so we can see what's happening
-    html += '<div class="card" style="background:#fff0f0;border:2px solid red;font-size:11px;word-break:break-all">'+
-      '<b>DEBUG settled section</b><br>'+
-      'STATE.logs.length='+STATE.logs.length+'<br>'+
-      'STATE.payments.length='+STATE.payments.length+'<br>'+
-      'lastSettledDate='+lastSettledDate+'<br>'+
-      'sessions.length='+sessions.length+'<br>'+
-      'sessions='+JSON.stringify(sessions)+'<br>'+
-      'settledHtml.length='+settledHtml.length+
-    '</div>';
 
     if (settledHtml) {
       var settledId = 'settled-body-'+Date.now();
@@ -4509,39 +4519,46 @@ function renderHistory(){
   if(!STATE.logs.length){el.innerHTML=empty('📅',t('noHistory'),t('logSomeDrinks'));return;}
   var bd={};
   STATE.logs.forEach(function(l){(bd[l.date]=bd[l.date]||[]).push(l);});
-  el.innerHTML=Object.keys(bd).sort().reverse().map(function(d){
+  el.innerHTML=Object.keys(bd).sort().reverse().map(function(d,di){
     var entries=bd[d];
     var bp={};entries.forEach(function(l){bp[l.person]=(bp[l.person]||0)+(l.quantity||0);});
     var badges=Object.entries(bp).map(function(e){return '<span class="badge">'+esc(e[0])+': '+e[1]+'</span>';}).join(' ');
-    return '<div class="card" style="padding:0;overflow:hidden">'+
-      '<div class="dh"><div><h4>'+fmtDate(d)+'</h4></div><div style="display:flex;gap:5px;flex-wrap:wrap">'+badges+'</div></div>'+
-      '<div style="padding:9px 13px">'+
-      entries.map(function(l){
-        var canDel=isMine(l);
-        var loggedBy = l.logged_by || l.added_by || '?';
-        var loggedByLine = (loggedBy && loggedBy !== l.person)
-          ? t('loggedBy')+' <strong style="color:#3a2010">'+esc(loggedBy)+'<\/strong> for '+esc(l.person)
-          : t('loggedBy')+' '+esc(loggedBy);
-        // Delete controls: −1 (decrement qty) and 🗑 (delete whole row)
-        var delControls = canDel
-          ? '<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;margin-left:8px">'+
-              (l.quantity > 1
-                ? '<button onclick="decrementLogEntry(\''+l.id+'\',\''+esc(l.person)+'\',\''+esc(l.drink)+'\')" '+
-                    'style="background:#f5ede4;border:1.5px solid #b5481f;border-radius:8px;color:#b5481f;font-size:13px;font-weight:800;padding:5px 10px;cursor:pointer;min-width:40px" '+
-                    'title="Remove one">−1</button>'
-                : '')+
-              '<button onclick="delEntry(\'drink_logs\',\''+l.id+'\',\''+esc(l.drink)+' for '+esc(l.person)+'\')" '+
-                'style="background:#fff0f0;border:1.5px solid #c4392b;border-radius:8px;color:#c4392b;font-size:15px;padding:5px 8px;cursor:pointer;min-width:40px" '+
-                'title="Delete whole entry">🗑</button>'+
-              (IS_ADMIN ? '<button class="btn-edit" onclick="adminEditDrink(\''+l.id+'\')">✏️</button>' : '')+
-            '</div>'
-          : '<span style="font-size:11px;color:#6a3020;margin-left:8px">🔒</span>';
-        return '<div class="entry"><div class="entry-l"><span class="ej">'+emoji(l.drink)+'</span><div>'+
-          '<div class="en">'+esc(l.person)+(l.quantity>1?' <span class="badge">×'+l.quantity+'</span>':'')+'</div>'+
-          '<div class="es">'+esc(l.drink.replace(/^.+? /,''))+(l.total_price>0?' · €'+parseFloat(l.unit_price).toFixed(2)+' ea · €'+parseFloat(l.total_price).toFixed(2):'')+(l.note?' · '+esc(l.note):'')+'</div>'+
-          '<div class="es" style="color:#6a3020">'+loggedByLine+'</div>'+
-          '</div></div>'+delControls+'</div>';
-      }).join('')+'</div></div>';
+    var totalQty=entries.reduce(function(s,l){return s+(l.quantity||0);},0);
+    var totalCost=entries.reduce(function(s,l){return s+(parseFloat(l.total_price)||0);},0);
+    var dayId='hist-day-'+di;
+    var isToday=d===td();
+    var bodyHtml=entries.map(function(l){
+      var canDel=isMine(l);
+      var loggedBy=l.logged_by||l.added_by||'?';
+      var loggedByLine=(loggedBy&&loggedBy!==l.person)
+        ?t('loggedBy')+' <strong style="color:#3a2010">'+esc(loggedBy)+'<\/strong> for '+esc(l.person)
+        :t('loggedBy')+' '+esc(loggedBy);
+      var delControls=canDel
+        ?'<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;margin-left:8px">'+
+          (l.quantity>1?'<button onclick="decrementLogEntry(\''+l.id+'\',\''+esc(l.person)+'\',\''+esc(l.drink)+'\')" style="background:#f5ede4;border:1.5px solid #b5481f;border-radius:8px;color:#b5481f;font-size:13px;font-weight:800;padding:5px 10px;cursor:pointer;min-width:40px" title="Remove one">−1</button>':'')+
+          '<button onclick="delEntry(\'drink_logs\',\''+l.id+'\',\''+esc(l.drink)+' for '+esc(l.person)+'\')" style="background:#fff0f0;border:1.5px solid #c4392b;border-radius:8px;color:#c4392b;font-size:15px;padding:5px 8px;cursor:pointer;min-width:40px" title="Delete whole entry">🗑</button>'+
+          (IS_ADMIN?'<button class="btn-edit" onclick="adminEditDrink(\''+l.id+'\')">✏️</button>':'')+
+          '</div>'
+        :'<span style="font-size:11px;color:#6a3020;margin-left:8px">🔒</span>';
+      return '<div class="entry"><div class="entry-l"><span class="ej">'+emoji(l.drink)+'</span><div>'+
+        '<div class="en">'+esc(l.person)+(l.quantity>1?' <span class="badge">×'+l.quantity+'</span>':'')+'</div>'+
+        '<div class="es">'+esc(l.drink.replace(/^.+? /,''))+(l.total_price>0?' · €'+parseFloat(l.unit_price).toFixed(2)+' ea · €'+parseFloat(l.total_price).toFixed(2):'')+(l.note?' · 📝 '+esc(l.note):'')+'</div>'+
+        '<div class="es" style="color:#6a3020">'+loggedByLine+'</div>'+
+        '</div></div>'+delControls+'</div>';
+    }).join('');
+    return '<div class="card" style="padding:0;overflow:hidden;margin-bottom:8px">'+
+      '<div class="dh" style="cursor:pointer;user-select:none" onclick="(function(b,a){b.style.display=b.style.display===\'none\'?\'\':\'none\';a.textContent=b.style.display===\'none\'?\'▼\':\'▲\';})(document.getElementById(\''+dayId+'\'),document.getElementById(\''+dayId+'-arr\'))">'+
+        '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">'+
+          '<span id="'+dayId+'-arr" style="font-size:11px;color:#7a5200">'+( isToday?'▲':'▼')+'</span>'+
+          '<h4 style="margin:0">'+fmtDate(d)+(isToday?' <span style="font-size:11px;color:#1f8a4f;font-weight:700">today</span>':'')+'</h4>'+
+        '</div>'+
+        '<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">'+
+          badges+
+          '<span style="font-size:11px;color:#7a5200;font-weight:600;margin-left:4px">'+totalQty+' drinks'+(totalCost>0?' · €'+totalCost.toFixed(2):'')+'</span>'+
+        '</div>'+
+      '</div>'+
+      '<div id="'+dayId+'" style="padding:9px 13px;'+(isToday?'':'display:none')+'">'+bodyHtml+'</div>'+
+    '</div>';
   }).join('');
 }
 
@@ -5376,8 +5393,18 @@ function renderAudit(){
       '<button onclick="clearAllAuditLogs()" style="background:#fce8e6;border:1.5px solid #c4392b;border-radius:9px;padding:8px 16px;color:#c4392b;font-size:13px;font-weight:700;cursor:pointer">🗑 Clear All Audit Logs</button>'+
     '</div>';
   }
-  html+=card(t('activityLog'),
-    STATE.auditLog.map(function(a){
+  // Group audit entries by date
+  var auditByDate = {};
+  STATE.auditLog.forEach(function(a){
+    var d = (a.performed_at||'').substring(0,10) || 'unknown';
+    (auditByDate[d]=auditByDate[d]||[]).push(a);
+  });
+  var auditDays = Object.keys(auditByDate).sort().reverse();
+  var auditDayHtml = auditDays.map(function(d, di){
+    var dayEntries = auditByDate[d];
+    var dayId = 'audit-day-'+di;
+    var isToday = d === td();
+    var entriesHtml = dayEntries.map(function(a){
       var col=actionColors[a.action]||'#5a3a28';
       var label=actionLabels[a.action]||a.action.toLowerCase().replace(/_/g,' ');
       var isMe=a.performed_by===CURRENT_NAME;
@@ -5399,7 +5426,18 @@ function renderAudit(){
         '</div>'+
         (IS_ADMIN?'<button class="btn-sm" style="color:#c4392b;font-size:16px;padding:4px" onclick="deleteAuditEntry(\''+a.id+'\')">🗑</button>':'')+
       '</div>';
-    }).join(''));
+    }).join('');
+    return '<div style="border:1.5px solid #e8dccc;border-radius:12px;overflow:hidden;margin-bottom:8px">'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#f5ede4;cursor:pointer;user-select:none" '+
+        'onclick="(function(b,a){b.style.display=b.style.display===\'none\'?\'\':\'none\';a.textContent=b.style.display===\'none\'?\'▼\':\'▲\';})(document.getElementById(\''+dayId+'\'),document.getElementById(\''+dayId+'-arr\'))">'+
+        '<span id="'+dayId+'-arr" style="font-size:11px;color:#7a5200">'+( isToday?'▲':'▼')+'</span>'+
+        '<span style="font-size:13px;font-weight:700;color:#1a0e08;flex:1">'+fmtDate(d)+(isToday?' <span style="font-size:11px;color:#1f8a4f;font-weight:700">today</span>':'')+'</span>'+
+        '<span style="font-size:11px;color:#7a5200;font-weight:600">'+dayEntries.length+' actions</span>'+
+      '</div>'+
+      '<div id="'+dayId+'" style="padding:8px 12px;'+(isToday?'':'display:none')+'">'+entriesHtml+'</div>'+
+    '</div>';
+  }).join('');
+  html += '<div class="card">'+auditDayHtml+'</div>';
   el.innerHTML=html;
 }
 
