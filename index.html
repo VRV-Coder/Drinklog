@@ -2126,31 +2126,40 @@ function renderConsolidatedToday(){
     var sessions = [];
 
     if (lastSettledDate) {
-      // Find all settlement boundaries by walking dates (same logic as getLastSettlementDate)
       var allLogDates = [...new Set(STATE.logs.map(function(l){ return l.date; }))].sort();
       var sessionStart = allLogDates[0];
-      var runningLastSettled = null;
 
       for (var di = 0; di < allLogDates.length; di++) {
         var checkDate = allLogDates[di];
-        // Stop once we reach the current session
         if (checkDate > lastSettledDate) break;
+
+        // Money settled?
         var cumBill = STATE.logs.reduce(function(s,l){
           return l.date <= checkDate && (parseFloat(l.unit_price)||0) > 0 ? s+(parseFloat(l.total_price)||0) : s;
         }, 0);
         var cumPaid = STATE.payments.reduce(function(s,p){
           return p.date <= checkDate ? s+(parseFloat(p.amount)||0) : s;
         }, 0);
-        var isBillSettled = cumBill > 0.01 && cumPaid >= cumBill - 0.01;
-        // Also count tab-closes as settlement boundaries (free-only sessions)
-        var allTabsClosed = (STATE.tabCloses||[]).some(function(c){ return c.closed_at === checkDate; });
-        if (isBillSettled || (checkDate === lastSettledDate)) {
+        var moneyOk = cumBill <= 0.005 || cumPaid >= cumBill - 0.01;
+
+        // All drinkers closed their tab?
+        var drinkersSoFar = [...new Set(STATE.logs
+          .filter(function(l){ return l.date <= checkDate; })
+          .map(function(l){ return l.person; })
+        )];
+        var closedSoFar = (STATE.tabCloses||[])
+          .filter(function(c){ return c.closed_at <= checkDate; })
+          .map(function(c){ return c.person; });
+        var allClosedSoFar = drinkersSoFar.length > 0 && drinkersSoFar.every(function(p){
+          return closedSoFar.indexOf(p) !== -1;
+        });
+
+        if (moneyOk && allClosedSoFar) {
           sessions.push({ from: sessionStart, to: checkDate });
           var nextIdx = di + 1;
           sessionStart = nextIdx < allLogDates.length ? allLogDates[nextIdx] : null;
         }
       }
-      // If no sessions were pushed but lastSettledDate exists, make one session covering all past logs
       if (!sessions.length) {
         sessions.push({ from: allLogDates[0], to: lastSettledDate });
       }
@@ -2626,29 +2635,43 @@ async function saveLog(){
 // A "session" = all logs since the last time EVERYONE's bill was fully settled.
 // This prevents yesterday's settled drinks mixing into today's counts/leaderboard.
 function getLastSettlementDate(){
-  // Walk through dates chronologically and find the most recent date
-  // where the cumulative PRICED bill was fully paid.
-  // Free (zero-price) drinks are excluded — they don't create a money debt.
+  // Returns the most recent date where the session was fully settled — either:
+  // (a) money session: cumulative priced bill fully paid, OR
+  // (b) free session: everyone who drank closed their tab (no money owed)
   var allDates = [...new Set(STATE.logs.map(function(l){return l.date;}))].sort();
   var lastSettled = null;
 
   for (var i = 0; i < allDates.length; i++){
     var upToDate = allDates[i];
-    // Only count priced (non-free) drinks in the bill
+
+    // ── Money check ──
     var bill = STATE.logs.reduce(function(s,l){
       return l.date <= upToDate && (parseFloat(l.unit_price)||0) > 0
         ? s + (parseFloat(l.total_price)||0) : s;
     }, 0);
-    // Total paid up to this date
     var paid = STATE.payments.reduce(function(s,p){
       return p.date <= upToDate ? s + (parseFloat(p.amount)||0) : s;
     }, 0);
-    // Settled = there is a real bill and it is fully covered
-    if (bill > 0.01 && paid >= bill - 0.01){
+    var moneySettled = bill <= 0.005 || paid >= bill - 0.01;
+
+    // ── Tab-close check (free sessions) ──
+    // Everyone who logged drinks up to this date must have closed their tab
+    var drinkers = [...new Set(STATE.logs
+      .filter(function(l){ return l.date <= upToDate; })
+      .map(function(l){ return l.person; })
+    )];
+    var tabClosesByDate = (STATE.tabCloses||[])
+      .filter(function(c){ return c.closed_at <= upToDate; })
+      .map(function(c){ return c.person; });
+    var allTabsClosed = drinkers.length > 0 && drinkers.every(function(p){
+      return tabClosesByDate.indexOf(p) !== -1;
+    });
+
+    if (moneySettled && allTabsClosed){
       lastSettled = upToDate;
     }
   }
-  return lastSettled; // null = never settled, use all logs
+  return lastSettled;
 }
 
 // Returns only logs that belong to the current unsettled session
