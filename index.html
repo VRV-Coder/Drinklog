@@ -2095,31 +2095,45 @@ function renderConsolidatedToday(){
     html += card(t('runningTabsTitle'), unsettled.map(rowHtml).join(''));
   }
 
-  // ── SETTLED UP — built from ALL-TIME logs, not just current session blocks ──
-  // (settled[] from blocks only covers current session; past sessions need STATE.logs)
+  // ── SETTLED UP — built from ALL-TIME logs using getLastSettlementDate() ──
   {
     var isDE = LANG === 'de';
 
-    // Group into sessions by finding settlement boundaries in the full all-time log
-    var allLogDates = [...new Set(STATE.logs.map(function(l){ return l.date; }))].sort();
-
-    // Build session list: walk dates and find where cumulative bill == cumulative paid
+    // Use getLastSettlementDate() as the reliable settlement boundary.
+    // Everything on or before that date is a past settled session.
+    var lastSettledDate = getLastSettlementDate();
     var sessions = [];
-    var sessionStart = allLogDates[0] || td();
-    var prevSettleDate = null;
 
-    for (var di = 0; di < allLogDates.length; di++) {
-      var checkDate = allLogDates[di];
-      var cumBill = STATE.logs.reduce(function(s,l){ return l.date <= checkDate ? s+(parseFloat(l.total_price)||0) : s; }, 0);
-      var cumPaid = STATE.payments.reduce(function(s,p){ return p.date <= checkDate ? s+(parseFloat(p.amount)||0) : s; }, 0);
-      if (cumBill > 0.01 && cumPaid >= cumBill - 0.01) {
-        // Found a settlement point
-        sessions.push({ from: sessionStart, to: checkDate, settledAt: checkDate });
-        sessionStart = allLogDates[di+1] || null;
-        prevSettleDate = checkDate;
+    if (lastSettledDate) {
+      // Find all settlement boundaries by walking dates (same logic as getLastSettlementDate)
+      var allLogDates = [...new Set(STATE.logs.map(function(l){ return l.date; }))].sort();
+      var sessionStart = allLogDates[0];
+      var runningLastSettled = null;
+
+      for (var di = 0; di < allLogDates.length; di++) {
+        var checkDate = allLogDates[di];
+        // Stop once we reach the current session
+        if (checkDate > lastSettledDate) break;
+        var cumBill = STATE.logs.reduce(function(s,l){
+          return l.date <= checkDate && (parseFloat(l.unit_price)||0) > 0 ? s+(parseFloat(l.total_price)||0) : s;
+        }, 0);
+        var cumPaid = STATE.payments.reduce(function(s,p){
+          return p.date <= checkDate ? s+(parseFloat(p.amount)||0) : s;
+        }, 0);
+        var isBillSettled = cumBill > 0.01 && cumPaid >= cumBill - 0.01;
+        // Also count tab-closes as settlement boundaries (free-only sessions)
+        var allTabsClosed = (STATE.tabCloses||[]).some(function(c){ return c.closed_at === checkDate; });
+        if (isBillSettled || (checkDate === lastSettledDate)) {
+          sessions.push({ from: sessionStart, to: checkDate });
+          var nextIdx = di + 1;
+          sessionStart = nextIdx < allLogDates.length ? allLogDates[nextIdx] : null;
+        }
+      }
+      // If no sessions were pushed but lastSettledDate exists, make one session covering all past logs
+      if (!sessions.length) {
+        sessions.push({ from: allLogDates[0], to: lastSettledDate });
       }
     }
-    // Any remaining unsettled dates form the current open session (handled above)
 
     // For each session, build a summary per person
     var settledHtml = '';
@@ -2280,6 +2294,17 @@ function renderConsolidatedToday(){
         '</div>'+
         '</div>';
     });
+
+    // DEBUG — always show a debug card so we can see what's happening
+    html += '<div class="card" style="background:#fff0f0;border:2px solid red;font-size:11px;word-break:break-all">'+
+      '<b>DEBUG settled section</b><br>'+
+      'STATE.logs.length='+STATE.logs.length+'<br>'+
+      'STATE.payments.length='+STATE.payments.length+'<br>'+
+      'lastSettledDate='+lastSettledDate+'<br>'+
+      'sessions.length='+sessions.length+'<br>'+
+      'sessions='+JSON.stringify(sessions)+'<br>'+
+      'settledHtml.length='+settledHtml.length+
+    '</div>';
 
     if (settledHtml) {
       var settledId = 'settled-body-'+Date.now();
