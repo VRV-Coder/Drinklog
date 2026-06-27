@@ -1461,6 +1461,10 @@ async function quickAddDrink(person, drink, event){
   else if (nextCount === 10) milestone = '🏆 10! Legend!';
   else if (nextCount % 5 === 0) milestone = '🎉 '+nextCount+' '+drinkName+'s!';
 
+  // Store pending log params on window so quickAddDrinkConfirm can access them
+  // regardless of HTML escaping issues in onclick attributes
+  window._pendingLog = { person: person, drink: drink, noteId: noteId };
+
   showModal(
     '<div style="text-align:center;padding:4px">'+
       '<div style="font-size:52px;margin-bottom:4px">'+emoji(drink)+'</div>'+
@@ -1469,11 +1473,11 @@ async function quickAddDrink(person, drink, event){
       (milestone?'<div style="font-size:13px;font-weight:700;color:#1f8a4f;background:#d4f5e2;border-radius:8px;padding:4px 12px;display:inline-block;margin-bottom:12px">'+milestone+'</div>':'')+
       '<input id="'+noteId+'" type="text" placeholder="📝 '+(isDE?'Notiz (optional)…':'Note (optional)…')+'" '+
         'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 12px;font-size:15px;color:#1a0e08;box-sizing:border-box;margin-bottom:12px" '+
-        'onkeydown="if(event.key===\'Enter\'){document.getElementById(\'qlog-btn\').click();}"/>'+
+        'onkeydown="if(event.key===\'Enter\'){quickAddDrinkConfirm();}"/>'+
       '<div style="display:flex;gap:10px">'+
         '<button onclick="closeModal()" style="flex:1;background:#f5ede4;border:1.5px solid #e8dccc;border-radius:10px;padding:12px;font-size:15px;font-weight:700;color:#5a3a28;cursor:pointer">'+
           (isDE?'Abbrechen':'Cancel')+'</button>'+
-        '<button id="qlog-btn" onclick="quickAddDrinkConfirm(\''+esc(person)+'\',\''+esc(drink)+'\',\''+noteId+'\')" '+
+        '<button id="qlog-btn" onclick="quickAddDrinkConfirm()" '+
           'style="flex:2;background:#b5481f;border:none;border-radius:10px;padding:12px;font-size:17px;font-weight:800;color:#fff;cursor:pointer">'+
           '✓ '+(isDE?'Erfassen':'Log it')+'</button>'+
       '</div>'+
@@ -1482,9 +1486,14 @@ async function quickAddDrink(person, drink, event){
   setTimeout(function(){ var el=document.getElementById(noteId); if(el) el.focus(); }, 80);
 }
 
-async function quickAddDrinkConfirm(person, drink, noteInputId){
-  var noteEl = document.getElementById(noteInputId);
+async function quickAddDrinkConfirm(){
+  var p = window._pendingLog || {};
+  var person = p.person;
+  var drink = p.drink;
+  // Read note BEFORE closing modal (DOM still present)
+  var noteEl = p.noteId ? document.getElementById(p.noteId) : null;
   var note = noteEl ? noteEl.value.trim() : '';
+  window._pendingLog = null;
   closeModal();
   await addPersonToTable(person);
   var price = getDrinkPrice(drink);
