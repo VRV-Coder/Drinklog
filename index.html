@@ -1439,27 +1439,47 @@ async function quickAddDrink(person, drink, event){
   if (event) event.stopPropagation();
   if (!person) return;
   var isDE = LANG === 'de';
-  // Show a small note popup before logging
-  var noteId = 'quick-note-input-'+Date.now();
+  var drinkName = drink.replace(/^.+? /, '');
+  var price = getDrinkPrice(drink);
+  var noteId = 'quick-note-'+Date.now();
+
+  // Pre-compute current drink count (before logging) to show in popup
+  var sessionLogs = getSessionLogs();
+  var currentCount = sessionLogs
+    .filter(function(l){ return l.person===person && l.drink===drink; })
+    .reduce(function(s,l){ return s+(l.quantity||0); }, 0);
+  var totalCount = sessionLogs
+    .filter(function(l){ return l.person===person; })
+    .reduce(function(s,l){ return s+(l.quantity||0); }, 0);
+  var nextCount = currentCount + 1;
+  var nextTotal = totalCount + 1;
+
+  // Fun milestone messages
+  var milestone = '';
+  if (nextCount === 1) milestone = isDE ? '🍻 Erstes '+drinkName+'!' : '🍻 First '+drinkName+'!';
+  else if (nextCount === 5) milestone = '🔥 5 down!';
+  else if (nextCount === 10) milestone = '🏆 10! Legend!';
+  else if (nextCount % 5 === 0) milestone = '🎉 '+nextCount+' '+drinkName+'s!';
+
   showModal(
     '<div style="text-align:center;padding:4px">'+
-      '<div style="font-size:48px;margin-bottom:6px">'+emoji(drink)+'</div>'+
-      '<h3 style="margin:0 0 4px 0;font-size:18px">'+esc(drink.replace(/^.+? /,''))+'</h3>'+
-      '<p style="font-size:13px;color:#5a3a28;margin:0 0 14px 0">'+esc(isDE?'für '+person:'for '+person)+'</p>'+
+      '<div style="font-size:52px;margin-bottom:4px">'+emoji(drink)+'</div>'+
+      '<div style="font-size:28px;font-weight:900;color:#b5481f;margin-bottom:2px">'+(nextCount)+' '+esc(drinkName)+(nextCount!==1?'s':'')+'</div>'+
+      '<div style="font-size:12px;color:#7a5200;margin-bottom:'+(milestone?'6px':'12px')+'">'+esc(person)+' · '+nextTotal+' '+(isDE?'gesamt':'total this session')+'</div>'+
+      (milestone?'<div style="font-size:13px;font-weight:700;color:#1f8a4f;background:#d4f5e2;border-radius:8px;padding:4px 12px;display:inline-block;margin-bottom:12px">'+milestone+'</div>':'')+
       '<input id="'+noteId+'" type="text" placeholder="📝 '+(isDE?'Notiz (optional)…':'Note (optional)…')+'" '+
-        'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 12px;font-size:15px;color:#1a0e08;box-sizing:border-box;margin-bottom:14px" '+
-        'onkeydown="if(event.key===\'Enter\'){document.getElementById(\'quick-confirm-btn\').click();}"/>'+
+        'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 12px;font-size:15px;color:#1a0e08;box-sizing:border-box;margin-bottom:12px" '+
+        'onkeydown="if(event.key===\'Enter\'){document.getElementById(\'qlog-btn\').click();}"/>'+
       '<div style="display:flex;gap:10px">'+
         '<button onclick="closeModal()" style="flex:1;background:#f5ede4;border:1.5px solid #e8dccc;border-radius:10px;padding:12px;font-size:15px;font-weight:700;color:#5a3a28;cursor:pointer">'+
           (isDE?'Abbrechen':'Cancel')+'</button>'+
-        '<button id="quick-confirm-btn" onclick="quickAddDrinkConfirm(\''+esc(person)+'\',\''+esc(drink)+'\',\''+noteId+'\')" '+
-          'style="flex:2;background:#b5481f;border:none;border-radius:10px;padding:12px;font-size:16px;font-weight:800;color:#fff;cursor:pointer">'+
+        '<button id="qlog-btn" onclick="quickAddDrinkConfirm(\''+esc(person)+'\',\''+esc(drink)+'\',\''+noteId+'\')" '+
+          'style="flex:2;background:#b5481f;border:none;border-radius:10px;padding:12px;font-size:17px;font-weight:800;color:#fff;cursor:pointer">'+
           '✓ '+(isDE?'Erfassen':'Log it')+'</button>'+
       '</div>'+
     '</div>'
   );
-  // Auto-focus the note input
-  setTimeout(function(){ var el=document.getElementById(noteId); if(el) el.focus(); }, 100);
+  setTimeout(function(){ var el=document.getElementById(noteId); if(el) el.focus(); }, 80);
 }
 
 async function quickAddDrinkConfirm(person, drink, noteInputId){
@@ -1492,7 +1512,6 @@ async function quickAddDrinkConfirm(person, drink, noteInputId){
       notify('⚠️ '+(LANG==='de'?'Nur noch '+availQ+' frei!':'Only '+availQ+' free left!'));
     }
   }
-  showDrinkCountPopup(person, drink);
 }
 
 async function quickRemoveDrink(person, drink, event){
@@ -2324,16 +2343,16 @@ function renderConsolidatedToday(){
         '</div>';
     });
 
-    if (settledHtml) {
-      var settledId = 'settled-body-'+Date.now();
-      html += '<div class="card">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="(function(){var b=document.getElementById(\'' + settledId + '\');var a=document.getElementById(\'' + settledId + '-arrow\');if(b.style.display===\'none\'){b.style.display=\'\';a.textContent=\'▲\';}else{b.style.display=\'none\';a.textContent=\'▼\';}})()">' +
-          '<div class="card-title" style="margin-bottom:0">' + t('settledUpTitle') + '</div>' +
-          '<span id="' + settledId + '-arrow" style="font-size:12px;color:#8a7568;margin-left:8px">▼</span>' +
-        '</div>' +
-        '<div id="' + settledId + '" style="display:none;margin-top:10px">' + settledHtml + '</div>' +
-      '</div>';
-    }
+    var settledId = 'settled-body-main';
+    html += '<div class="card">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="(function(){var b=document.getElementById(\''+settledId+'\');var a=document.getElementById(\''+settledId+'-arrow\');if(b.style.display===\'none\'){b.style.display=\'\';a.textContent=\'▲\';}else{b.style.display=\'none\';a.textContent=\'▼\';}})()">' +
+        '<div class="card-title" style="margin-bottom:0">' + t('settledUpTitle') + '</div>' +
+        '<span id="'+settledId+'-arrow" style="font-size:12px;color:#8a7568;margin-left:8px">▼</span>' +
+      '</div>' +
+      '<div id="'+settledId+'" style="display:none;margin-top:10px">' +
+        (settledHtml || '<div style="text-align:center;padding:20px;color:#7a5200;font-size:13px">📭 '+(isDE?'Noch keine abgeschlossenen Sitzungen.':'No settled sessions yet. Close your tab after drinking to record a session.')+'</div>') +
+      '</div>' +
+    '</div>';
   }
 
   return html;
@@ -5443,12 +5462,16 @@ function renderAudit(){
         (IS_ADMIN?'<button class="btn-sm" style="color:#c4392b;font-size:16px;padding:4px" onclick="deleteAuditEntry(\''+a.id+'\')">🗑</button>':'')+
       '</div>';
     }).join('');
+    var dayIds = dayEntries.map(function(a){ return a.id; });
     return '<div style="border:1.5px solid #e8dccc;border-radius:12px;overflow:hidden;margin-bottom:8px">'+
-      '<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#f5ede4;cursor:pointer;user-select:none" '+
-        'onclick="(function(b,a){b.style.display=b.style.display===\'none\'?\'\':\'none\';a.textContent=b.style.display===\'none\'?\'▼\':\'▲\';})(document.getElementById(\''+dayId+'\'),document.getElementById(\''+dayId+'-arr\'))">'+
-        '<span id="'+dayId+'-arr" style="font-size:11px;color:#7a5200">'+( isToday?'▲':'▼')+'</span>'+
-        '<span style="font-size:13px;font-weight:700;color:#1a0e08;flex:1">'+fmtDate(d)+(isToday?' <span style="font-size:11px;color:#1f8a4f;font-weight:700">today</span>':'')+'</span>'+
-        '<span style="font-size:11px;color:#7a5200;font-weight:600">'+dayEntries.length+' actions</span>'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#f5ede4">'+
+        '<div style="display:flex;align-items:center;gap:8px;flex:1;cursor:pointer;user-select:none" '+
+          'onclick="(function(b,a){b.style.display=b.style.display===\'none\'?\'\':\'none\';a.textContent=b.style.display===\'none\'?\'▼\':\'▲\';})(document.getElementById(\''+dayId+'\'),document.getElementById(\''+dayId+'-arr\'))">'+
+          '<span id="'+dayId+'-arr" style="font-size:11px;color:#7a5200">'+( isToday?'▲':'▼')+'</span>'+
+          '<span style="font-size:13px;font-weight:700;color:#1a0e08">'+fmtDate(d)+(isToday?' <span style="font-size:11px;color:#1f8a4f;font-weight:700">today</span>':'')+'</span>'+
+          '<span style="font-size:11px;color:#7a5200;font-weight:600;margin-left:4px">'+dayEntries.length+' actions</span>'+
+        '</div>'+
+        (IS_ADMIN?'<button onclick="deleteAuditDay(\''+d+'\')" style="background:#fce8e6;border:1.5px solid #c4392b;border-radius:7px;color:#c4392b;font-size:11px;font-weight:700;padding:4px 8px;cursor:pointer;white-space:nowrap">🗑 day</button>':'')+
       '</div>'+
       '<div id="'+dayId+'" style="padding:8px 12px;'+(isToday?'':'display:none')+'">'+entriesHtml+'</div>'+
     '</div>';
@@ -5462,6 +5485,41 @@ async function deleteAuditEntry(id){
   var {error} = await SB.from('audit_log').delete().eq('id', id);
   if (error) { notify('Error: '+error.message, true); return; }
   notify('Audit entry deleted ✓');
+  await loadAll();
+}
+
+async function deleteAuditDay(date){
+  if (!IS_ADMIN) return;
+  var isDE = LANG === 'de';
+  var dayEntries = STATE.auditLog.filter(function(a){
+    return (a.performed_at||'').substring(0,10) === date;
+  });
+  if (!dayEntries.length) return;
+  showModal(
+    '<div style="text-align:center">'+
+      '<div style="font-size:40px;margin-bottom:8px">🗑</div>'+
+      '<h3 style="margin-bottom:8px">'+(isDE?'Tag löschen?':'Delete day?')+'</h3>'+
+      '<p style="font-size:13px;color:#5a3a28;margin-bottom:16px">'+fmtDate(date)+' · '+dayEntries.length+' '+(isDE?'Einträge':'entries')+'</p>'+
+      '<div style="display:flex;gap:10px">'+
+        '<button onclick="closeModal()" style="flex:1;background:#f5ede4;border:1.5px solid #e8dccc;border-radius:10px;padding:12px;font-size:15px;font-weight:700;color:#5a3a28;cursor:pointer">'+(isDE?'Abbrechen':'Cancel')+'</button>'+
+        '<button onclick="closeModal();doDeleteAuditDay(\''+date+'\')" style="flex:1;background:#c4392b;border:none;border-radius:10px;padding:12px;font-size:15px;font-weight:800;color:#fff;cursor:pointer">🗑 '+(isDE?'Löschen':'Delete')+'</button>'+
+      '</div>'+
+    '</div>'
+  );
+}
+
+async function doDeleteAuditDay(date){
+  if (!IS_ADMIN) return;
+  var dayEntries = STATE.auditLog.filter(function(a){
+    return (a.performed_at||'').substring(0,10) === date;
+  });
+  var errors = [];
+  for (var i=0; i<dayEntries.length; i++){
+    var {error} = await SB.from('audit_log').delete().eq('id', dayEntries[i].id);
+    if (error) errors.push(error.message);
+  }
+  if (errors.length) { notify('Error: '+errors[0], true); return; }
+  notify('Deleted '+dayEntries.length+' audit entries for '+fmtDate(date)+' ✓');
   await loadAll();
 }
 
