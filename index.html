@@ -1773,20 +1773,27 @@ async function saveRunningAmountEdit(person, date){
 function renderConsolidatedToday(){
   if (!STATE.logs.length) return '';
 
-  // Build per-person running tab: every drink they've ever logged stays
-  // consolidated together until their balance is fully settled —
-  // both money (priced drinks vs payments) AND bottles (free drinks vs replacements).
-  var personNames = [...new Set(STATE.logs.map(function(l){ return l.person; }))].sort();
+  // Use only the current unsettled session logs — everything since the last full settlement.
+  // This prevents old settled drinks from reappearing in the "not yet settled" section.
+  var sessionLogs = getSessionLogs();
+  var sessionCutoffDate = getLastSettlementDate(); // null = no settlement yet
+
+  if (!sessionLogs.length) return '';
+
+  var personNames = [...new Set(sessionLogs.map(function(l){ return l.person; }))].sort();
 
   var blocks = personNames.map(function(person){
-    var pLogs = STATE.logs.filter(function(l){ return l.person === person; });
+    var pLogs = sessionLogs.filter(function(l){ return l.person === person; });
+    if (!pLogs.length) return null;
 
-    // Money owed: priced drinks minus payments where this person is listed as a payer
+    // Money owed: priced session drinks minus payments made AFTER last settlement
     var moneyOwed = pLogs.reduce(function(s,l){
       var unitPrice = parseFloat(l.unit_price)||0;
       return unitPrice > 0 ? s + (parseFloat(l.total_price)||0) : s;
     }, 0);
     var moneyPaid = STATE.payments.reduce(function(s,p){
+      // Only count payments from after the last settlement date
+      if (sessionCutoffDate && p.date <= sessionCutoffDate) return s;
       var payers = (p.payers||'').split(',').map(function(x){return x.trim();});
       return payers.indexOf(person) !== -1 ? s + (parseFloat(p.amount)||0) : s;
     }, 0);
@@ -1803,9 +1810,9 @@ function renderConsolidatedToday(){
       freeFundContribCS[c.drink] = (freeFundContribCS[c.drink]||0) + (c.crates||0)*CRATE_SIZE_CS + (c.extra_bottles||0);
     });
 
-    // Total FREE consumed by ALL people per drink type (communal pool)
+    // Total FREE consumed by ALL people per drink type (communal pool) — session only
     var totalFreeCommunal = {};
-    STATE.logs.forEach(function(l){
+    sessionLogs.forEach(function(l){
       if ((parseFloat(l.unit_price)||0) > 0) return;
       totalFreeCommunal[l.drink] = (totalFreeCommunal[l.drink]||0) + (l.quantity||0);
     });
@@ -1873,6 +1880,9 @@ function renderConsolidatedToday(){
       _debugInfo: _debugInfo
     };
   });
+
+  // Filter out any null entries (people with no session logs)
+  blocks = blocks.filter(Boolean);
 
   // Sort: unsettled people first (most owed first), then settled people
   blocks.sort(function(a,b){
@@ -2644,7 +2654,8 @@ function showDrinkCountPopup(person, drink){
 // ── PERSON + DAY DETAILED LOG (timestamped) ─────────────────
 // ── PERSON'S RUNNING TAB (all entries since last settlement, grouped by day) ──
 function showPersonRunningTab(person){
-  var entries = STATE.logs
+  // Only show logs from the current unsettled session
+  var entries = getSessionLogs()
     .filter(function(l){ return l.person===person; })
     .slice()
     .sort(function(a,b){
