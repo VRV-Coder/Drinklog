@@ -2116,52 +2116,51 @@ function renderConsolidatedToday(){
     html += card(t('runningTabsTitle'), unsettled.map(rowHtml).join(''));
   }
 
-  // ── SETTLED UP — built from ALL-TIME logs using getLastSettlementDate() ──
+  // ── SETTLED UP ──
+  // A session boundary is any date where either:
+  //   • money: a full payment was recorded covering all priced drinks so far, OR
+  //   • free: at least one person closed their tab (marks the end of that session day)
+  // We collect all such boundaries and build session blocks between them.
   {
     var isDE = LANG === 'de';
-
-    // Use getLastSettlementDate() as the reliable settlement boundary.
-    // Everything on or before that date is a past settled session.
-    var lastSettledDate = getLastSettlementDate();
     var sessions = [];
 
-    if (lastSettledDate) {
+    if (STATE.logs.length) {
       var allLogDates = [...new Set(STATE.logs.map(function(l){ return l.date; }))].sort();
       var sessionStart = allLogDates[0];
+      var prevCumPaid = 0;
 
       for (var di = 0; di < allLogDates.length; di++) {
         var checkDate = allLogDates[di];
-        if (checkDate > lastSettledDate) break;
 
-        // Money settled?
+        // Cumulative bill (priced drinks only) up to this date
         var cumBill = STATE.logs.reduce(function(s,l){
           return l.date <= checkDate && (parseFloat(l.unit_price)||0) > 0 ? s+(parseFloat(l.total_price)||0) : s;
         }, 0);
         var cumPaid = STATE.payments.reduce(function(s,p){
           return p.date <= checkDate ? s+(parseFloat(p.amount)||0) : s;
         }, 0);
-        var moneyOk = cumBill <= 0.005 || cumPaid >= cumBill - 0.01;
+        var moneySettled = cumBill > 0.005 && cumPaid >= cumBill - 0.01;
 
-        // All drinkers closed their tab?
-        var drinkersSoFar = [...new Set(STATE.logs
-          .filter(function(l){ return l.date <= checkDate; })
-          .map(function(l){ return l.person; })
-        )];
-        var closedSoFar = (STATE.tabCloses||[])
-          .filter(function(c){ return c.closed_at <= checkDate; })
-          .map(function(c){ return c.person; });
-        var allClosedSoFar = drinkersSoFar.length > 0 && drinkersSoFar.every(function(p){
-          return closedSoFar.indexOf(p) !== -1;
-        });
+        // Any tab close on this exact date
+        var closesOnDate = (STATE.tabCloses||[]).filter(function(c){ return c.closed_at === checkDate; });
+        var hasTabClose = closesOnDate.length > 0;
 
-        if (moneyOk && allClosedSoFar) {
-          sessions.push({ from: sessionStart, to: checkDate });
+        // Mark as session boundary if: money fully settled, OR someone closed their tab
+        var isBoundary = moneySettled || hasTabClose;
+
+        // Don't mark future/current unsettled dates as boundaries
+        // (only dates where something definitively closed)
+        if (isBoundary && sessionStart) {
+          sessions.push({
+            from: sessionStart,
+            to: checkDate,
+            moneySettled: moneySettled,
+            tabCloses: closesOnDate
+          });
           var nextIdx = di + 1;
           sessionStart = nextIdx < allLogDates.length ? allLogDates[nextIdx] : null;
         }
-      }
-      if (!sessions.length) {
-        sessions.push({ from: allLogDates[0], to: lastSettledDate });
       }
     }
 
@@ -2635,41 +2634,40 @@ async function saveLog(){
 // A "session" = all logs since the last time EVERYONE's bill was fully settled.
 // This prevents yesterday's settled drinks mixing into today's counts/leaderboard.
 function getLastSettlementDate(){
-  // Returns the most recent date where the session was fully settled — either:
-  // (a) money session: cumulative priced bill fully paid, OR
-  // (b) free session: everyone who drank closed their tab (no money owed)
+  // A session is settled when EITHER:
+  // (a) there's a priced bill and it's fully paid, OR
+  // (b) all drinks are free AND every drinker closed their tab on the same date
+  // We look for the most recent such boundary date.
   var allDates = [...new Set(STATE.logs.map(function(l){return l.date;}))].sort();
   var lastSettled = null;
 
   for (var i = 0; i < allDates.length; i++){
-    var upToDate = allDates[i];
+    var d = allDates[i];
 
-    // ── Money check ──
-    var bill = STATE.logs.reduce(function(s,l){
-      return l.date <= upToDate && (parseFloat(l.unit_price)||0) > 0
-        ? s + (parseFloat(l.total_price)||0) : s;
+    // Logs only up to and including this date
+    var logsUpTo = STATE.logs.filter(function(l){ return l.date <= d; });
+    var bill = logsUpTo.reduce(function(s,l){
+      return (parseFloat(l.unit_price)||0) > 0 ? s+(parseFloat(l.total_price)||0) : s;
     }, 0);
     var paid = STATE.payments.reduce(function(s,p){
-      return p.date <= upToDate ? s + (parseFloat(p.amount)||0) : s;
+      return p.date <= d ? s+(parseFloat(p.amount)||0) : s;
     }, 0);
-    var moneySettled = bill <= 0.005 || paid >= bill - 0.01;
 
-    // ── Tab-close check (free sessions) ──
-    // Everyone who logged drinks up to this date must have closed their tab
-    var drinkers = [...new Set(STATE.logs
-      .filter(function(l){ return l.date <= upToDate; })
-      .map(function(l){ return l.person; })
-    )];
-    var tabClosesByDate = (STATE.tabCloses||[])
-      .filter(function(c){ return c.closed_at <= upToDate; })
+    // Money side: either no bill at all, or bill is fully covered
+    var moneyOk = bill <= 0.005 || paid >= bill - 0.01;
+
+    // Tab-close side: every drinker on THIS date closed their tab on this date
+    var drinkers = [...new Set(logsUpTo.map(function(l){ return l.person; }))];
+    var closedOnThisDate = (STATE.tabCloses||[])
+      .filter(function(c){ return c.closed_at === d; })
       .map(function(c){ return c.person; });
-    var allTabsClosed = drinkers.length > 0 && drinkers.every(function(p){
-      return tabClosesByDate.indexOf(p) !== -1;
+    var allClosed = drinkers.length > 0 && drinkers.every(function(p){
+      // Person either closed on this exact date, or had no drinks after their last close
+      return closedOnThisDate.indexOf(p) !== -1 ||
+        isTabTrulyClosed(p, null); // already closed before this session
     });
 
-    if (moneySettled && allTabsClosed){
-      lastSettled = upToDate;
-    }
+    if (moneyOk && allClosed) lastSettled = d;
   }
   return lastSettled;
 }
@@ -4542,10 +4540,8 @@ function renderHistory(){
   if(!STATE.logs.length){el.innerHTML=empty('📅',t('noHistory'),t('logSomeDrinks'));return;}
   var bd={};
   STATE.logs.forEach(function(l){(bd[l.date]=bd[l.date]||[]).push(l);});
-  el.innerHTML=Object.keys(bd).sort().reverse().map(function(d,di){
+  var histHtml = Object.keys(bd).sort().reverse().map(function(d,di){
     var entries=bd[d];
-    var bp={};entries.forEach(function(l){bp[l.person]=(bp[l.person]||0)+(l.quantity||0);});
-    var badges=Object.entries(bp).map(function(e){return '<span class="badge">'+esc(e[0])+': '+e[1]+'</span>';}).join(' ');
     var totalQty=entries.reduce(function(s,l){return s+(l.quantity||0);},0);
     var totalCost=entries.reduce(function(s,l){return s+(parseFloat(l.total_price)||0);},0);
     var dayId='hist-day-'+di;
@@ -4558,31 +4554,28 @@ function renderHistory(){
         :t('loggedBy')+' '+esc(loggedBy);
       var delControls=canDel
         ?'<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;margin-left:8px">'+
-          (l.quantity>1?'<button onclick="decrementLogEntry(\''+l.id+'\',\''+esc(l.person)+'\',\''+esc(l.drink)+'\')" style="background:#f5ede4;border:1.5px solid #b5481f;border-radius:8px;color:#b5481f;font-size:13px;font-weight:800;padding:5px 10px;cursor:pointer;min-width:40px" title="Remove one">−1</button>':'')+
-          '<button onclick="delEntry(\'drink_logs\',\''+l.id+'\',\''+esc(l.drink)+' for '+esc(l.person)+'\')" style="background:#fff0f0;border:1.5px solid #c4392b;border-radius:8px;color:#c4392b;font-size:15px;padding:5px 8px;cursor:pointer;min-width:40px" title="Delete whole entry">🗑</button>'+
+          (l.quantity>1?'<button onclick="decrementLogEntry(\''+l.id+'\',\''+esc(l.person)+'\',\''+esc(l.drink)+'\')" style="background:#f5ede4;border:1.5px solid #b5481f;border-radius:8px;color:#b5481f;font-size:13px;font-weight:800;padding:5px 10px;cursor:pointer;min-width:40px">−1</button>':'')+
+          '<button onclick="delEntry(\'drink_logs\',\''+l.id+'\',\''+esc(l.drink)+' for '+esc(l.person)+'\')" style="background:#fff0f0;border:1.5px solid #c4392b;border-radius:8px;color:#c4392b;font-size:15px;padding:5px 8px;cursor:pointer;min-width:40px">🗑</button>'+
           (IS_ADMIN?'<button class="btn-edit" onclick="adminEditDrink(\''+l.id+'\')">✏️</button>':'')+
           '</div>'
-        :'<span style="font-size:11px;color:#6a3020;margin-left:8px">🔒</span>';
+        :'';
       return '<div class="entry"><div class="entry-l"><span class="ej">'+emoji(l.drink)+'</span><div>'+
         '<div class="en">'+esc(l.person)+(l.quantity>1?' <span class="badge">×'+l.quantity+'</span>':'')+'</div>'+
         '<div class="es">'+esc(l.drink.replace(/^.+? /,''))+(l.total_price>0?' · €'+parseFloat(l.unit_price).toFixed(2)+' ea · €'+parseFloat(l.total_price).toFixed(2):'')+(l.note?' · 📝 '+esc(l.note):'')+'</div>'+
         '<div class="es" style="color:#6a3020">'+loggedByLine+'</div>'+
         '</div></div>'+delControls+'</div>';
     }).join('');
-    return '<div class="card" style="padding:0;overflow:hidden;margin-bottom:8px">'+
-      '<div class="dh" style="cursor:pointer;user-select:none" onclick="(function(b,a){b.style.display=b.style.display===\'none\'?\'\':\'none\';a.textContent=b.style.display===\'none\'?\'▼\':\'▲\';})(document.getElementById(\''+dayId+'\'),document.getElementById(\''+dayId+'-arr\'))">'+
-        '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">'+
-          '<span id="'+dayId+'-arr" style="font-size:11px;color:#7a5200">'+( isToday?'▲':'▼')+'</span>'+
-          '<h4 style="margin:0">'+fmtDate(d)+(isToday?' <span style="font-size:11px;color:#1f8a4f;font-weight:700">today</span>':'')+'</h4>'+
-        '</div>'+
-        '<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">'+
-          badges+
-          '<span style="font-size:11px;color:#7a5200;font-weight:600;margin-left:4px">'+totalQty+' drinks'+(totalCost>0?' · €'+totalCost.toFixed(2):'')+'</span>'+
-        '</div>'+
+    return '<div style="border:1.5px solid #e8dccc;border-radius:12px;overflow:hidden;margin-bottom:8px">'+
+      '<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#f5ede4;cursor:pointer;user-select:none" '+
+        'onclick="(function(b,a){b.style.display=b.style.display===\'none\'?\'\':\'none\';a.textContent=b.style.display===\'none\'?\'▼\':\'▲\';})(document.getElementById(\''+dayId+'\'),document.getElementById(\''+dayId+'-arr\'))">'+
+        '<span id="'+dayId+'-arr" style="font-size:11px;color:#7a5200">'+( isToday?'▲':'▼')+'</span>'+
+        '<span style="font-size:13px;font-weight:700;color:#1a0e08;flex:1">'+fmtDate(d)+(isToday?' <span style="font-size:11px;color:#1f8a4f;font-weight:700">today</span>':'')+'</span>'+
+        '<span style="font-size:11px;color:#7a5200;font-weight:600">'+totalQty+' drinks'+(totalCost>0?' · €'+totalCost.toFixed(2):'')+'</span>'+
       '</div>'+
       '<div id="'+dayId+'" style="padding:9px 13px;'+(isToday?'':'display:none')+'">'+bodyHtml+'</div>'+
     '</div>';
   }).join('');
+  el.innerHTML = '<div class="card">'+histHtml+'</div>';
 }
 
 // ══════════════════════════════════════════════════════════════
