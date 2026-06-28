@@ -219,7 +219,7 @@
         <button onclick="setLang(LANG==='en'?'de':'en')" class="btn-logout" id="lang-toggle-btn" title="Switch language" style="margin-right:2px">🌐 EN</button>
         <span class="user-name" id="user-label"></span>
         <span id="realtime-dot" title="Connecting..." style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#f8d878;margin-right:2px;vertical-align:middle;transition:background .5s;flex-shrink:0"></span>
-        <button class="btn-logout" onclick="loadAll().then(function(){notify('Data refreshed ✓')})" title="Refresh data" style="font-size:16px;padding:5px 10px">🔄</button>
+        <button class="btn-logout" onclick="location.reload()" title="Reload app" style="font-size:16px;padding:5px 10px">🔄</button>
         <button class="btn-logout" id="signout-btn" onclick="signOut()">Exit</button>
       </div>
     </div>
@@ -1404,12 +1404,16 @@ function buildRunningRow(person, pd, today, isDE){
         }
       }
 
-      // "Add price" button — own entries or admin
+      // "Add price" button — only for zero-priced drinks NOT covered by the free fund
       var addPriceBtn = '';
       if ((isMe || IS_ADMIN) && info.freeQty > 0){
-        addPriceBtn = '<button class="plus" style="font-size:11px;padding:3px 7px;background:#d4f5e2;border:1.5px solid #1f8a4f;color:#1f8a4f;border-radius:6px;font-weight:800;min-height:26px" '+
-          'onclick="event.stopPropagation();showTodayFreePriceModal(\''+esc(person)+'\',\''+esc(d)+'\',\''+today+'\')" '+
-          'title="'+(isDE?'Preis hinzufügen':'Add price')+'">€+</button>';
+        // Reuse fundAvail already computed above — if fund covers all free qty, no price needed
+        var notFromFund = toReplace; // drinks not covered by fund or replacement
+        if (notFromFund > 0){
+          addPriceBtn = '<button class="plus" style="font-size:11px;padding:3px 7px;background:#fef3cd;border:1.5px solid #b5481f;color:#b5481f;border-radius:6px;font-weight:800;min-height:26px" '+
+            'onclick="event.stopPropagation();showTodayFreePriceModal(\''+esc(person)+'\',\''+esc(d)+'\',\''+today+'\')" '+
+            'title="'+(isDE?'Preis hinzufügen':'Add price')+'">€+</button>';
+        }
       }
 
       return '<span class="rtab-drink-item" style="flex-direction:column;align-items:flex-start;gap:2px;padding:4px 7px">'+
@@ -2198,32 +2202,39 @@ function renderConsolidatedToday(){
       for (var di = 0; di < allLogDates.length; di++) {
         var checkDate = allLogDates[di];
 
-        // Cumulative bill (priced drinks only) up to this date
+        // Everyone who drank up to this date
+        var drinkersUpTo = [...new Set(STATE.logs
+          .filter(function(l){ return l.date <= checkDate; })
+          .map(function(l){ return l.person; })
+        )];
+
+        // Everyone who closed their tab on or before this date
+        var closersUpTo = (STATE.tabCloses||[])
+          .filter(function(c){ return c.closed_at <= checkDate; })
+          .map(function(c){ return c.person; });
+
+        // EVERY drinker must have closed their tab
+        var allTabsClosed = drinkersUpTo.length > 0 && drinkersUpTo.every(function(p){
+          return closersUpTo.indexOf(p) !== -1;
+        });
+
+        if (!allTabsClosed) continue; // not a boundary — someone hasn't closed yet
+
+        // For money sessions: bill must also be fully paid
         var cumBill = STATE.logs.reduce(function(s,l){
           return l.date <= checkDate && (parseFloat(l.unit_price)||0) > 0 ? s+(parseFloat(l.total_price)||0) : s;
         }, 0);
         var cumPaid = STATE.payments.reduce(function(s,p){
           return p.date <= checkDate ? s+(parseFloat(p.amount)||0) : s;
         }, 0);
-        var moneySettled = cumBill > 0.005 && cumPaid >= cumBill - 0.01;
+        var moneyOk = cumBill <= 0.005 || cumPaid >= cumBill - 0.01;
 
-        // Any tab close on this exact date
-        var closesOnDate = (STATE.tabCloses||[]).filter(function(c){ return c.closed_at === checkDate; });
-        var hasTabClose = closesOnDate.length > 0;
-
-        // A boundary requires EITHER:
-        // (a) there's a real priced bill and it's fully paid, OR
-        // (b) someone closed their tab AND there's no unpaid priced bill
-        //     (free-drink-only sessions close via tab-close)
-        var isBoundary = moneySettled || (hasTabClose && cumBill <= 0.005);
-
-        // Don't mark future/current unsettled dates as boundaries
-        // (only dates where something definitively closed)
-        if (isBoundary && sessionStart) {
+        if (moneyOk && sessionStart) {
+          var closesOnDate = (STATE.tabCloses||[]).filter(function(c){ return c.closed_at === checkDate; });
           sessions.push({
             from: sessionStart,
             to: checkDate,
-            moneySettled: moneySettled,
+            moneySettled: cumBill > 0.005,
             tabCloses: closesOnDate
           });
           var nextIdx = di + 1;
@@ -2702,40 +2713,41 @@ async function saveLog(){
 // A "session" = all logs since the last time EVERYONE's bill was fully settled.
 // This prevents yesterday's settled drinks mixing into today's counts/leaderboard.
 function getLastSettlementDate(){
-  // A session is settled when EITHER:
-  // (a) there's a priced bill and it's fully paid, OR
-  // (b) all drinks are free AND every drinker closed their tab on the same date
-  // We look for the most recent such boundary date.
+  // A session is settled when ALL drinkers have closed their tab
+  // AND (if there's a priced bill) it's been fully paid.
   var allDates = [...new Set(STATE.logs.map(function(l){return l.date;}))].sort();
   var lastSettled = null;
 
   for (var i = 0; i < allDates.length; i++){
     var d = allDates[i];
 
-    // Logs only up to and including this date
-    var logsUpTo = STATE.logs.filter(function(l){ return l.date <= d; });
-    var bill = logsUpTo.reduce(function(s,l){
-      return (parseFloat(l.unit_price)||0) > 0 ? s+(parseFloat(l.total_price)||0) : s;
+    // All people who ever drank up to this date
+    var drinkers = [...new Set(STATE.logs
+      .filter(function(l){ return l.date <= d; })
+      .map(function(l){ return l.person; })
+    )];
+
+    // All people who closed their tab on or before this date
+    var closers = (STATE.tabCloses||[])
+      .filter(function(c){ return c.closed_at <= d; })
+      .map(function(c){ return c.person; });
+
+    var allClosed = drinkers.length > 0 && drinkers.every(function(p){
+      return closers.indexOf(p) !== -1;
+    });
+
+    if (!allClosed) continue;
+
+    // Money check
+    var bill = STATE.logs.reduce(function(s,l){
+      return l.date <= d && (parseFloat(l.unit_price)||0) > 0 ? s+(parseFloat(l.total_price)||0) : s;
     }, 0);
     var paid = STATE.payments.reduce(function(s,p){
       return p.date <= d ? s+(parseFloat(p.amount)||0) : s;
     }, 0);
-
-    // Money side: either no bill at all, or bill is fully covered
     var moneyOk = bill <= 0.005 || paid >= bill - 0.01;
 
-    // Tab-close side: every drinker on THIS date closed their tab on this date
-    var drinkers = [...new Set(logsUpTo.map(function(l){ return l.person; }))];
-    var closedOnThisDate = (STATE.tabCloses||[])
-      .filter(function(c){ return c.closed_at === d; })
-      .map(function(c){ return c.person; });
-    var allClosed = drinkers.length > 0 && drinkers.every(function(p){
-      // Person either closed on this exact date, or had no drinks after their last close
-      return closedOnThisDate.indexOf(p) !== -1 ||
-        isTabTrulyClosed(p, null); // already closed before this session
-    });
-
-    if (moneyOk && allClosed) lastSettled = d;
+    if (moneyOk) lastSettled = d;
   }
   return lastSettled;
 }
