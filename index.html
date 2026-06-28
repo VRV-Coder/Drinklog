@@ -655,8 +655,9 @@ async function onAdminLoggedIn(){
 }
 
 function enterApp(){
+  try {
   var label = document.getElementById('user-label');
-  label.innerHTML = '👤 ' + esc(CURRENT_NAME) + (IS_ADMIN ? ' <span class="admin-badge">👑 ADMIN</span>' : '');
+  if (label) label.innerHTML = '👤 ' + esc(CURRENT_NAME) + (IS_ADMIN ? ' <span class="admin-badge">👑 ADMIN</span>' : '');
   var auditBtn = document.getElementById('nav-audit-btn');
   if (auditBtn) auditBtn.style.display = IS_ADMIN ? '' : 'none';
   var historyBtn = document.getElementById('nav-history-btn');
@@ -665,19 +666,31 @@ function enterApp(){
   if (peopleBtn) peopleBtn.style.display = IS_ADMIN ? '' : 'none';
   var dtBtn = document.getElementById('nav-drinktypes-btn');
   if (dtBtn) dtBtn.style.display = IS_ADMIN ? '' : 'none';
-  document.getElementById('auth-screen').style.display = 'none';
-  document.getElementById('app').style.display = 'block';
-  loadDrinkPrices(); // load this user's saved prices
-  updateHeaderLabels();
+  var authEl = document.getElementById('auth-screen');
+  var appEl = document.getElementById('app');
+  if (authEl) authEl.style.display = 'none';
+  if (appEl) appEl.style.display = 'block';
+  loadDrinkPrices();
+  try { updateHeaderLabels(); } catch(e2) { console.warn('updateHeaderLabels:', e2); }
   registerSelfAsPerson();
   loadAll().then(function(){
     showLoginJokePopup();
     startRealtime();
   }).catch(function(e){
     console.error('[BeerOClock] loadAll error:', e);
+    notify('Load error: ' + e.message, true);
     showLoginJokePopup();
     startRealtime();
   });
+  } catch(e) {
+    console.error('[BeerOClock] enterApp crash:', e);
+    var errEl = document.getElementById('auth-error');
+    if (errEl) { errEl.style.color='#c4392b'; errEl.textContent = 'Login error: ' + e.message; }
+    var authEl2 = document.getElementById('auth-screen');
+    var appEl2 = document.getElementById('app');
+    if (authEl2) authEl2.style.display = 'flex';
+    if (appEl2) appEl2.style.display = 'none';
+  }
   // Play intro animation once per session — not on screen-wake/unlock
   var _animKey = 'boc_intro_played_' + (CURRENT_NAME||'guest');
   if (!sessionStorage.getItem(_animKey)) {
