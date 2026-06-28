@@ -5524,7 +5524,7 @@ function renderFeedback(){
         '<div style="background:'+(adm?'#1f8a4f':'#f5ede4')+';border-radius:10px;padding:7px 11px;max-width:78%;position:relative">'+
           '<div style="font-size:10px;font-weight:700;color:'+(adm?'rgba(255,255,255,.7)':'#7a5200')+';margin-bottom:2px;display:flex;align-items:center;gap:4px">'+
             (adm?'Admin':'You')+' \xb7 '+rts+
-            (IS_ADMIN ? '<button data-delete-reply="'+rep.id+'" style="background:none;border:none;color:'+(adm?'rgba(255,255,255,.5)':'#c4392b')+';cursor:pointer;font-size:11px;padding:0 0 0 4px" title="Delete">&#x1F5D1;</button>' : '')+
+            (IS_ADMIN ? '<button onclick="event.stopPropagation();deleteFeedbackReply(\''+rep.id+'\')" style="background:none;border:none;color:'+(adm?'rgba(255,255,255,.5)':'#c4392b')+';cursor:pointer;font-size:11px;padding:0 0 0 4px" title="Delete reply">&#x1F5D1;</button>' : '')+
           '</div>'+
           '<div style="font-size:13px;color:'+(adm?'#fff':'#1a0e08')+'">'+esc(rep.message)+'</div>'+
         '</div>'+
@@ -5535,13 +5535,17 @@ function renderFeedback(){
     var replyInputId = 'reply_'+safeRid;
     var replyBtnId = 'replybtn_'+safeRid;
 
-    // Admin controls in thread header
+    // Store thread id in global lookup so onclick can reference it safely
+    var tidx = Object.keys(roots).indexOf(rid);
+    window._fbRids = window._fbRids || {};
+    window._fbRids['t'+tidx] = rid;
+
     var adminControls = IS_ADMIN
       ? '<div style="display:flex;gap:6px;flex-shrink:0">'+
           (!isClosed
-            ? '<button data-close-thread="'+rid+'" style="background:#f5ede4;border:1.5px solid #b5481f;border-radius:7px;color:#b5481f;font-size:11px;font-weight:700;padding:4px 8px;cursor:pointer" title="Close this conversation">\uD83D\uDD12 Close</button>'
-            : '<span style="font-size:11px;color:#7a5200;font-weight:700">\uD83D\uDD12 Closed</span>')+
-          '<button data-delete-thread="'+rid+'" style="background:#fff0f0;border:1.5px solid #c4392b;border-radius:7px;color:#c4392b;font-size:11px;font-weight:700;padding:4px 8px;cursor:pointer" title="Delete entire conversation">\uD83D\uDDD1 All</button>'+
+            ? '<button onclick="event.stopPropagation();closeFeedbackThread(window._fbRids[\'t'+tidx+'\'])" style="background:#f5ede4;border:1.5px solid #b5481f;border-radius:7px;color:#b5481f;font-size:11px;font-weight:700;padding:4px 8px;cursor:pointer">&#x1F512; Close</button>'
+            : '<span style="font-size:11px;color:#7a5200;font-weight:700">&#x1F512; Closed</span>')+
+          '<button onclick="event.stopPropagation();deleteFeedbackThread(window._fbRids[\'t'+tidx+'\'])" style="background:#fff0f0;border:1.5px solid #c4392b;border-radius:7px;color:#c4392b;font-size:11px;font-weight:700;padding:4px 8px;cursor:pointer">&#x1F5D1; Delete</button>'+
         '</div>'
       : '';
 
@@ -5552,7 +5556,7 @@ function renderFeedback(){
             'style="flex:1;border:1.5px solid #e8dccc;border-radius:9px;padding:7px 11px;font-size:13px;color:#1a0e08;'+(isClosed&&!IS_ADMIN?'opacity:.5':'')+'"/>'+
           '<button id="'+replyBtnId+'" style="background:#b5481f;border:none;border-radius:9px;padding:7px 12px;color:#fff;font-size:13px;font-weight:800;cursor:pointer;'+(isClosed&&!IS_ADMIN?'opacity:.4;pointer-events:none':'')+'">\u21a9</button>'+
         '</div>'
-      : '<div style="padding-left:44px;margin-top:8px;font-size:12px;color:#7a5200;font-style:italic">\uD83D\uDD12 This conversation has been closed.</div>';
+      : '<div style="padding-left:44px;margin-top:8px;font-size:12px;color:#7a5200;font-style:italic">&#x1F512; This conversation has been closed.</div>';
 
     return '<div id="thread_'+safeRid+'" class="card" style="margin-bottom:10px'+(isClosed?';opacity:.85':'')+'">'+
       '<div style="display:flex;align-items:flex-start;gap:10px">'+
@@ -5602,16 +5606,7 @@ function renderFeedback(){
     }
   });
 
-  // Wire up admin action buttons (already only rendered for admins)
-  el.querySelectorAll('[data-delete-reply]').forEach(function(btn){
-    btn.onclick = function(e){ e.stopPropagation(); deleteFeedbackReply(this.getAttribute('data-delete-reply')); };
-  });
-  el.querySelectorAll('[data-delete-thread]').forEach(function(btn){
-    btn.onclick = function(e){ e.stopPropagation(); deleteFeedbackThread(this.getAttribute('data-delete-thread')); };
-  });
-  el.querySelectorAll('[data-close-thread]').forEach(function(btn){
-    btn.onclick = function(e){ e.stopPropagation(); closeFeedbackThread(this.getAttribute('data-close-thread')); };
-  });
+  // Admin buttons use inline onclick with window._fbRids lookup
 }
 
 async function submitNewFeedback(textareaId){
