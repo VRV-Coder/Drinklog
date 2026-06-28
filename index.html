@@ -1281,7 +1281,9 @@ function renderRunningTodayTab(){
       var pp = (p.payers||'').split(',').map(function(x){return x.trim();});
       return pp.indexOf(person) !== -1 ? s+(parseFloat(p.amount)||0) : s;
     }, 0);
-    var isSettled = moneyOwed <= 0.005 || moneyPaid >= moneyOwed - 0.01;
+    // Only consider settled if there ARE priced drinks and they've been paid
+    // Free-drink-only people are never "settled" — they need to close their tab explicitly
+    var isSettled = moneyOwed > 0.005 && moneyPaid >= moneyOwed - 0.01;
     if (tabClosedToday2 || isSettled) closedRows.push(person);
     else activeRows.push(person);
   });
@@ -1324,7 +1326,8 @@ function buildRunningRow(person, pd, today, isDE){
       var payers = (p.payers||'').split(',').map(function(x){return x.trim();});
       return payers.indexOf(person) !== -1 ? s + (parseFloat(p.amount)||0) : s;
     }, 0);
-    var moneySettled = todayPriced > 0 && totalPaid >= todayPriced - 0.005;
+    // Only settled if there are actual priced drinks AND they've been paid
+    var moneySettled = todayPriced > 0.005 && totalPaid >= todayPriced - 0.005;
 
     // Also settled if person closed their tab today AND no new drinks after close time
     var tabClosedToday = isTabTrulyClosed(person, today);
@@ -1894,7 +1897,8 @@ function renderConsolidatedToday(){
       return payers.indexOf(person) !== -1 ? s + (parseFloat(p.amount)||0) : s;
     }, 0);
     var moneyPending = moneyOwed - moneyPaid;
-    var moneySettled = moneyPending <= 0.005;
+    // Only settled if there's a real bill and it's paid; €0 bill = not settled (need tab close)
+    var moneySettled = moneyOwed > 0.005 && moneyPending <= 0.005;
 
     // Bottles owed: free (€0) drinks per person
     // BUT exclude drinks where the fund contribution fully covers the communal consumption
@@ -2207,8 +2211,11 @@ function renderConsolidatedToday(){
         var closesOnDate = (STATE.tabCloses||[]).filter(function(c){ return c.closed_at === checkDate; });
         var hasTabClose = closesOnDate.length > 0;
 
-        // Mark as session boundary if: money fully settled, OR someone closed their tab
-        var isBoundary = moneySettled || hasTabClose;
+        // A boundary requires EITHER:
+        // (a) there's a real priced bill and it's fully paid, OR
+        // (b) someone closed their tab AND there's no unpaid priced bill
+        //     (free-drink-only sessions close via tab-close)
+        var isBoundary = moneySettled || (hasTabClose && cumBill <= 0.005);
 
         // Don't mark future/current unsettled dates as boundaries
         // (only dates where something definitively closed)
@@ -5463,7 +5470,15 @@ function renderFeedback(){
   var dtDisplay = now.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) + ' \xb7 ' + now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
 
   var allFeedback = STATE.feedback || [];
-  var visible = IS_ADMIN ? allFeedback : allFeedback.filter(function(f){ return f.person === CURRENT_NAME; });
+
+  // For non-admins: show roots they authored + ALL replies to those threads (including admin replies)
+  var myRootIds = new Set(allFeedback.filter(function(f){ return !f.parent_id && f.person === CURRENT_NAME; }).map(function(f){ return f.id; }));
+  var visible = IS_ADMIN
+    ? allFeedback
+    : allFeedback.filter(function(f){
+        // show if it's my root message, OR it's a reply to one of my threads
+        return (!f.parent_id && f.person === CURRENT_NAME) || (f.parent_id && myRootIds.has(f.parent_id));
+      });
 
   var roots = {}, replies = {};
   visible.forEach(function(f){
