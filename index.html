@@ -979,16 +979,17 @@ async function signOut(){
 // ── LOAD DATA ───────────────────────────────────────────────
 async function loadAll(){
   try {
+    var _safe = function(p){ return p.then(function(r){ return r.error ? {data:[],error:null} : r; }).catch(function(){ return {data:[],error:null}; }); };
     var [ppl, l, pay, rep, aud, fc, dt, tc, fb] = await Promise.all([
-      SB.from('people').select('*').order('name'),
-      SB.from('drink_logs').select('*').order('date',{ascending:false}).order('logged_at',{ascending:false}),
-      SB.from('payments').select('*').order('date',{ascending:false}),
-      SB.from('replacements').select('*').order('for_date',{ascending:false}),
-      SB.from('audit_log').select('*').order('performed_at',{ascending:false}).limit(100),
-      SB.from('free_contributions').select('*').order('date',{ascending:false}).then(function(r){ return r.error ? {data:[],error:null} : r; }),
-      SB.from('drink_types').select('*').order('sort_order').then(function(r){ return r.error ? {data:[],error:null} : r; }),
-      SB.from('tab_closes').select('*').order('closed_at',{ascending:false}).then(function(r){ return r.error ? {data:[],error:null} : r; }),
-      SB.from('feedback').select('*').order('created_at',{ascending:false}).then(function(r){ return r.error ? {data:[],error:null} : r; })
+      _safe(SB.from('people').select('*').order('name')),
+      _safe(SB.from('drink_logs').select('*').order('date',{ascending:false}).order('logged_at',{ascending:false})),
+      _safe(SB.from('payments').select('*').order('date',{ascending:false})),
+      _safe(SB.from('replacements').select('*').order('for_date',{ascending:false})),
+      _safe(SB.from('audit_log').select('*').order('performed_at',{ascending:false}).limit(100)),
+      _safe(SB.from('free_contributions').select('*').order('date',{ascending:false})),
+      _safe(SB.from('drink_types').select('*').order('sort_order')),
+      _safe(SB.from('tab_closes').select('*').order('closed_at',{ascending:false})),
+      _safe(SB.from('feedback').select('*').order('created_at',{ascending:false}))
     ]);
     if(ppl.error) notify('people: '+ppl.error.message, true);
     if(l.error)   notify('drink_logs: '+l.error.message, true);
@@ -3802,7 +3803,7 @@ function renderFreeDrinks(){
       // Per-drink totals inline
       html += '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:3px">';
       Object.entries(pd2.byDrink).forEach(function(e){
-        html += '<span style="font-size:11px;background:#d4f5e2;color:#1f6a3f;border-radius:6px;padding:1px 7px;font-weight:700">'+emoji(e[0])+'×'+e[1]+'</span>';
+        html += '<span style="font-size:11px;background:#d4f5e2;color:#1f6a3f;border-radius:6px;padding:1px 7px;font-weight:700">'+emoji(e[0])+' '+esc(e[0].replace(/^.+? /,''))+'×'+e[1]+'</span>';
       });
       html += '</div></div>';
       html += '<div style="text-align:right"><div style="font-size:20px;font-weight:900;color:#1f8a4f">'+pd2.total+'</div>';
@@ -3820,7 +3821,7 @@ function renderFreeDrinks(){
         html += '<div style="font-size:11px;color:#7a5200;min-width:75px">'+fmtDate(date)+'</div>';
         html += '<div style="flex:1;display:flex;flex-wrap:wrap;gap:4px">';
         Object.entries(drinks2).forEach(function(e2){
-          html += '<span style="font-size:12px;background:#fce4d0;border-radius:6px;padding:2px 7px;font-weight:700;color:#b5481f">'+emoji(e2[0])+' ×'+e2[1]+'</span>';
+          html += '<span style="font-size:12px;background:#fce4d0;border-radius:6px;padding:2px 7px;font-weight:700;color:#b5481f">'+emoji(e2[0])+' '+esc(e2[0].replace(/^.+? /,''))+' ×'+e2[1]+'</span>';
         });
         html += '</div>';
         html += '<div style="text-align:right;font-size:11px;color:#1f8a4f;font-weight:700;min-width:50px">∑ '+cumulative+'</div>';
