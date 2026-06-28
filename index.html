@@ -5602,18 +5602,16 @@ function renderFeedback(){
     }
   });
 
-  // Admin: delete reply buttons
-  if (IS_ADMIN) {
-    el.querySelectorAll('[data-delete-reply]').forEach(function(btn){
-      btn.onclick = function(){ deleteFeedbackReply(this.getAttribute('data-delete-reply')); };
-    });
-    el.querySelectorAll('[data-delete-thread]').forEach(function(btn){
-      btn.onclick = function(){ deleteFeedbackThread(this.getAttribute('data-delete-thread')); };
-    });
-    el.querySelectorAll('[data-close-thread]').forEach(function(btn){
-      btn.onclick = function(){ closeFeedbackThread(this.getAttribute('data-close-thread')); };
-    });
-  }
+  // Wire up admin action buttons (already only rendered for admins)
+  el.querySelectorAll('[data-delete-reply]').forEach(function(btn){
+    btn.onclick = function(e){ e.stopPropagation(); deleteFeedbackReply(this.getAttribute('data-delete-reply')); };
+  });
+  el.querySelectorAll('[data-delete-thread]').forEach(function(btn){
+    btn.onclick = function(e){ e.stopPropagation(); deleteFeedbackThread(this.getAttribute('data-delete-thread')); };
+  });
+  el.querySelectorAll('[data-close-thread]').forEach(function(btn){
+    btn.onclick = function(e){ e.stopPropagation(); closeFeedbackThread(this.getAttribute('data-close-thread')); };
+  });
 }
 
 async function submitNewFeedback(textareaId){
@@ -5663,13 +5661,6 @@ function deleteFeedbackReply(replyId){
     notify('Reply deleted ✓'); await loadAll(); renderFeedback();
   };},50);
 }
-async function _deleteFeedbackReplyDone(replyId){
-  var {error} = await SB.from('feedback').delete().eq('id', replyId);
-  if (error){ notify('Error: '+error.message, true); return; }
-  notify('Reply deleted \u2713');
-  await loadAll(); renderFeedback();
-}
-
 function deleteFeedbackThread(rootId){
   if (!IS_ADMIN) return;
   var isDE = LANG === 'de';
