@@ -1273,10 +1273,20 @@ function renderRunningTodayTab(){
   Object.keys(byPerson).sort().forEach(function(person){
     var pd = byPerson[person];
     var tabClosedToday2 = isTabTrulyClosed(person, today);
-    if (tabClosedToday2) closedRows.push(person);
+    // Also treat as closed if their money is fully settled (paid >= owed)
+    var moneyOwed = pd.entries.reduce(function(s,l){ return (parseFloat(l.unit_price)||0)>0 ? s+(parseFloat(l.total_price)||0) : s; }, 0);
+    var sessionCutoff = getLastSettlementDate();
+    var moneyPaid = STATE.payments.reduce(function(s,p){
+      if (sessionCutoff && p.date <= sessionCutoff) return s;
+      var pp = (p.payers||'').split(',').map(function(x){return x.trim();});
+      return pp.indexOf(person) !== -1 ? s+(parseFloat(p.amount)||0) : s;
+    }, 0);
+    var isSettled = moneyOwed <= 0.005 || moneyPaid >= moneyOwed - 0.01;
+    if (tabClosedToday2 || isSettled) closedRows.push(person);
     else activeRows.push(person);
   });
 
+  // Only show people who still have an open/unsettled tab today
   var rows = activeRows.map(function(person){ return buildRunningRow(person, byPerson[person], today, isDE); }).join('');
 
   var closedSection = '';
@@ -2379,9 +2389,9 @@ function renderConsolidatedToday(){
     html += '<div class="card">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="(function(){var b=document.getElementById(\''+settledId+'\');var a=document.getElementById(\''+settledId+'-arrow\');if(b.style.display===\'none\'){b.style.display=\'\';a.textContent=\'▲\';}else{b.style.display=\'none\';a.textContent=\'▼\';}})()">' +
         '<div class="card-title" style="margin-bottom:0">' + t('settledUpTitle') + '</div>' +
-        '<span id="'+settledId+'-arrow" style="font-size:12px;color:#8a7568;margin-left:8px">▼</span>' +
+        '<span id="'+settledId+'-arrow" style="font-size:12px;color:#8a7568;margin-left:8px">▲</span>' +
       '</div>' +
-      '<div id="'+settledId+'" style="display:none;margin-top:10px">' +
+      '<div id="'+settledId+'" style="margin-top:10px">' +
         (settledHtml || '<div style="text-align:center;padding:20px;color:#7a5200;font-size:13px">📭 '+(isDE?'Noch keine abgeschlossenen Sitzungen.':'No settled sessions yet. Close your tab after drinking to record a session.')+'</div>') +
       '</div>' +
     '</div>';
@@ -3718,7 +3728,10 @@ function renderFreeDrinks(){
   // ── CONTRIBUTIONS LIST ──
   if (contribs.length) {
     html += '<div class="card" style="margin-bottom:14px">';
-    html += '<div style="font-size:13px;font-weight:800;color:#5a3a28;margin-bottom:10px">📋 '+(isDE?'Alle Beiträge':'All Contributions')+'</div>';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="(function(){var b=document.getElementById(\'fc-contribs-body\');var a=document.getElementById(\'fc-contribs-arr\');b.style.display=b.style.display===\'none\'?\'\':\'none\';a.textContent=b.style.display===\'none\'?\'▼\':\'▲\';})()">';
+    html += '<div style="font-size:13px;font-weight:800;color:#5a3a28">📋 '+(isDE?'Alle Beiträge':'All Contributions')+' ('+contribs.length+')</div>';
+    html += '<span id="fc-contribs-arr" style="font-size:12px;color:#8a7568">▼</span></div>';
+    html += '<div id="fc-contribs-body" style="display:none;margin-top:10px">';
     contribs.slice().reverse().forEach(function(c){
       var bottles = (c.crates||0)*CRATE_SIZE + (c.extra_bottles||0);
       // Ownership: the person who ENTERED the contribution (added_by), not the beneficiary
@@ -3783,12 +3796,16 @@ function renderFreeDrinks(){
       }
       html += '</div>';
     });
+    html += '</div>'; // close fc-contribs-body
     html += '</div>';
   }
 
   // ── CONSUMPTION LOG PER PERSON ──
   html += '<div class="card">';
-  html += '<div style="font-size:13px;font-weight:800;color:#5a3a28;margin-bottom:10px">🧾 '+(isDE?'Verbrauch (kostenlose Getränke)':'Free Drinks Consumption Log')+'</div>';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="(function(){var b=document.getElementById(\'fc-consumption-body\');var a=document.getElementById(\'fc-consumption-arr\');b.style.display=b.style.display===\'none\'?\'\':\'none\';a.textContent=b.style.display===\'none\'?\'▼\':\'▲\';})()">';
+  html += '<div style="font-size:13px;font-weight:800;color:#5a3a28">🧾 '+(isDE?'Verbrauch':'Free Drinks Consumption Log')+'</div>';
+  html += '<span id="fc-consumption-arr" style="font-size:12px;color:#8a7568">▼</span></div>';
+  html += '<div id="fc-consumption-body" style="display:none;margin-top:10px">';
 
   // Group free drinks from STATE.logs by person
   var byPerson2 = {};
@@ -3843,6 +3860,7 @@ function renderFreeDrinks(){
       html += '</div></div>';
     });
   }
+  html += '</div>'; // close fc-consumption-body
   html += '</div>';
 
   el.innerHTML = html;
@@ -5456,15 +5474,25 @@ function renderFeedback(){
 
   var threadHtml = rootIds.map(function(rid){
     var r = roots[rid];
+    var isClosed = r.is_closed;
     var ts = r.created_at ? new Date(r.created_at).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
     var reps = (replies[rid]||[]).sort(function(a,b){ return a.created_at > b.created_at ? 1 : -1; });
+
     var repliesHtml = reps.map(function(rep){
       var rts = rep.created_at ? new Date(rep.created_at).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
       var adm = rep.is_admin_reply;
-      return '<div style="display:flex;gap:8px;margin-top:8px;'+(adm?'flex-direction:row-reverse':'')+';align-items:flex-start">'+
-        '<div style="width:28px;height:28px;background:'+(adm?'#1f8a4f':'#b5481f')+';border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;font-weight:800;flex-shrink:0">'+(adm?'&#x1F451;':esc((rep.person||'?')[0].toUpperCase()))+'</div>'+
-        '<div style="background:'+(adm?'#1f8a4f':'#f5ede4')+';border-radius:10px;padding:7px 11px;max-width:78%">'+
-          '<div style="font-size:10px;font-weight:700;color:'+(adm?'rgba(255,255,255,.7)':'#7a5200')+';margin-bottom:2px">'+(adm?'Admin':'You')+' \xb7 '+rts+'</div>'+
+      var delBtn = IS_ADMIN
+        ? '<button style="background:none;border:none;color:rgba(255,255,255,.6);cursor:pointer;font-size:12px;padding:0;margin-left:6px" '
+          + 'title="Delete this reply">&#x1F5D1;</button>'
+        : '';
+      var repId = rep.id.replace(/-/g,'_');
+      return '<div id="rep_'+repId+'" style="display:flex;gap:8px;margin-top:8px;'+(adm?'flex-direction:row-reverse':'')+';align-items:flex-start">'+
+        '<div style="width:28px;height:28px;background:'+(adm?'#1f8a4f':'#b5481f')+';border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;font-weight:800;flex-shrink:0">'+(adm?'\u{1F451}':esc((rep.person||'?')[0].toUpperCase()))+'</div>'+
+        '<div style="background:'+(adm?'#1f8a4f':'#f5ede4')+';border-radius:10px;padding:7px 11px;max-width:78%;position:relative">'+
+          '<div style="font-size:10px;font-weight:700;color:'+(adm?'rgba(255,255,255,.7)':'#7a5200')+';margin-bottom:2px;display:flex;align-items:center;gap:4px">'+
+            (adm?'Admin':'You')+' \xb7 '+rts+
+            (IS_ADMIN ? '<button data-delete-reply="'+rep.id+'" style="background:none;border:none;color:'+(adm?'rgba(255,255,255,.5)':'#c4392b')+';cursor:pointer;font-size:11px;padding:0 0 0 4px" title="Delete">&#x1F5D1;</button>' : '')+
+          '</div>'+
           '<div style="font-size:13px;color:'+(adm?'#fff':'#1a0e08')+'">'+esc(rep.message)+'</div>'+
         '</div>'+
       '</div>';
@@ -5473,41 +5501,61 @@ function renderFeedback(){
     var safeRid = rid.replace(/-/g,'_');
     var replyInputId = 'reply_'+safeRid;
     var replyBtnId = 'replybtn_'+safeRid;
-    return '<div class="card" style="margin-bottom:10px">'+
-      '<div style="display:flex;gap:10px;align-items:flex-start">'+
+
+    // Admin controls in thread header
+    var adminControls = IS_ADMIN
+      ? '<div style="display:flex;gap:6px;flex-shrink:0">'+
+          (!isClosed
+            ? '<button data-close-thread="'+rid+'" style="background:#f5ede4;border:1.5px solid #b5481f;border-radius:7px;color:#b5481f;font-size:11px;font-weight:700;padding:4px 8px;cursor:pointer" title="Close this conversation">\uD83D\uDD12 Close</button>'
+            : '<span style="font-size:11px;color:#7a5200;font-weight:700">\uD83D\uDD12 Closed</span>')+
+          '<button data-delete-thread="'+rid+'" style="background:#fff0f0;border:1.5px solid #c4392b;border-radius:7px;color:#c4392b;font-size:11px;font-weight:700;padding:4px 8px;cursor:pointer" title="Delete entire conversation">\uD83D\uDDD1 All</button>'+
+        '</div>'
+      : '';
+
+    var replySection = (!isClosed || IS_ADMIN)
+      ? '<div style="display:flex;gap:8px;margin-top:10px;padding-left:44px">'+
+          '<input id="'+replyInputId+'" type="text" placeholder="'+(IS_ADMIN?'Reply as admin\u2026':(isClosed?'Conversation closed':'Reply\u2026'))+'" '+
+            (isClosed && !IS_ADMIN ? 'disabled ' : '')+
+            'style="flex:1;border:1.5px solid #e8dccc;border-radius:9px;padding:7px 11px;font-size:13px;color:#1a0e08;'+(isClosed&&!IS_ADMIN?'opacity:.5':'')+'"/>'+
+          '<button id="'+replyBtnId+'" style="background:#b5481f;border:none;border-radius:9px;padding:7px 12px;color:#fff;font-size:13px;font-weight:800;cursor:pointer;'+(isClosed&&!IS_ADMIN?'opacity:.4;pointer-events:none':'')+'">\u21a9</button>'+
+        '</div>'
+      : '<div style="padding-left:44px;margin-top:8px;font-size:12px;color:#7a5200;font-style:italic">\uD83D\uDD12 This conversation has been closed.</div>';
+
+    return '<div id="thread_'+safeRid+'" class="card" style="margin-bottom:10px'+(isClosed?';opacity:.85':'')+'">'+
+      '<div style="display:flex;align-items:flex-start;gap:10px">'+
         '<div style="width:36px;height:36px;background:#b5481f;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;font-weight:800;flex-shrink:0">'+esc((r.person||'?')[0].toUpperCase())+'</div>'+
-        '<div style="flex:1">'+
-          '<div style="font-size:11px;color:#7a5200;font-weight:700">'+esc(r.person)+' \xb7 '+ts+'</div>'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="font-size:11px;color:#7a5200;font-weight:700">'+esc(r.person)+' \xb7 '+ts+(isClosed?' \xb7 \uD83D\uDD12 closed':'')+'</div>'+
           '<div style="font-size:14px;color:#1a0e08;margin-top:3px">'+esc(r.message)+'</div>'+
         '</div>'+
+        adminControls+
       '</div>'+
       (repliesHtml?'<div style="padding-left:44px;margin-top:6px">'+repliesHtml+'</div>':'')+
-      '<div style="display:flex;gap:8px;margin-top:10px;padding-left:44px">'+
-        '<input id="'+replyInputId+'" type="text" placeholder="'+(IS_ADMIN?'Reply as admin\u2026':'Reply\u2026')+'" '+
-          'style="flex:1;border:1.5px solid #e8dccc;border-radius:9px;padding:7px 11px;font-size:13px;color:#1a0e08"/>'+
-        '<button id="'+replyBtnId+'" style="background:#b5481f;border:none;border-radius:9px;padding:7px 12px;color:#fff;font-size:13px;font-weight:800;cursor:pointer">\u21a9</button>'+
-      '</div>'+
+      replySection+
     '</div>';
   }).join('');
 
-  var html = '<div class="card" style="margin-bottom:16px">'+
-    '<div style="font-size:13px;font-weight:800;color:#5a3a28;margin-bottom:12px">&#x1F4AC; '+(isDE?'Feedback senden':'Send Feedback')+'</div>'+
-    '<div style="display:flex;gap:8px;margin-bottom:10px">'+
-      '<div style="flex:1;background:#f5ede4;border-radius:8px;padding:7px 11px;font-size:12px;color:#7a5200">&#x1F464; '+esc(CURRENT_NAME||'?')+'</div>'+
-      '<div style="flex:1;background:#f5ede4;border-radius:8px;padding:7px 11px;font-size:12px;color:#7a5200">&#x1F550; '+dtDisplay+'</div>'+
-    '</div>'+
-    '<textarea id="fb_new_msg" rows="3" placeholder="'+(isDE?'Dein Feedback\u2026':'Your feedback, ideas or bugs\u2026')+'" '+
-      'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 12px;font-size:15px;color:#1a0e08;box-sizing:border-box;resize:vertical;margin-bottom:10px"></textarea>'+
-    '<button id="fb_submit_btn" style="width:100%;background:#b5481f;border:none;border-radius:10px;padding:13px;font-size:16px;font-weight:800;color:#fff;cursor:pointer">'+
-      '\u2713 '+(isDE?'Senden':'Submit')+'</button>'+
-  '</div>'+
+  var canSubmit = !IS_ADMIN; // admin replies to existing, doesn't start new
+  var html = (!IS_ADMIN
+    ? '<div class="card" style="margin-bottom:16px">'+
+        '<div style="font-size:13px;font-weight:800;color:#5a3a28;margin-bottom:12px">&#x1F4AC; '+(isDE?'Feedback senden':'Send Feedback')+'</div>'+
+        '<div style="display:flex;gap:8px;margin-bottom:10px">'+
+          '<div style="flex:1;background:#f5ede4;border-radius:8px;padding:7px 11px;font-size:12px;color:#7a5200">&#x1F464; '+esc(CURRENT_NAME||'?')+'</div>'+
+          '<div style="flex:1;background:#f5ede4;border-radius:8px;padding:7px 11px;font-size:12px;color:#7a5200">&#x1F550; '+dtDisplay+'</div>'+
+        '</div>'+
+        '<textarea id="fb_new_msg" rows="3" placeholder="'+(isDE?'Dein Feedback\u2026':'Your feedback, ideas or bugs\u2026')+'" '+
+          'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 12px;font-size:15px;color:#1a0e08;box-sizing:border-box;resize:vertical;margin-bottom:10px"></textarea>'+
+        '<button id="fb_submit_btn" style="width:100%;background:#b5481f;border:none;border-radius:10px;padding:13px;font-size:16px;font-weight:800;color:#fff;cursor:pointer">'+
+          '\u2713 '+(isDE?'Senden':'Submit')+'</button>'+
+      '</div>'
+    : '') +
   (rootIds.length
     ? '<div style="font-size:13px;font-weight:800;color:#5a3a28;margin-bottom:10px">'+(IS_ADMIN?'&#x1F4CB; All Feedback':'&#x1F4CB; My Feedback')+'</div>'+threadHtml
     : '<div style="text-align:center;padding:24px;color:#7a5200;font-size:13px">&#x1F4ED; '+(isDE?'Noch kein Feedback.':'No feedback yet!')+'</div>');
 
   el.innerHTML = html;
 
-  // Attach event listeners after DOM is set
+  // Attach event listeners
   var submitBtn = document.getElementById('fb_submit_btn');
   if (submitBtn) submitBtn.onclick = function(){ submitNewFeedback('fb_new_msg'); };
 
@@ -5520,6 +5568,19 @@ function renderFeedback(){
       inp.onkeydown = function(e){ if (e.key === 'Enter') submitFeedbackReply(rid, 'reply_'+safeRid); };
     }
   });
+
+  // Admin: delete reply buttons
+  if (IS_ADMIN) {
+    el.querySelectorAll('[data-delete-reply]').forEach(function(btn){
+      btn.onclick = function(){ deleteFeedbackReply(this.getAttribute('data-delete-reply')); };
+    });
+    el.querySelectorAll('[data-delete-thread]').forEach(function(btn){
+      btn.onclick = function(){ deleteFeedbackThread(this.getAttribute('data-delete-thread')); };
+    });
+    el.querySelectorAll('[data-close-thread]').forEach(function(btn){
+      btn.onclick = function(){ closeFeedbackThread(this.getAttribute('data-close-thread')); };
+    });
+  }
 }
 
 async function submitNewFeedback(textareaId){
@@ -5527,7 +5588,7 @@ async function submitNewFeedback(textareaId){
   if (!el) return;
   var msg = el.value.trim();
   if (!msg){ notify('Please enter a message', true); return; }
-  var obj = { person: CURRENT_NAME||'guest', message: msg, is_admin_reply: false, parent_id: null };
+  var obj = { person: CURRENT_NAME||'guest', message: msg, is_admin_reply: false, parent_id: null, is_closed: false };
   if (CURRENT_USER) obj.user_id = CURRENT_USER.id;
   var {error} = await SB.from('feedback').insert(obj);
   if (error){ notify('Error: '+error.message, true); return; }
@@ -5540,13 +5601,47 @@ async function submitFeedbackReply(parentId, inputId){
   if (!el) return;
   var msg = el.value.trim();
   if (!msg) return;
-  var obj = { person: IS_ADMIN?'admin':(CURRENT_NAME||'guest'), message: msg, is_admin_reply: IS_ADMIN, parent_id: parentId };
+  // Check if closed
+  var root = (STATE.feedback||[]).find(function(f){ return f.id === parentId; });
+  if (root && root.is_closed && !IS_ADMIN) { notify('This conversation is closed', true); return; }
+  var obj = { person: IS_ADMIN?'admin':(CURRENT_NAME||'guest'), message: msg, is_admin_reply: IS_ADMIN, parent_id: parentId, is_closed: false };
   if (CURRENT_USER) obj.user_id = CURRENT_USER.id;
   var {error} = await SB.from('feedback').insert(obj);
   if (error){ notify('Error: '+error.message, true); return; }
   notify('Reply sent \u2713');
   await loadAll(); renderFeedback();
 }
+
+async function deleteFeedbackReply(replyId){
+  if (!IS_ADMIN) return;
+  if (!confirm('Delete this reply?')) return;
+  var {error} = await SB.from('feedback').delete().eq('id', replyId);
+  if (error){ notify('Error: '+error.message, true); return; }
+  notify('Reply deleted \u2713');
+  await loadAll(); renderFeedback();
+}
+
+async function deleteFeedbackThread(rootId){
+  if (!IS_ADMIN) return;
+  if (!confirm('Delete this entire conversation and all replies?')) return;
+  // Delete all replies first, then root
+  var repIds = (STATE.feedback||[]).filter(function(f){ return f.parent_id === rootId; }).map(function(f){ return f.id; });
+  for (var i=0; i<repIds.length; i++){
+    await SB.from('feedback').delete().eq('id', repIds[i]);
+  }
+  await SB.from('feedback').delete().eq('id', rootId);
+  notify('Conversation deleted \u2713');
+  await loadAll(); renderFeedback();
+}
+
+async function closeFeedbackThread(rootId){
+  if (!IS_ADMIN) return;
+  var {error} = await SB.from('feedback').update({ is_closed: true }).eq('id', rootId);
+  if (error){ notify('Error: '+error.message, true); return; }
+  notify('Conversation closed \u2713');
+  await loadAll(); renderFeedback();
+}
+
 
 function renderAudit(){
   var el=document.getElementById('tab-audit');
