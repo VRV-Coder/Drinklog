@@ -955,7 +955,14 @@ async function showLoginJokePopup(){
 
   // Update the modal content (if still open)
   var jokeEl = document.getElementById('joke-content');
-  if (jokeEl) jokeEl.innerHTML = content;
+  if (jokeEl) {
+    // Convert plain-text newlines to <br>, strip markdown bold/italic markers
+    var formatted = esc(content)
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/\n/g, '<br>');
+    jokeEl.innerHTML = formatted;
+  }
 }
 
 async function registerSelfAsPerson(){
@@ -1483,13 +1490,13 @@ async function quickAddDrink(person, drink, event){
   var price = getDrinkPrice(drink);
   var noteId = 'quick-note-'+Date.now();
 
-  // Pre-compute current drink count (before logging) to show in popup
-  var sessionLogs = getSessionLogs();
-  var currentCount = sessionLogs
-    .filter(function(l){ return l.person===person && l.drink===drink; })
+  // Pre-compute current drink count using today's logs (most reliable for the popup)
+  var todayStr = td();
+  var todayLogs = STATE.logs.filter(function(l){ return l.person===person && l.date===todayStr; });
+  var currentCount = todayLogs
+    .filter(function(l){ return l.drink===drink; })
     .reduce(function(s,l){ return s+(l.quantity||0); }, 0);
-  var totalCount = sessionLogs
-    .filter(function(l){ return l.person===person; })
+  var totalCount = todayLogs
     .reduce(function(s,l){ return s+(l.quantity||0); }, 0);
   var nextCount = currentCount + 1;
   var nextTotal = totalCount + 1;
