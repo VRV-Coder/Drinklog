@@ -223,6 +223,9 @@
         <button class="btn-logout" id="signout-btn" onclick="signOut()">Exit</button>
       </div>
     </div>
+    <div style="text-align:center;padding:4px 0 0 0;font-size:10px;color:rgba(255,255,255,0.55);letter-spacing:0.5px;font-style:italic">
+      crafted with ❤️ by <strong style="color:rgba(255,255,255,0.8);font-style:normal">Vinod (Vinnu)</strong>
+    </div>
     <nav id="main-nav">
       <button class="active" onclick="switchTab('log',this)"><span id="nav-log-label">📋 Log</span></button>
       <button onclick="switchTab('freedrinks',this)"><span id="nav-freedrinks-label">🍾 Free</span></button>
@@ -234,6 +237,7 @@
       <button onclick="switchTab('audit',this)" id="nav-audit-btn" style="display:none"><span id="nav-audit-label">📜 Audit</span></button>
       <button onclick="switchTab('people',this)" id="nav-people-btn" style="display:none"><span id="nav-people-label">👥 People</span></button>
       <button onclick="switchTab('drinktypes',this)" id="nav-drinktypes-btn" style="display:none"><span id="nav-drinktypes-label">🍹 Drinks</span></button>
+      <button onclick="switchTab('feedback',this)" id="nav-feedback-btn"><span id="nav-feedback-label">💬 Feedback</span></button>
     </nav>
   </div>
   <div class="team-banner-wrap" id="team-banner-wrap">
@@ -249,7 +253,8 @@
     <div id="tab-payments" style="display:none"></div>
     <div id="tab-history"  style="display:none"></div>
     <div id="tab-replace"  style="display:none"></div>
-    <div id="tab-audit"      style="display:none"></div>
+    <div id="tab-feedback"   style="display:none"></div>
+  <div id="tab-audit"      style="display:none"></div>
     <div id="tab-people"     style="display:none"></div>
     <div id="tab-drinktypes" style="display:none"></div>
   </div>
@@ -296,7 +301,7 @@ function getDrinkPrice(drink){ return parseFloat(DRINK_PRICES[drink])||0; }
 function setDrinkPrice(drink, price){ DRINK_PRICES[drink]=parseFloat(price)||0; localStorage.setItem(_priceKey(),JSON.stringify(DRINK_PRICES)); }
 
 var STATE = {
-  tab:'log', people:[], logs:[], payments:[], replacements:[], auditLog:[], freeContributions:[], tabCloses:[],
+  tab:'log', people:[], logs:[], payments:[], replacements:[], auditLog:[], freeContributions:[], tabCloses:[], feedback:[],
   dashPeriod:'weekly', dashDrinkFilter:'🍺*', dashSortDir:'desc',
   logPerson:'', logDrink:'🍺 Beer', logQty:1, logPrice:'', logDate:td(), logNote:'',
   payPayers:[], payNonDrinkers:[], payAmount:'', payDate:td(), payNote:'',
@@ -697,6 +702,7 @@ function startRealtime(){
       .on('postgres_changes', {event:'*', schema:'public', table:'payments'},       function(){ queueRefresh('payments'); })
       .on('postgres_changes', {event:'*', schema:'public', table:'replacements'},   function(){ queueRefresh('replacements'); })
       .on('postgres_changes', {event:'*', schema:'public', table:'audit_log'},      function(){ queueRefresh('audit_log'); })
+      .on('postgres_changes', {event:'*', schema:'public', table:'feedback'},         function(){ queueRefresh('feedback'); })
       .on('postgres_changes', {event:'*', schema:'public', table:'people'},         function(){ queueRefresh('people'); })
       .subscribe(function(status){
         var dot = document.getElementById('realtime-dot');
@@ -973,7 +979,7 @@ async function signOut(){
 // ── LOAD DATA ───────────────────────────────────────────────
 async function loadAll(){
   try {
-    var [ppl, l, pay, rep, aud, fc, dt, tc] = await Promise.all([
+    var [ppl, l, pay, rep, aud, fc, dt, tc, fb] = await Promise.all([
       SB.from('people').select('*').order('name'),
       SB.from('drink_logs').select('*').order('date',{ascending:false}).order('logged_at',{ascending:false}),
       SB.from('payments').select('*').order('date',{ascending:false}),
@@ -981,7 +987,8 @@ async function loadAll(){
       SB.from('audit_log').select('*').order('performed_at',{ascending:false}).limit(100),
       SB.from('free_contributions').select('*').order('date',{ascending:false}).then(function(r){ return r.error ? {data:[],error:null} : r; }),
       SB.from('drink_types').select('*').order('sort_order').then(function(r){ return r.error ? {data:[],error:null} : r; }),
-      SB.from('tab_closes').select('*').order('closed_at',{ascending:false}).then(function(r){ return r.error ? {data:[],error:null} : r; })
+      SB.from('tab_closes').select('*').order('closed_at',{ascending:false}).then(function(r){ return r.error ? {data:[],error:null} : r; }),
+      SB.from('feedback').select('*').order('created_at',{ascending:false}).then(function(r){ return r.error ? {data:[],error:null} : r; })
     ]);
     if(ppl.error) notify('people: '+ppl.error.message, true);
     if(l.error)   notify('drink_logs: '+l.error.message, true);
@@ -995,6 +1002,7 @@ async function loadAll(){
     STATE.auditLog          = aud.data || [];
     STATE.freeContributions = fc.data  || [];
     STATE.tabCloses         = tc.data  || [];
+    STATE.feedback          = fb ? (fb.data || []) : [];
 
     // People: only active people show in the group list.
     // Inactive (deleted) people's logs/payments still appear in running tabs so debts can be cleared.
@@ -1093,7 +1101,7 @@ function switchTab(tab, btn){
   }
   document.querySelectorAll('nav button').forEach(function(b){b.classList.remove('active');});
   btn.classList.add('active');
-  ['log','freedrinks','stats','dashboard','payments','history','replace','audit','people','drinktypes'].forEach(function(t){
+  ['log','freedrinks','stats','dashboard','payments','history','replace','feedback','audit','people','drinktypes'].forEach(function(t){
     document.getElementById('tab-'+t).style.display = t===tab?'':'none';
   });
   STATE.tab = tab;
@@ -1109,6 +1117,7 @@ function renderTab(t){
     if(t==='history')  renderHistory();
     if(t==='replace')  renderReplace();
     if(t==='audit')    renderAudit();
+    if(t==='feedback') renderFeedback();
     if(t==='people')      renderPeople();
     if(t==='drinktypes')  renderDrinkTypes();
   } catch(e) {
@@ -5412,6 +5421,107 @@ async function undoReplace(){
 // ══════════════════════════════════════════════════════════════
 // AUDIT TAB
 // ══════════════════════════════════════════════════════════════
+// ── FEEDBACK TAB ─────────────────────────────────────────
+function renderFeedback(){
+  var isDE = LANG === 'de';
+  var el = document.getElementById('tab-feedback');
+  if (!el) return;
+
+  var now = new Date();
+  var dtDisplay = now.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) + ' · ' + now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+
+  var allFeedback = STATE.feedback || [];
+  var visible = IS_ADMIN ? allFeedback : allFeedback.filter(function(f){ return f.person === CURRENT_NAME; });
+
+  // Build threads: top-level (no parent_id) + their replies
+  var roots = {}, replies = {};
+  visible.forEach(function(f){
+    if (!f.parent_id) roots[f.id] = f;
+    else { if (!replies[f.parent_id]) replies[f.parent_id] = []; replies[f.parent_id].push(f); }
+  });
+  var rootIds = Object.keys(roots).sort(function(a,b){ return roots[b].created_at > roots[a].created_at ? 1 : -1; });
+
+  var threadHtml = rootIds.map(function(rid){
+    var r = roots[rid];
+    var ts = r.created_at ? new Date(r.created_at).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
+    var reps = (replies[rid]||[]).sort(function(a,b){ return a.created_at > b.created_at ? 1 : -1; });
+    var repliesHtml = reps.map(function(rep){
+      var rts = rep.created_at ? new Date(rep.created_at).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
+      var adm = rep.is_admin_reply;
+      return '<div style="display:flex;gap:8px;margin-top:8px;'+(adm?'flex-direction:row-reverse':'')+';align-items:flex-start">'+
+        '<div style="width:28px;height:28px;background:'+(adm?'#1f8a4f':'#b5481f')+';border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;font-weight:800;flex-shrink:0">'+(adm?'👑':esc((rep.person||'?')[0].toUpperCase()))+'</div>'+
+        '<div style="background:'+(adm?'#1f8a4f':'#f5ede4')+';border-radius:10px;padding:7px 11px;max-width:78%">'+
+          '<div style="font-size:10px;font-weight:700;color:'+(adm?'rgba(255,255,255,.7)':'#7a5200')+';margin-bottom:2px">'+(adm?'Admin':'You')+' · '+rts+'</div>'+
+          '<div style="font-size:13px;color:'+(adm?'#fff':'#1a0e08')+'">'+esc(rep.message)+'</div>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+    var replyId = 'reply-'+rid;
+    return '<div class="card" style="margin-bottom:10px">'+
+      '<div style="display:flex;gap:10px;align-items:flex-start">'+
+        '<div style="width:36px;height:36px;background:#b5481f;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;font-weight:800;flex-shrink:0">'+esc((r.person||'?')[0].toUpperCase())+'</div>'+
+        '<div style="flex:1">'+
+          '<div style="font-size:11px;color:#7a5200;font-weight:700">'+esc(r.person)+' · '+ts+'</div>'+
+          '<div style="font-size:14px;color:#1a0e08;margin-top:3px">'+esc(r.message)+'</div>'+
+        '</div>'+
+      '</div>'+
+      (repliesHtml?'<div style="padding-left:44px;margin-top:6px">'+repliesHtml+'</div>':'')+
+      '<div style="display:flex;gap:8px;margin-top:10px;padding-left:44px">'+
+        '<input id="'+replyId+'" type="text" placeholder="'+(IS_ADMIN?'Reply as admin…':'Reply…')+'" '+
+          'style="flex:1;border:1.5px solid #e8dccc;border-radius:9px;padding:7px 11px;font-size:13px;color:#1a0e08" '+
+          'onkeydown="if(event.key==='Enter'){submitFeedbackReply(''+rid+'',''+replyId+'')}"/>'+
+        '<button onclick="submitFeedbackReply(''+rid+'',''+replyId+'')" '+
+          'style="background:#b5481f;border:none;border-radius:9px;padding:7px 12px;color:#fff;font-size:13px;font-weight:800;cursor:pointer">↩</button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+
+  var submitId = 'fb-new-msg';
+  var html = '<div class="card" style="margin-bottom:16px">'+
+    '<div style="font-size:13px;font-weight:800;color:#5a3a28;margin-bottom:12px">💬 '+(isDE?'Feedback senden':'Send Feedback')+'</div>'+
+    '<div style="display:flex;gap:8px;margin-bottom:10px">'+
+      '<div style="flex:1;background:#f5ede4;border-radius:8px;padding:7px 11px;font-size:12px;color:#7a5200">👤 '+esc(CURRENT_NAME||'?')+'</div>'+
+      '<div style="flex:1;background:#f5ede4;border-radius:8px;padding:7px 11px;font-size:12px;color:#7a5200">🕐 '+dtDisplay+'</div>'+
+    '</div>'+
+    '<textarea id="'+submitId+'" rows="3" placeholder="'+(isDE?'Dein Feedback…':'Your feedback, ideas or bugs…')+'" '+
+      'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 12px;font-size:15px;color:#1a0e08;box-sizing:border-box;resize:vertical;margin-bottom:10px"></textarea>'+
+    '<button onclick="submitNewFeedback(''+submitId+'')" '+
+      'style="width:100%;background:#b5481f;border:none;border-radius:10px;padding:13px;font-size:16px;font-weight:800;color:#fff;cursor:pointer">'+
+      '✓ '+(isDE?'Senden':'Submit')+'</button>'+
+  '</div>'+
+  (rootIds.length
+    ? '<div style="font-size:13px;font-weight:800;color:#5a3a28;margin-bottom:10px">'+(IS_ADMIN?'📋 All Feedback':'📋 My Feedback')+'</div>'+threadHtml
+    : '<div style="text-align:center;padding:24px;color:#7a5200;font-size:13px">📭 '+(isDE?'Noch kein Feedback.':'No feedback yet!')+'</div>');
+
+  el.innerHTML = html;
+}
+
+async function submitNewFeedback(textareaId){
+  var el = document.getElementById(textareaId);
+  if (!el) return;
+  var msg = el.value.trim();
+  if (!msg){ notify('Please enter a message', true); return; }
+  var obj = { person: CURRENT_NAME||'guest', message: msg, is_admin_reply: false, parent_id: null };
+  if (CURRENT_USER) obj.user_id = CURRENT_USER.id;
+  var {error} = await SB.from('feedback').insert(obj);
+  if (error){ notify('Error: '+error.message, true); return; }
+  notify(LANG==='de'?'Feedback gesendet ✓':'Feedback sent ✓');
+  await loadAll(); renderFeedback();
+}
+
+async function submitFeedbackReply(parentId, inputId){
+  var el = document.getElementById(inputId);
+  if (!el) return;
+  var msg = el.value.trim();
+  if (!msg) return;
+  var obj = { person: IS_ADMIN?'admin':(CURRENT_NAME||'guest'), message: msg, is_admin_reply: IS_ADMIN, parent_id: parentId };
+  if (CURRENT_USER) obj.user_id = CURRENT_USER.id;
+  var {error} = await SB.from('feedback').insert(obj);
+  if (error){ notify('Error: '+error.message, true); return; }
+  notify('Reply sent ✓');
+  await loadAll(); renderFeedback();
+}
+
 function renderAudit(){
   var el=document.getElementById('tab-audit');
   if(!STATE.auditLog.length){el.innerHTML=empty('📜',t('noDataYet'),t('logSomeDrinks'));return;}
