@@ -5442,12 +5442,11 @@ function renderFeedback(){
   if (!el) return;
 
   var now = new Date();
-  var dtDisplay = now.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) + ' · ' + now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  var dtDisplay = now.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) + ' \xb7 ' + now.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
 
   var allFeedback = STATE.feedback || [];
   var visible = IS_ADMIN ? allFeedback : allFeedback.filter(function(f){ return f.person === CURRENT_NAME; });
 
-  // Build threads: top-level (no parent_id) + their replies
   var roots = {}, replies = {};
   visible.forEach(function(f){
     if (!f.parent_id) roots[f.id] = f;
@@ -5463,51 +5462,64 @@ function renderFeedback(){
       var rts = rep.created_at ? new Date(rep.created_at).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
       var adm = rep.is_admin_reply;
       return '<div style="display:flex;gap:8px;margin-top:8px;'+(adm?'flex-direction:row-reverse':'')+';align-items:flex-start">'+
-        '<div style="width:28px;height:28px;background:'+(adm?'#1f8a4f':'#b5481f')+';border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;font-weight:800;flex-shrink:0">'+(adm?'👑':esc((rep.person||'?')[0].toUpperCase()))+'</div>'+
+        '<div style="width:28px;height:28px;background:'+(adm?'#1f8a4f':'#b5481f')+';border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;font-weight:800;flex-shrink:0">'+(adm?'&#x1F451;':esc((rep.person||'?')[0].toUpperCase()))+'</div>'+
         '<div style="background:'+(adm?'#1f8a4f':'#f5ede4')+';border-radius:10px;padding:7px 11px;max-width:78%">'+
-          '<div style="font-size:10px;font-weight:700;color:'+(adm?'rgba(255,255,255,.7)':'#7a5200')+';margin-bottom:2px">'+(adm?'Admin':'You')+' · '+rts+'</div>'+
+          '<div style="font-size:10px;font-weight:700;color:'+(adm?'rgba(255,255,255,.7)':'#7a5200')+';margin-bottom:2px">'+(adm?'Admin':'You')+' \xb7 '+rts+'</div>'+
           '<div style="font-size:13px;color:'+(adm?'#fff':'#1a0e08')+'">'+esc(rep.message)+'</div>'+
         '</div>'+
       '</div>';
     }).join('');
-    var replyId = 'reply-'+rid;
+
+    var safeRid = rid.replace(/-/g,'_');
+    var replyInputId = 'reply_'+safeRid;
+    var replyBtnId = 'replybtn_'+safeRid;
     return '<div class="card" style="margin-bottom:10px">'+
       '<div style="display:flex;gap:10px;align-items:flex-start">'+
         '<div style="width:36px;height:36px;background:#b5481f;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;font-weight:800;flex-shrink:0">'+esc((r.person||'?')[0].toUpperCase())+'</div>'+
         '<div style="flex:1">'+
-          '<div style="font-size:11px;color:#7a5200;font-weight:700">'+esc(r.person)+' · '+ts+'</div>'+
+          '<div style="font-size:11px;color:#7a5200;font-weight:700">'+esc(r.person)+' \xb7 '+ts+'</div>'+
           '<div style="font-size:14px;color:#1a0e08;margin-top:3px">'+esc(r.message)+'</div>'+
         '</div>'+
       '</div>'+
       (repliesHtml?'<div style="padding-left:44px;margin-top:6px">'+repliesHtml+'</div>':'')+
       '<div style="display:flex;gap:8px;margin-top:10px;padding-left:44px">'+
-        '<input id="'+replyId+'" type="text" placeholder="'+(IS_ADMIN?'Reply as admin…':'Reply…')+'" '+
-          'style="flex:1;border:1.5px solid #e8dccc;border-radius:9px;padding:7px 11px;font-size:13px;color:#1a0e08" '+
-          'onkeydown="if(event.key==='Enter'){submitFeedbackReply(''+rid+'',''+replyId+'')}"/>'+
-        '<button onclick="submitFeedbackReply(''+rid+'',''+replyId+'')" '+
-          'style="background:#b5481f;border:none;border-radius:9px;padding:7px 12px;color:#fff;font-size:13px;font-weight:800;cursor:pointer">↩</button>'+
+        '<input id="'+replyInputId+'" type="text" placeholder="'+(IS_ADMIN?'Reply as admin\u2026':'Reply\u2026')+'" '+
+          'style="flex:1;border:1.5px solid #e8dccc;border-radius:9px;padding:7px 11px;font-size:13px;color:#1a0e08"/>'+
+        '<button id="'+replyBtnId+'" style="background:#b5481f;border:none;border-radius:9px;padding:7px 12px;color:#fff;font-size:13px;font-weight:800;cursor:pointer">\u21a9</button>'+
       '</div>'+
     '</div>';
   }).join('');
 
-  var submitId = 'fb-new-msg';
   var html = '<div class="card" style="margin-bottom:16px">'+
-    '<div style="font-size:13px;font-weight:800;color:#5a3a28;margin-bottom:12px">💬 '+(isDE?'Feedback senden':'Send Feedback')+'</div>'+
+    '<div style="font-size:13px;font-weight:800;color:#5a3a28;margin-bottom:12px">&#x1F4AC; '+(isDE?'Feedback senden':'Send Feedback')+'</div>'+
     '<div style="display:flex;gap:8px;margin-bottom:10px">'+
-      '<div style="flex:1;background:#f5ede4;border-radius:8px;padding:7px 11px;font-size:12px;color:#7a5200">👤 '+esc(CURRENT_NAME||'?')+'</div>'+
-      '<div style="flex:1;background:#f5ede4;border-radius:8px;padding:7px 11px;font-size:12px;color:#7a5200">🕐 '+dtDisplay+'</div>'+
+      '<div style="flex:1;background:#f5ede4;border-radius:8px;padding:7px 11px;font-size:12px;color:#7a5200">&#x1F464; '+esc(CURRENT_NAME||'?')+'</div>'+
+      '<div style="flex:1;background:#f5ede4;border-radius:8px;padding:7px 11px;font-size:12px;color:#7a5200">&#x1F550; '+dtDisplay+'</div>'+
     '</div>'+
-    '<textarea id="'+submitId+'" rows="3" placeholder="'+(isDE?'Dein Feedback…':'Your feedback, ideas or bugs…')+'" '+
+    '<textarea id="fb_new_msg" rows="3" placeholder="'+(isDE?'Dein Feedback\u2026':'Your feedback, ideas or bugs\u2026')+'" '+
       'style="width:100%;border:1.5px solid #e8dccc;border-radius:10px;padding:10px 12px;font-size:15px;color:#1a0e08;box-sizing:border-box;resize:vertical;margin-bottom:10px"></textarea>'+
-    '<button onclick="submitNewFeedback(''+submitId+'')" '+
-      'style="width:100%;background:#b5481f;border:none;border-radius:10px;padding:13px;font-size:16px;font-weight:800;color:#fff;cursor:pointer">'+
-      '✓ '+(isDE?'Senden':'Submit')+'</button>'+
+    '<button id="fb_submit_btn" style="width:100%;background:#b5481f;border:none;border-radius:10px;padding:13px;font-size:16px;font-weight:800;color:#fff;cursor:pointer">'+
+      '\u2713 '+(isDE?'Senden':'Submit')+'</button>'+
   '</div>'+
   (rootIds.length
-    ? '<div style="font-size:13px;font-weight:800;color:#5a3a28;margin-bottom:10px">'+(IS_ADMIN?'📋 All Feedback':'📋 My Feedback')+'</div>'+threadHtml
-    : '<div style="text-align:center;padding:24px;color:#7a5200;font-size:13px">📭 '+(isDE?'Noch kein Feedback.':'No feedback yet!')+'</div>');
+    ? '<div style="font-size:13px;font-weight:800;color:#5a3a28;margin-bottom:10px">'+(IS_ADMIN?'&#x1F4CB; All Feedback':'&#x1F4CB; My Feedback')+'</div>'+threadHtml
+    : '<div style="text-align:center;padding:24px;color:#7a5200;font-size:13px">&#x1F4ED; '+(isDE?'Noch kein Feedback.':'No feedback yet!')+'</div>');
 
   el.innerHTML = html;
+
+  // Attach event listeners after DOM is set
+  var submitBtn = document.getElementById('fb_submit_btn');
+  if (submitBtn) submitBtn.onclick = function(){ submitNewFeedback('fb_new_msg'); };
+
+  rootIds.forEach(function(rid){
+    var safeRid = rid.replace(/-/g,'_');
+    var btn = document.getElementById('replybtn_'+safeRid);
+    var inp = document.getElementById('reply_'+safeRid);
+    if (btn && inp) {
+      btn.onclick = function(){ submitFeedbackReply(rid, 'reply_'+safeRid); };
+      inp.onkeydown = function(e){ if (e.key === 'Enter') submitFeedbackReply(rid, 'reply_'+safeRid); };
+    }
+  });
 }
 
 async function submitNewFeedback(textareaId){
@@ -5519,7 +5531,7 @@ async function submitNewFeedback(textareaId){
   if (CURRENT_USER) obj.user_id = CURRENT_USER.id;
   var {error} = await SB.from('feedback').insert(obj);
   if (error){ notify('Error: '+error.message, true); return; }
-  notify(LANG==='de'?'Feedback gesendet ✓':'Feedback sent ✓');
+  notify(LANG==='de'?'Feedback gesendet \u2713':'Feedback sent \u2713');
   await loadAll(); renderFeedback();
 }
 
@@ -5532,7 +5544,7 @@ async function submitFeedbackReply(parentId, inputId){
   if (CURRENT_USER) obj.user_id = CURRENT_USER.id;
   var {error} = await SB.from('feedback').insert(obj);
   if (error){ notify('Error: '+error.message, true); return; }
-  notify('Reply sent ✓');
+  notify('Reply sent \u2713');
   await loadAll(); renderFeedback();
 }
 
