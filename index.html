@@ -2733,13 +2733,9 @@ function getLastSettlementDate(){
       .map(function(l){ return l.person; })
     )];
 
-    // All people who closed their tab on or before this date
-    var closers = (STATE.tabCloses||[])
-      .filter(function(c){ return c.closed_at <= d; })
-      .map(function(c){ return c.person; });
-
+    // Use isTabTrulyClosed — respects new drinks logged after a close
     var allClosed = drinkers.length > 0 && drinkers.every(function(p){
-      return closers.indexOf(p) !== -1;
+      return isTabTrulyClosed(p, d);
     });
 
     if (!allClosed) continue;
@@ -4744,48 +4740,26 @@ function renderReplace(){
   document.querySelectorAll('[id^="repl-note-"]').forEach(function(inp){
     if (inp.value) savedNotes[inp.id] = inp.value;
   });
-  var cbd={},pbd={};
-  STATE.logs.forEach(function(l){cbd[l.date]=(cbd[l.date]||0)+(parseFloat(l.total_price)||0);});
-  STATE.payments.forEach(function(p){pbd[p.date]=(pbd[p.date]||0)+(parseFloat(p.amount)||0);});
-  var cdd={},rdd={};
-
-  // ── Session cutoff: only show logs AFTER the last closed session ──
   var closedSessions = JSON.parse(localStorage.getItem('boc_closed_replace_sessions')||'[]');
   var lastSession = closedSessions.length ? closedSessions[closedSessions.length-1] : null;
+  var cdd={},rdd={};
 
-  // Cutoff timestamp: if we have a precise close timestamp, use it.
-  // If only a date (old sessions), use end of the PREVIOUS day — meaning
-  // all logs on the close date itself are always visible in the new session.
-  var sessionCutoffTs = null;
-  if (lastSession) {
-    if (lastSession.closedTimestamp) {
-      sessionCutoffTs = lastSession.closedTimestamp;
-    } else {
-      // Old session stored only a date — treat cutoff as midnight before that date
-      // so everything on closedAt date is visible (conservative, user-friendly)
-      var d = new Date(lastSession.closedAt + 'T00:00:00.000Z');
-      d.setDate(d.getDate() - 1);
-      sessionCutoffTs = d.toISOString().replace('T00:00:00.000Z','T23:59:59.999Z');
-    }
-  }
+  // Use getSessionLogs() — same session boundary as the rest of the app
+  // This ensures fund-covered drinks don't show as "to replace" across sessions
+  var sessionLogs = getSessionLogs();
 
-  STATE.logs.forEach(function(l){
+  sessionLogs.forEach(function(l){
     var unitPrice = parseFloat(l.unit_price)||0;
-    if (unitPrice > 0) return;
-    // Compare using logged_at timestamp if available, otherwise date only
-    if (sessionCutoffTs){
-      var logTs = l.logged_at || (l.date + 'T00:00:00.000Z');
-      if (logTs <= sessionCutoffTs) return;
-    }
+    if (unitPrice > 0) return; // only free drinks
     if(!cdd[l.date])cdd[l.date]={};
     cdd[l.date][l.drink]=(cdd[l.date][l.drink]||0)+(l.quantity||0);
   });
+
+  // Replacements: also session-scoped
+  var lastSettledDate = getLastSettlementDate();
   STATE.replacements.forEach(function(r){
     if(!r.quantity || r.drink === '_SESSION_CLOSED_') return;
-    if (sessionCutoffTs){
-      var repTs = r.logged_at || (r.for_date + 'T00:00:00.000Z');
-      if (repTs <= sessionCutoffTs) return;
-    }
+    if(lastSettledDate && r.for_date <= lastSettledDate) return;
     if(!rdd[r.for_date])rdd[r.for_date]={};
     rdd[r.for_date][r.drink]=(rdd[r.for_date][r.drink]||0)+(r.quantity||0);
   });
@@ -4799,16 +4773,19 @@ function renderReplace(){
     if (!c.drink) return;
     freeFundContrib[c.drink] = (freeFundContrib[c.drink]||0) + (c.crates||0)*CRATE_SIZE_FREE + (c.extra_bottles||0);
   });
-  // Free fund consumed = ALL-TIME zero-price logs (matches what Free Beer tab shows)
-  // Replacements reduce the consumed count — they physically re-stock what was drunk
+  // Free fund consumed = current SESSION zero-price logs only
+  // Old sessions already closed shouldn't eat into the fund for the current session
   var freeFundConsumed = {};
-  STATE.logs.forEach(function(l){
+  sessionLogs.forEach(function(l){
     if ((parseFloat(l.unit_price)||0) === 0)
       freeFundConsumed[l.drink] = (freeFundConsumed[l.drink]||0) + (l.quantity||0);
   });
+  // Session replacements reduce consumption
   STATE.replacements.forEach(function(r){
-    if (r.drink && (r.quantity||0) > 0 && r.drink !== '_SESSION_CLOSED_')
+    if (r.drink && (r.quantity||0) > 0 && r.drink !== '_SESSION_CLOSED_'){
+      if(lastSettledDate && r.for_date <= lastSettledDate) return;
       freeFundConsumed[r.drink] = Math.max(0, (freeFundConsumed[r.drink]||0) - (r.quantity||0));
+    }
   });
   // Available free fund per drink (total contributed minus all-time consumption)
   var freeFundAvail = {};
