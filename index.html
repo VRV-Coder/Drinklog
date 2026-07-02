@@ -1226,29 +1226,6 @@ function renderLog(){
     '<span style="margin-left:auto;font-size:18px">⬆️</span>'+
   '</button>';
 
-  // ── DEBUG ──
-  (function(){
-    var today = '2026-07-01';
-    var lastSD = getLastSettlementDate();
-    var sessionDrinkers = [...new Set(STATE.logs
-      .filter(function(l){ return !lastSD || l.date > lastSD; })
-      .map(function(l){ return l.person; })
-    )];
-    var closers = (STATE.tabCloses||[])
-      .filter(function(c){ return !lastSD || c.closed_at > lastSD; });
-    var dbg = '<div class="card" style="background:#e8f0ff;border:2px solid blue;font-size:10px;word-break:break-all;margin-bottom:8px">';
-    dbg += 'lastSD: '+lastSD+'<br>';
-    dbg += 'sessionDrinkers: '+JSON.stringify(sessionDrinkers)+'<br>';
-    dbg += 'tabCloses after lastSD: '+JSON.stringify(closers.map(function(c){return c.person+' closed:'+c.closed_at+' created:'+c.created_at;}))+'<br>';
-    sessionDrinkers.forEach(function(p){
-      var isClosed = isTabTrulyClosed(p, null);
-      var personCloses = (STATE.tabCloses||[]).filter(function(c){return c.person===p;});
-      dbg += p+' → isTabTrulyClosed:'+isClosed+' closes:'+JSON.stringify(personCloses.map(function(c){return c.closed_at+'@'+c.created_at;}))+'<br>';
-    });
-    dbg += '</div>';
-    html += dbg;
-  })();
-
   // ── SECTION 6: Historical consolidated running tabs ──
   html += renderConsolidatedToday();
 
@@ -1259,9 +1236,15 @@ function renderLog(){
 // Returns true only if person's latest tab close has NO drinks logged after its timestamp.
 // This means: closing at 8am then ordering at 11am reopens the tab automatically.
 function isTabTrulyClosed(person, forDate){
-  var closesForPerson = (STATE.tabCloses||[]).filter(function(c){ return c.person === person; });
+  // Only consider closes from the current session (after last settlement)
+  var lastSD = getLastSettlementDate();
+  var closesForPerson = (STATE.tabCloses||[]).filter(function(c){
+    if (c.person !== person) return false;
+    if (lastSD && c.closed_at <= lastSD) return false; // ignore past session closes
+    return true;
+  });
   if (!closesForPerson.length) return false;
-  // Find the most recent close (by timestamp, fall back to date)
+  // Most recent close in this session
   closesForPerson.sort(function(a,b){
     var ta = a.created_at || (a.closed_at+'T23:59:59Z');
     var tb = b.created_at || (b.closed_at+'T23:59:59Z');
@@ -1270,11 +1253,11 @@ function isTabTrulyClosed(person, forDate){
   var lastClose = closesForPerson[0];
   var closeTs = lastClose.created_at || (lastClose.closed_at+'T23:59:59Z');
   var closeDate = lastClose.closed_at;
-  // If forDate is given, only consider closes on that date
   if (forDate && closeDate !== forDate) return false;
-  // Check if any drink was logged AFTER this close timestamp
+  // Check no drinks logged AFTER this close
   var logsAfter = STATE.logs.filter(function(l){
     if (l.person !== person) return false;
+    if (lastSD && l.date <= lastSD) return false;
     if (forDate && l.date !== forDate) return false;
     var logTs = l.logged_at || (l.date+'T00:00:00Z');
     return logTs > closeTs;
@@ -1994,13 +1977,10 @@ function renderConsolidatedToday(){
     var bottlesRemaining = Math.max(0, totalBottlesOwed - totalBottlesReplaced);
     var bottlesSettled = totalBottlesOwed === 0 || bottlesRemaining === 0;
 
-    var isSettled = moneySettled && bottlesSettled;
-
-    // A tab close by this person also counts as settled — only if no new drinks after close
-    if (!isSettled) {
-      var personTabClosed = isTabTrulyClosed(person);
-      if (personTabClosed && moneySettled) isSettled = true;
-    }
+    // If person closed their tab this session, they are fully settled
+    // Tab close = explicit sign-off, covers both money (must be €0 or paid) and bottles (fund covers them)
+    var personTabClosed = isTabTrulyClosed(person);
+    var isSettled = personTabClosed || (moneySettled && bottlesSettled);
 
     // DEBUG removed — use console in browser to check
     var _debugInfo = '';
@@ -3056,12 +3036,17 @@ async function adminCloseAllTabs(){
     if (btn) btn.onclick = async function(){
       closeModal();
       var people = window._pendingCloseAll || [];
+      var errors = [];
       for (var i=0; i<people.length; i++){
         var obj = { person: people[i], closed_at: today, note: 'Closed by admin', free_count: 0, added_by: CURRENT_NAME };
         if (CURRENT_USER) obj.user_id = CURRENT_USER.id;
-        await SB.from('tab_closes').insert(obj);
+        // Do NOT include user_id for other people's tab closes — RLS may reject it
+        delete obj.user_id;
+        var {error} = await SB.from('tab_closes').insert(obj);
+        if (error) errors.push(people[i]+': '+error.message);
       }
-      notify('Closed '+people.length+' tabs ✓');
+      if (errors.length) { notify('Errors: '+errors.join('; '), true); }
+      else { notify('Closed '+people.length+' tabs ✓'); }
       await loadAll();
     };
   }, 50);
@@ -3076,11 +3061,12 @@ async function doCloseMyTab(person, note, freeCount){
     free_count: freeCount,
     added_by: CURRENT_NAME
   };
-  if (IS_ADMIN && CURRENT_USER) obj.user_id = CURRENT_USER.id;
+  // Only attach user_id when closing own tab (RLS may reject it for other users)
+  if (IS_ADMIN && CURRENT_USER && person === CURRENT_NAME) obj.user_id = CURRENT_USER.id;
   if (IS_GUEST) obj.guest_token = GUEST_TOKEN;
 
   var {error} = await SB.from('tab_closes').insert(obj);
-  if (error){ notify('Error: '+error.message+' — run supabase_tab_closes.sql first',true); return; }
+  if (error){ notify('Error: '+error.message,true); return; }
 
   closeModal();
   notify('✅ '+(LANG==='de'?'Tab geschlossen! Bis zum nächsten Mal 🍺':'Tab closed! See you next time 🍺'));
