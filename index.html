@@ -1929,16 +1929,15 @@ async function saveRunningAmountEdit(person, date){
 
 // Consolidate all of today's (and recent days') drinks per person
 function renderConsolidatedToday(){
-  if (!STATE.logs.length) return '';
+  if (!STATE.logs.length && !(STATE.tabCloses||[]).length) return '';
 
-  // Use only the current unsettled session logs — everything since the last full settlement.
-  // This prevents old settled drinks from reappearing in the "not yet settled" section.
   var sessionLogs = getSessionLogs();
-  var sessionCutoffDate = getLastSettlementDate(); // null = no settlement yet
+  var sessionCutoffDate = getLastSettlementDate();
 
-  if (!sessionLogs.length) return '';
-
-  var personNames = [...new Set(sessionLogs.map(function(l){ return l.person; }))].sort();
+  // Don't bail early — we still need to render the settled section even if sessionLogs is empty
+  var personNames = sessionLogs.length
+    ? [...new Set(sessionLogs.map(function(l){ return l.person; }))].sort()
+    : [];
 
   var blocks = personNames.map(function(person){
     var pLogs = sessionLogs.filter(function(l){ return l.person === person; });
@@ -4857,43 +4856,20 @@ function renderReplace(){
   STATE.payments.forEach(function(p){pbd[p.date]=(pbd[p.date]||0)+(parseFloat(p.amount)||0);});
   var cdd={},rdd={};
 
-  // ── Session cutoff: only show logs AFTER the last closed session ──
-  var closedSessions = JSON.parse(localStorage.getItem('boc_closed_replace_sessions')||'[]');
-  var lastSession = closedSessions.length ? closedSessions[closedSessions.length-1] : null;
+  // Use per-person getSessionLogs — each person's open tab free drinks need replacing
+  var sessionLogsReplace = getSessionLogs();
+  var openTabDates = new Set(sessionLogsReplace.map(function(l){ return l.date; }));
 
-  // Cutoff timestamp: if we have a precise close timestamp, use it.
-  // If only a date (old sessions), use end of the PREVIOUS day — meaning
-  // all logs on the close date itself are always visible in the new session.
-  var sessionCutoffTs = null;
-  if (lastSession) {
-    if (lastSession.closedTimestamp) {
-      sessionCutoffTs = lastSession.closedTimestamp;
-    } else {
-      // Old session stored only a date — treat cutoff as midnight before that date
-      // so everything on closedAt date is visible (conservative, user-friendly)
-      var d = new Date(lastSession.closedAt + 'T00:00:00.000Z');
-      d.setDate(d.getDate() - 1);
-      sessionCutoffTs = d.toISOString().replace('T00:00:00.000Z','T23:59:59.999Z');
-    }
-  }
-
-  STATE.logs.forEach(function(l){
-    var unitPrice = parseFloat(l.unit_price)||0;
-    if (unitPrice > 0) return;
-    // Compare using logged_at timestamp if available, otherwise date only
-    if (sessionCutoffTs){
-      var logTs = l.logged_at || (l.date + 'T00:00:00.000Z');
-      if (logTs <= sessionCutoffTs) return;
-    }
+  sessionLogsReplace.forEach(function(l){
+    if ((parseFloat(l.unit_price)||0) > 0) return; // only free drinks
     if(!cdd[l.date])cdd[l.date]={};
     cdd[l.date][l.drink]=(cdd[l.date][l.drink]||0)+(l.quantity||0);
   });
+
+  // Only replacements for open-tab dates
   STATE.replacements.forEach(function(r){
     if(!r.quantity || r.drink === '_SESSION_CLOSED_') return;
-    if (sessionCutoffTs){
-      var repTs = r.logged_at || (r.for_date + 'T00:00:00.000Z');
-      if (repTs <= sessionCutoffTs) return;
-    }
+    if(!openTabDates.has(r.for_date)) return;
     if(!rdd[r.for_date])rdd[r.for_date]={};
     rdd[r.for_date][r.drink]=(rdd[r.for_date][r.drink]||0)+(r.quantity||0);
   });
@@ -4921,13 +4897,10 @@ function renderReplace(){
     if ((parseFloat(l.unit_price)||0) === 0)
       freeFundConsumed[l.drink] = (freeFundConsumed[l.drink]||0) + (l.quantity||0);
   });
-  // Replacements for settled sessions restore fund capacity
-  var sessionLogsForFund = getSessionLogs();
-  var openTabDatesSet = new Set(sessionLogsForFund.map(function(l){ return l.date; }));
+  // Replacements for settled dates restore fund capacity (openTabDates defined above)
   STATE.replacements.forEach(function(r){
     if (r.drink && (r.quantity||0) > 0 && r.drink !== '_SESSION_CLOSED_'){
-      // Only count replacements for settled dates (not in current open tab)
-      if (!openTabDatesSet.has(r.for_date))
+      if (!openTabDates.has(r.for_date))
         freeFundConsumed[r.drink] = Math.max(0, (freeFundConsumed[r.drink]||0) - (r.quantity||0));
     }
   });
