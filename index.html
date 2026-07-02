@@ -1226,6 +1226,48 @@ function renderLog(){
     '<span style="margin-left:auto;font-size:18px">⬆️</span>'+
   '</button>';
 
+  // ── DEBUG: Detailed settlement trace ──
+  (function(){
+    var allDates = [...new Set(STATE.logs.map(function(l){return l.date;}))].sort();
+    var lastSettled = null;
+    var dbg = '<div class="card" style="background:#e8f0ff;border:2px solid blue;font-size:10px;word-break:break-all;margin-bottom:8px">';
+    dbg += '<b>Settlement Trace</b><br>';
+    for (var i=0; i<allDates.length; i++){
+      var d = allDates[i];
+      var prevSettled = lastSettled;
+      var sessionDrinkers = [...new Set(STATE.logs
+        .filter(function(l){ return l.date <= d && (!prevSettled || l.date > prevSettled); })
+        .map(function(l){ return l.person; })
+      )];
+      var closers = (STATE.tabCloses||[])
+        .filter(function(c){ return c.closed_at <= d && (!prevSettled || c.closed_at > prevSettled); })
+        .map(function(c){ return c.person; });
+      var allClosed = sessionDrinkers.length > 0 && sessionDrinkers.every(function(p){
+        return closers.indexOf(p) !== -1;
+      });
+      var bill = STATE.logs.reduce(function(s,l){
+        var inSession = l.date <= d && (!prevSettled || l.date > prevSettled);
+        return inSession && (parseFloat(l.unit_price)||0) > 0 ? s+(parseFloat(l.total_price)||0) : s;
+      }, 0);
+      var paid = STATE.payments.reduce(function(s,p){
+        var inSession = p.date <= d && (!prevSettled || p.date > prevSettled);
+        return inSession ? s+(parseFloat(p.amount)||0) : s;
+      }, 0);
+      var moneyOk = bill <= 0.005 || paid >= bill - 0.01;
+      var settles = allClosed && moneyOk;
+      if (settles) lastSettled = d;
+      dbg += '<div style="padding:2px 0;border-bottom:1px solid #ccd">';
+      dbg += '<b>'+d+'</b> → allClosed:'+allClosed+' bill:€'+bill.toFixed(2)+' paid:€'+paid.toFixed(2)+' moneyOk:'+moneyOk+' SETTLES:'+settles+'<br>';
+      dbg += 'drinkers:['+sessionDrinkers.join(',')+'] closers:['+closers.join(',')+']';
+      var missing = sessionDrinkers.filter(function(p){ return closers.indexOf(p)===-1; });
+      if (missing.length) dbg += ' <span style="color:red">MISSING:['+missing.join(',')+']</span>';
+      dbg += '</div>';
+    }
+    dbg += '<br>Final lastSettled: <b>'+(lastSettled||'null')+'</b>';
+    dbg += '</div>';
+    html += dbg;
+  })();
+
   // ── SECTION 6: Historical consolidated running tabs ──
   html += renderConsolidatedToday();
 
@@ -2749,12 +2791,14 @@ function getLastSettlementDate(){
 
     if (!allClosed) continue;
 
-    // Money check
+    // Money check — only for this session (since prevSettled date)
     var bill = STATE.logs.reduce(function(s,l){
-      return l.date <= d && (parseFloat(l.unit_price)||0) > 0 ? s+(parseFloat(l.total_price)||0) : s;
+      var inSession = l.date <= d && (!prevSettled || l.date > prevSettled);
+      return inSession && (parseFloat(l.unit_price)||0) > 0 ? s+(parseFloat(l.total_price)||0) : s;
     }, 0);
     var paid = STATE.payments.reduce(function(s,p){
-      return p.date <= d ? s+(parseFloat(p.amount)||0) : s;
+      var inSession = p.date <= d && (!prevSettled || p.date > prevSettled);
+      return inSession ? s+(parseFloat(p.amount)||0) : s;
     }, 0);
     var moneyOk = bill <= 0.005 || paid >= bill - 0.01;
 
@@ -2954,17 +2998,21 @@ async function closeMyTab(person){
     ? fmtDate(sessionDates[0])+' → '+fmtDate(sessionDates[sessionDates.length-1])
     : sessionDates.length === 1 ? fmtDate(sessionDates[0]) : fmtDate(today);
 
-  // Check for any unpaid priced drinks (all-time)
+  // Check unpaid priced drinks for THIS session only
+  var lastSD = getLastSettlementDate();
   var pricedTotal = STATE.logs.reduce(function(s,l){
-    return l.person===person&&(parseFloat(l.unit_price)||0)>0 ? s+(parseFloat(l.total_price)||0) : s;
+    if (l.person!==person||(parseFloat(l.unit_price)||0)<=0) return s;
+    if (lastSD && l.date <= lastSD) return s; // skip past sessions
+    return s+(parseFloat(l.total_price)||0);
   },0);
   var paidTotal = STATE.payments.reduce(function(s,p){
+    if (lastSD && p.date <= lastSD) return s;
     var pp=(p.payers||'').split(',').map(function(x){return x.trim();});
     return pp.indexOf(person)!==-1?s+(parseFloat(p.amount)||0):s;
   },0);
   var moneyOwed = Math.max(0, pricedTotal - paidTotal);
 
-  if (moneyOwed > 0.01){
+  if (moneyOwed > 0.01 && !IS_ADMIN){
     notify('⚠️ '+(isDE?'Bitte zuerst die Rechnung bezahlen: €'+moneyOwed.toFixed(2):'Please pay the outstanding bill first: €'+moneyOwed.toFixed(2)),true);
     return;
   }
@@ -2984,7 +3032,7 @@ async function closeMyTab(person){
     '</div>'+
     '<button onclick="doCloseMyTab(\''+esc(person)+'\',\''+esc(note)+'\','+freeCount+')" '+
       'style="width:100%;background:linear-gradient(135deg,#1f8a4f,#28b866);border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:800;padding:14px;cursor:pointer;margin-bottom:8px">'+
-      '✅ '+(isDE?'Ja, Tab schließen':'Yes, Close My Tab')+'</button>'+
+      '✅ '+(IS_ADMIN && person!==CURRENT_NAME ? (isDE?'Tab für '+esc(person)+' schließen':'Close Tab for '+esc(person)) : (isDE?'Ja, Tab schließen':'Yes, Close My Tab'))+'</button>'+
     '<button class="modal-close" onclick="closeModal()" style="width:100%">'+esc(t('cancel'))+'</button>'
   );
 }
