@@ -4838,8 +4838,6 @@ function renderReplace(){
   var tot_r = allDrinks.reduce(function(s,d){return s+ob[d].replaced;},0);
   var tot_rem = allDrinks.reduce(function(s,d){return s+ob[d].remaining;},0);
 
-  el.innerHTML = debugHtml; // temp debug
-
   if(!allDrinks.length){
     var emptyHtml = '<div style="text-align:center;padding:24px 16px">';
     emptyHtml += '<div style="font-size:48px;margin-bottom:12px">✅</div>';
@@ -4876,7 +4874,7 @@ function renderReplace(){
         }).join(''));
       }
     }
-    el.innerHTML = emptyHtml;
+    el.innerHTML = debugHtml + emptyHtml;
     return;
   }
 
@@ -5088,7 +5086,7 @@ function renderReplace(){
     html += '</div>';
   }
 
-  el.innerHTML=html;
+  el.innerHTML = debugHtml + html;
 
   // Restore any note inputs being typed when re-render fired
   Object.keys(savedNotes).forEach(function(id){
