@@ -1073,10 +1073,21 @@ async function audit(action, table, id, details){
 // ── OWNERSHIP CHECK ─────────────────────────────────────────
 function isMine(row){
   if (IS_ADMIN) return true;
-  if (IS_GUEST) return row.guest_token === GUEST_TOKEN;
-  // Logged-in non-admin: check if they logged this entry (by user_id or by name)
-  if (CURRENT_USER && row.user_id && row.user_id === CURRENT_USER.id) return true;
-  if (CURRENT_NAME && (row.added_by === CURRENT_NAME || row.logged_by === CURRENT_NAME)) return true;
+  if (!CURRENT_NAME) return false;
+
+  // 1. Strongest check: user_id match (logged-in users, works across devices)
+  if (CURRENT_USER && CURRENT_USER.id && row.user_id) {
+    return row.user_id === CURRENT_USER.id;
+  }
+
+  // 2. Guest token match (same device/session only)
+  if (IS_GUEST && row.guest_token && row.guest_token === GUEST_TOKEN) return true;
+
+  // 3. Name-based fallback: covers cross-device, re-login, guest sessions, older entries
+  //    "It's my drink" (person) OR "I logged it for someone" (added_by/logged_by)
+  if (row.person === CURRENT_NAME) return true;
+  if (row.added_by === CURRENT_NAME || row.logged_by === CURRENT_NAME) return true;
+
   return false;
 }
 
@@ -1520,7 +1531,7 @@ function buildRunningRow(person, pd, today, isDE){
                 '€'+pd.total.toFixed(2)+' ✏️</button>'
               : '<div class="rtab-total">€'+pd.total.toFixed(2)+'</div>')
           : '')+
-        (!tabClosedToday && (isMe || IS_ADMIN || info.entries.some(function(l){ return isMine(l); }))
+        (!tabClosedToday && (isMe || IS_ADMIN || pd.entries.some(function(l){ return isMine(l); }))
           ? '<button onclick="event.stopPropagation();closeMyTab(\''+esc(person)+'\')" '+
               'style="background:#1f8a4f;border:none;border-radius:9px;padding:5px 10px;cursor:pointer;font-size:12px;font-weight:800;color:#fff;white-space:nowrap;margin-top:2px">'+
               '✅ '+(isDE?'Tab zu':'Close tab')+(person!==CURRENT_NAME?' ('+esc(person)+')':'')+'</button>'
