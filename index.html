@@ -1245,34 +1245,56 @@ function renderLog(){
 
 // Returns true only if person's latest tab close has NO drinks logged after its timestamp.
 // This means: closing at 8am then ordering at 11am reopens the tab automatically.
-function isTabTrulyClosed(person, forDate){
-  // Only consider closes from the current session (after last settlement)
-  var lastSD = getLastSettlementDate();
-  var closesForPerson = (STATE.tabCloses||[]).filter(function(c){
-    if (c.person !== person) return false;
-    if (lastSD && c.closed_at <= lastSD) return false; // ignore past session closes
-    return true;
-  });
-  if (!closesForPerson.length) return false;
-  // Most recent close in this session
-  closesForPerson.sort(function(a,b){
+// ─── PER-PERSON SETTLEMENT ─────────────────────────────────
+// Simple rule: each person has their own tab.
+// They are settled when they have a tab close AND no drinks after it.
+// Admin can close/edit/delete anyone's tab close.
+
+function getPersonLastClose(person){
+  // Returns the most recent tab_close record for this person
+  var closes = (STATE.tabCloses||[]).filter(function(c){ return c.person === person; });
+  if (!closes.length) return null;
+  return closes.sort(function(a,b){
     var ta = a.created_at || (a.closed_at+'T23:59:59Z');
     var tb = b.created_at || (b.closed_at+'T23:59:59Z');
     return tb > ta ? 1 : -1;
-  });
-  var lastClose = closesForPerson[0];
-  var closeTs = lastClose.created_at || (lastClose.closed_at+'T23:59:59Z');
-  var closeDate = lastClose.closed_at;
-  if (forDate && closeDate !== forDate) return false;
-  // Check no drinks logged AFTER this close
-  var logsAfter = STATE.logs.filter(function(l){
+  })[0];
+}
+
+function getPersonCloseTs(person){
+  // Returns ISO timestamp of person's last close, or null
+  var lc = getPersonLastClose(person);
+  if (!lc) return null;
+  return lc.created_at || (lc.closed_at+'T23:59:59Z');
+}
+
+function getPersonSessionLogs(person){
+  // Logs after the person's last close (their current open tab)
+  // If never closed: all their logs
+  var closeTs = getPersonCloseTs(person);
+  return STATE.logs.filter(function(l){
     if (l.person !== person) return false;
-    if (lastSD && l.date <= lastSD) return false;
-    if (forDate && l.date !== forDate) return false;
+    if (!closeTs) return true;
     var logTs = l.logged_at || (l.date+'T00:00:00Z');
     return logTs > closeTs;
   });
-  return logsAfter.length === 0;
+}
+
+function isPersonSettled(person){
+  // Person is settled if they have a close AND no drinks logged after it
+  var closeTs = getPersonCloseTs(person);
+  if (!closeTs) return false;
+  return getPersonSessionLogs(person).length === 0;
+}
+
+// Keep isTabTrulyClosed as alias for backward compat
+function isTabTrulyClosed(person, forDate){
+  if (forDate) {
+    // Legacy: check if person closed on a specific date with no drinks after
+    var lc = getPersonLastClose(person);
+    if (!lc || lc.closed_at !== forDate) return false;
+  }
+  return isPersonSettled(person);
 }
 
 // Render today's bar tab (only today, live running)
@@ -1987,9 +2009,8 @@ function renderConsolidatedToday(){
     var bottlesRemaining = Math.max(0, totalBottlesOwed - totalBottlesReplaced);
     var bottlesSettled = totalBottlesOwed === 0 || bottlesRemaining === 0;
 
-    // If person closed their tab this session, they are fully settled
-    // Tab close = explicit sign-off, covers both money (must be €0 or paid) and bottles (fund covers them)
-    var personTabClosed = isTabTrulyClosed(person);
+    // Per-person: settled = they closed their tab AND no drinks after it
+    var personTabClosed = isPersonSettled(person);
     var isSettled = personTabClosed || (moneySettled && bottlesSettled);
 
     // DEBUG removed — use console in browser to check
@@ -2231,219 +2252,109 @@ function renderConsolidatedToday(){
     html += card(t('runningTabsTitle'), unsettledHtml);
   }
 
-  // ── SETTLED UP ──
-  // A session boundary is any date where either:
-  //   • money: a full payment was recorded covering all priced drinks so far, OR
-  //   • free: at least one person closed their tab (marks the end of that session day)
-  // We collect all such boundaries and build session blocks between them.
+  // ── SETTLED UP — per-person ──
+  // Each person's settled history is independent.
+  // Admin can reopen, edit or delete any person's tab close.
   {
     var isDE = LANG === 'de';
-    var sessions = [];
 
-    if (STATE.logs.length) {
-      var allLogDates = [...new Set(STATE.logs.map(function(l){ return l.date; }))].sort();
-      var sessionStart = allLogDates[0];
-      var prevCumPaid = 0;
-
-      // Mirror getLastSettlementDate — closers-only bill check
-      var maxIter2 = 20;
-      while (sessionStart && maxIter2-- > 0) {
-        var sesClosers = [...new Set((STATE.tabCloses||[])
-          .filter(function(c){ return c.closed_at >= sessionStart; })
-          .map(function(c){ return c.person; })
-        )];
-        if (!sesClosers.length) break;
-
-        var sesLastCloseDate = (STATE.tabCloses||[])
-          .filter(function(c){ return c.closed_at >= sessionStart; })
-          .reduce(function(max,c){ return c.closed_at>max?c.closed_at:max; }, sessionStart);
-
-        var sesCloserDrinks = STATE.logs.filter(function(l){
-          return l.date>=sessionStart && l.date<=sesLastCloseDate
-            && sesClosers.indexOf(l.person)!==-1 && (parseFloat(l.unit_price)||0)>0;
-        });
-        var sesBill = sesCloserDrinks.reduce(function(s,l){ return s+(parseFloat(l.total_price)||0); },0);
-        var sesPaid = STATE.payments
-          .filter(function(p){ return p.date>=sessionStart && p.date<=sesLastCloseDate; })
-          .reduce(function(s,p){ return s+(parseFloat(p.amount)||0); },0);
-        var sesMoneyOk = sesBill<=0.005 || sesPaid>=sesBill-0.01;
-        if (!sesMoneyOk) break;
-
-        var sesCloserDates = STATE.logs
-          .filter(function(l){ return l.date>=sessionStart && sesClosers.indexOf(l.person)!==-1; })
-          .map(function(l){ return l.date; });
-        var sesLastDate = sesCloserDates.length
-          ? sesCloserDates.reduce(function(max,d){ return d>max?d:max; }, sessionStart)
-          : sesLastCloseDate;
-
-        sessions.push({
-          from: sessionStart,
-          to: sesLastDate,
-          moneySettled: sesBill > 0.005,
-          tabCloses: sesClosers
-        });
-        var nextSesDate = allLogDates.filter(function(d){ return d > sesLastDate; });
-        sessionStart = nextSesDate.length ? nextSesDate[0] : null;
-      }
-    }
-
-    // For each session, build a summary per person
+    // Build per-person settled cards
     var settledHtml = '';
-    sessions.slice().reverse().forEach(function(sess, si) {
-      var sessId = 'sess-'+si;
-      var sessLogs = STATE.logs.filter(function(l){ return l.date >= sess.from && l.date <= sess.to; });
-      var sessPays = STATE.payments.filter(function(p){ return p.date >= sess.from && p.date <= sess.to; });
-      var sessReps  = STATE.replacements.filter(function(r){ return r.for_date >= sess.from && r.for_date <= sess.to; });
-
-      var sessTotalBill = sessLogs.reduce(function(s,l){ return s+(parseFloat(l.total_price)||0); }, 0);
-      var sessTotalPaid = sessPays.reduce(function(s,p){ return s+(parseFloat(p.amount)||0); }, 0);
-
-      // ── Fund-aware bottle calculation (same logic as running tabs) ──
-      var CRATE_SIZE_SESS = 20;
-      // Free contributions fund per drink type (all-time, not session-scoped — fund is communal)
-      var sessFreeFund = {};
-      (STATE.freeContributions||[]).forEach(function(c){
-        if (!c.drink) return;
-        sessFreeFund[c.drink] = (sessFreeFund[c.drink]||0) + (c.crates||0)*CRATE_SIZE_SESS + (c.extra_bottles||0);
+    // Get all people who have ever closed their tab
+    var allClosedPeople = [...new Set((STATE.tabCloses||[]).map(function(c){ return c.person; }))];
+    // Sort: most recently closed first
+    allClosedPeople.sort(function(a,b){
+      var ta = getPersonCloseTs(a)||'';
+      var tb = getPersonCloseTs(b)||'';
+      return tb > ta ? 1 : -1;
+    });
+    allClosedPeople.forEach(function(person, si) {
+      var lc = getPersonLastClose(person);
+      if (!lc) return;
+      var closeTs = getPersonCloseTs(person);
+      // Logs in their last closed tab (before the close)
+      var sessLogs = STATE.logs.filter(function(l){
+        if (l.person !== person) return false;
+        // Get all closes for this person sorted newest first
+        var allCloses = (STATE.tabCloses||[]).filter(function(c){ return c.person===person; })
+          .sort(function(a,b){ return (b.created_at||b.closed_at)>(a.created_at||a.closed_at)?1:-1; });
+        // Previous close = the one before the current last close
+        var prevClose = allCloses[1];
+        var prevCloseTs = prevClose ? (prevClose.created_at||(prevClose.closed_at+'T23:59:59Z')) : null;
+        var logTs = l.logged_at||(l.date+'T00:00:00Z');
+        // Log must be after previous close and before current close
+        var afterPrev = !prevCloseTs || logTs > prevCloseTs;
+        var beforeCurrent = logTs <= closeTs;
+        return afterPrev && beforeCurrent;
       });
-      // Total free drinks consumed per drink type across ALL logs (communal pool basis)
-      var sessFreeCommunal = {};
-      STATE.logs.forEach(function(l){
-        if ((parseFloat(l.unit_price)||0) > 0) return;
-        sessFreeCommunal[l.drink] = (sessFreeCommunal[l.drink]||0) + (l.quantity||0);
-      });
-      // Total replacements per drink type across ALL replacements
-      var sessReplacedCommunal = {};
-      STATE.replacements.forEach(function(r){
-        sessReplacedCommunal[r.drink] = (sessReplacedCommunal[r.drink]||0) + (r.quantity||0);
-      });
-      // Count free drinks in this session that are NOT covered by fund or replacements
-      var sessBottlesOwed = 0;
-      var sessDrinkFree = {};
-      sessLogs.forEach(function(l){
-        if ((parseFloat(l.unit_price)||0) > 0) return;
-        sessDrinkFree[l.drink] = (sessDrinkFree[l.drink]||0) + (l.quantity||0);
-      });
-      Object.keys(sessDrinkFree).forEach(function(drink){
-        var communalFree = sessFreeCommunal[drink]||0;
-        var fundCover    = sessFreeFund[drink]||0;
-        var replaced     = sessReplacedCommunal[drink]||0;
-        // If fund + replacements cover all communal free drinks, none owed
-        if (communalFree > 0 && (fundCover + replaced) >= communalFree) return;
-        sessBottlesOwed += sessDrinkFree[drink];
-      });
-      var sessTotalFree = Object.values(sessDrinkFree).reduce(function(s,v){return s+v;},0);
-      var sessTotalReplaced = sessReps.reduce(function(s,r){ return s+(r.quantity||0); }, 0);
+      var sessId = 'settled-person-'+si;
+      var closeDateLabel = lc.closed_at ? fmtDate(lc.closed_at) : '';
+      var sessQty = sessLogs.reduce(function(s,l){ return s+(l.quantity||0); },0);
+      var sessCost = sessLogs.reduce(function(s,l){ return s+(parseFloat(l.total_price)||0); },0);
+      var drinkCounts = {};
+      sessLogs.forEach(function(l){ drinkCounts[l.drink]=(drinkCounts[l.drink]||0)+(l.quantity||0); });
+      var drinkTags = Object.entries(drinkCounts).map(function(e){
+        return '<span class="drink-tag">'+emoji(e[0])+' ×'+e[1]+'</span>';
+      }).join('');
+      // Per-person settled card
+      var sessTotalBill = sessLogs.reduce(function(s,l){ return s+(parseFloat(l.total_price)||0); },0);
+      var sessTotalFree = sessLogs.filter(function(l){return (parseFloat(l.unit_price)||0)===0;}).reduce(function(s,l){return s+(l.quantity||0);},0);
+      var closeDateLabel = lc.closed_at ? fmtDate(lc.closed_at) : '';
 
-      var moneyOk = sessTotalPaid >= sessTotalBill - 0.01;
-      var bottlesOk = sessBottlesOwed === 0;
-      var allOk = moneyOk && bottlesOk;
+      // Drink tags
+      var drinkCounts2 = {};
+      sessLogs.forEach(function(l){ drinkCounts2[l.drink]=(drinkCounts2[l.drink]||0)+(l.quantity||0); });
+      var drinkTagsHtml = Object.entries(drinkCounts2).map(function(e){
+        return '<span class="drink-tag">'+emoji(e[0])+' ×'+e[1]+'</span>';
+      }).join('');
 
-      var dateLabel = sess.from === sess.to ? fmtDate(sess.from) : fmtDate(sess.from)+' → '+fmtDate(sess.to);
-      var statusBadge = allOk
-        ? '<span style="background:#d4f5e2;color:#1f8a4f;border-radius:8px;padding:3px 10px;font-size:12px;font-weight:700">✅ '+(isDE?'Vollständig beglichen':'Fully settled')+'</span>'
-        : '<span style="background:#fef3cd;color:#7a5200;border-radius:8px;padding:3px 10px;font-size:12px;font-weight:700">⏳ '+(isDE?'Teilweise offen':'Partially pending')+'</span>';
+      // Admin controls for this person's tab close
+      var adminCloseControls = IS_ADMIN
+        ? '<div style="display:flex;gap:6px;margin-top:8px">'+
+            '<button onclick="event.stopPropagation();adminReopenTab(\''+esc(person)+'\',\''+esc(lc.id||'')+'\')" '+
+              'style="background:#fce8e6;border:1.5px solid #c4392b;border-radius:7px;color:#c4392b;font-size:11px;font-weight:700;padding:4px 8px;cursor:pointer">'+
+              '↩ Reopen tab</button>'+
+            '<button onclick="event.stopPropagation();closeMyTab(\''+esc(person)+'\')" '+
+              'style="background:#f5ede4;border:1.5px solid #b5481f;border-radius:7px;color:#b5481f;font-size:11px;font-weight:700;padding:4px 8px;cursor:pointer">'+
+              '✅ Re-close</button>'+
+          '</div>'
+        : '';
 
-      var moneyBadge = moneyOk
-        ? '<span style="font-size:11px;background:#d4f5e2;color:#1f8a4f;border-radius:5px;padding:1px 6px;font-weight:700">💶 '+(isDE?'Bezahlt':'Paid')+'</span>'
-        : '<span style="font-size:11px;background:#fce8e6;color:#c4392b;border-radius:5px;padding:1px 6px;font-weight:700">💶 €'+(sessTotalBill-sessTotalPaid).toFixed(2)+' '+(isDE?'ausstehend':'pending')+'</span>';
-
-      // Collect sponsor names for the drinks consumed free in this session
-      var sessSponsors = [];
-      if (sessTotalFree > 0 && bottlesOk) {
-        var sponsorSet = {};
-        Object.keys(sessDrinkFree).forEach(function(drink) {
-          (STATE.freeContributions||[]).forEach(function(c) {
-            if (c.drink === drink && c.person) sponsorSet[c.person] = true;
-          });
-        });
-        sessSponsors = Object.keys(sponsorSet).sort();
-      }
-
-      var bottleBadge = sessTotalFree === 0 ? '' : bottlesOk
-        ? '<span style="font-size:11px;background:#e8f4ff;color:#1a5a8a;border-radius:5px;padding:2px 8px;font-weight:700">'+          Object.keys(sessDrinkFree).map(function(d){return emoji(d);}).join(' ')+          ' '+(isDE?'Freibier gesponsert von':'Free '+Object.keys(sessDrinkFree).map(function(d){return d.replace(/^.+? /,'');}).join(' & ')+' sponsored by')+          ' '+esc(sessSponsors.join(', '))+'</span>'
-        : '<span style="font-size:11px;background:#fef3cd;color:#7a5200;border-radius:5px;padding:1px 6px;font-weight:700">🍾 '+sessBottlesOwed+' '+(isDE?'offen':'to replace')+'</span>';
-
-      // ── Session header row ──
       settledHtml +=
         '<div style="border:1.5px solid #e8dccc;border-radius:12px;overflow:hidden;margin-bottom:8px">'+
-        // Accordion toggle row
-        '<div onclick="(function(el){el.style.display=el.style.display===\'none\'?\'\':\'none\';})(document.getElementById(\''+sessId+'\'))" '+
-          'style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:#f5ede4;cursor:pointer">'+
-          '<div style="font-size:11px;color:#9a7060;min-width:16px">▶</div>'+
-          '<div style="flex:1;min-width:0">'+
-            '<div style="font-size:13px;font-weight:700;color:#1a0e08">'+dateLabel+'</div>'+
-            '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px">'+
-              statusBadge+moneyBadge+bottleBadge+
+          '<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:#f5ede4;cursor:pointer" '+
+            'onclick="(function(el){el.style.display=el.style.display===\'none\'?\'\':\'none\';})(document.getElementById(\''+sessId+'\'))">'+
+            '<div style="width:32px;height:32px;border-radius:50%;background:'+colorFor(person)+';display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0">'+person[0].toUpperCase()+'</div>'+
+            '<div style="flex:1;min-width:0">'+
+              '<div style="font-size:13px;font-weight:700;color:#1a0e08">'+esc(person)+'</div>'+
+              '<div style="font-size:11px;color:#7a5200;margin-top:2px">'+
+                '✅ '+closeDateLabel+
+                (sessTotalBill>0?' · €'+sessTotalBill.toFixed(2):'')+(sessTotalFree>0?' · 🍾×'+sessTotalFree:'')+
+              '</div>'+
+              '<div style="margin-top:4px">'+drinkTagsHtml+'</div>'+
             '</div>'+
           '</div>'+
-          '<div style="text-align:right;flex-shrink:0">'+
-            '<div style="font-size:15px;font-weight:800;color:#b5481f">€'+sessTotalBill.toFixed(2)+'</div>'+
-            '<div style="font-size:10px;color:#7a5200">'+sessLogs.reduce(function(s,l){return s+(l.quantity||0);},0)+' '+(isDE?'Getränke':'drinks')+'</div>'+
-          '</div>'+
-        '</div>'+
-
-        // ── Expandable detail: per-person breakdown ──
-        '<div id="'+sessId+'" style="display:none">'+
-          (function(){
-            var peopleInSess = [...new Set(sessLogs.map(function(l){return l.person;}))].sort();
-            return peopleInSess.map(function(person){
-              var pLogs = sessLogs.filter(function(l){return l.person===person;});
-              var pSpent = pLogs.reduce(function(s,l){return s+(parseFloat(l.total_price)||0);},0);
-              var pPaid  = sessPays.reduce(function(s,p){
-                var pp=(p.payers||'').split(',').map(function(x){return x.trim();});
-                return pp.indexOf(person)!==-1?s+(parseFloat(p.amount)||0):s;
-              },0);
-              var pFree  = pLogs.filter(function(l){return (parseFloat(l.unit_price)||0)===0;}).reduce(function(s,l){return s+(l.quantity||0);},0);
-              var pOwes  = pSpent - pPaid;
-              var pSettled = pOwes <= 0.01;
-
-              // Drink summary
-              var drinkSummary = {};
-              pLogs.forEach(function(l){ drinkSummary[l.drink]=(drinkSummary[l.drink]||0)+(l.quantity||0); });
-              var drinkTags = Object.entries(drinkSummary).map(function(e){
-                return '<span style="font-size:11px;background:#f5ede4;border-radius:5px;padding:1px 6px;color:#5a3a28;font-weight:600">'+emoji(e[0])+'×'+e[1]+'</span>';
-              }).join('');
-
-              // Date-by-date breakdown
+          '<div id="'+sessId+'" style="display:none;padding:10px 14px">'+
+            // Date-by-date detail
+            (function(){
               var byDate2 = {};
-              pLogs.forEach(function(l){ (byDate2[l.date]=byDate2[l.date]||[]).push(l); });
-              var dateRows = Object.keys(byDate2).sort().map(function(d2){
-                var dayDrinks = {};
-                byDate2[d2].forEach(function(l){ dayDrinks[l.drink]=(dayDrinks[l.drink]||0)+(l.quantity||0); });
-                return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #f5ede4">'+
-                  '<span style="font-size:11px;color:#7a5200;min-width:72px">'+fmtDate(d2)+'</span>'+
-                  '<span style="display:flex;flex-wrap:wrap;gap:3px;flex:1">'+
-                    Object.entries(dayDrinks).map(function(e){
-                      return '<span style="font-size:11px;background:#fce4d0;border-radius:5px;padding:1px 5px;font-weight:600;color:#b5481f">'+emoji(e[0])+'×'+e[1]+'</span>';
-                    }).join('')+
-                  '</span>'+
-                '</div>';
-              }).join('');
-
-              return '<div style="padding:10px 14px;border-top:1px solid #e8dccc;background:'+(pSettled?'#f8fff8':'#fff8f8')+'">'+
-                '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'+
-                  '<div style="width:26px;height:26px;border-radius:50%;background:'+colorFor(person)+';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0">'+person[0].toUpperCase()+'</div>'+
-                  '<div style="flex:1">'+
-                    '<div style="font-size:13px;font-weight:700;color:#1a0e08">'+esc(person)+'</div>'+
-                    '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px">'+drinkTags+'</div>'+
-                  '</div>'+
-                  '<div style="text-align:right;flex-shrink:0">'+
-                    (pSpent>0?'<div style="font-size:13px;font-weight:800;color:'+(pSettled?'#1f8a4f':'#c4392b')+'">'+
-                      (pSettled?'✅ ':'💸 ')+'€'+pSpent.toFixed(2)+'</div>':'')+
-                    (pFree>0?'<div style="font-size:11px;color:#7a5200">🍾 ×'+pFree+'</div>':'')+
-                  '</div>'+
-                '</div>'+
-                // Date-wise detail
-                (dateRows?'<div style="margin-left:34px">'+dateRows+'</div>':'')+
-                // Payment summary
-                (pPaid>0?'<div style="margin-left:34px;margin-top:4px;font-size:11px;color:#1f8a4f">'+
-                  '💶 '+(isDE?'Bezahlt':'Paid')+': €'+pPaid.toFixed(2)+(pSettled?' ✓':' · '+(isDE?'Diff':'Diff')+': €'+Math.abs(pOwes).toFixed(2))+
-                '</div>':'')+
-              '</div>';
-            }).join('');
-          })()+
-        '</div>'+
+              sessLogs.forEach(function(l){ (byDate2[l.date]=byDate2[l.date]||[]).push(l); });
+              return '<div style="font-size:11px;color:#7a5200;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Drink history</div>'+
+                Object.keys(byDate2).sort().map(function(d2){
+                  var dayDrinks = {};
+                  byDate2[d2].forEach(function(l){ dayDrinks[l.drink]=(dayDrinks[l.drink]||0)+(l.quantity||0); });
+                  return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #f5ede4">'+
+                    '<span style="font-size:11px;color:#7a5200;min-width:72px">'+fmtDate(d2)+'</span>'+
+                    '<span style="display:flex;flex-wrap:wrap;gap:3px;flex:1">'+
+                      Object.entries(dayDrinks).map(function(e){
+                        return '<span style="font-size:11px;background:#fce4d0;border-radius:5px;padding:1px 5px;font-weight:600;color:#b5481f">'+emoji(e[0])+'×'+e[1]+'</span>';
+                      }).join('')+
+                    '</span>'+
+                  '</div>';
+                }).join('');
+            })()+
+            adminCloseControls+
+          '</div>'+
         '</div>';
     });
 
@@ -2757,93 +2668,42 @@ async function saveLog(){
 // A "session" = all logs since the last time EVERYONE's bill was fully settled.
 // This prevents yesterday's settled drinks mixing into today's counts/leaderboard.
 function getLastSettlementDate(){
-  // SESSION SETTLEMENT ALGORITHM
-  //
-  // A settlement boundary forms when at least one person closes their tab
-  // AND their priced drinks are fully paid.
-  //
-  // KEY RULES:
-  // 1. Only CLOSERS' priced drinks count toward the money check.
-  //    Unclosed people's unpaid bills don't block settlement.
-  // 2. Unclosed people's drinks stay in their running tab (getSessionLogs handles this).
-  // 3. Settlement date = last log date of closers' drinks in this session.
+  // With per-person settlement, this returns the earliest close date
+  // among ALL people who have settled — used mainly for fund calculations.
+  // Returns null if no one has settled yet.
+  var settled = STATE.logs
+    .map(function(l){ return l.person; })
+    .filter(function(p,i,a){ return a.indexOf(p)===i; })
+    .filter(function(p){ return isPersonSettled(p); });
 
-  if (!STATE.logs.length) return null;
+  if (!settled.length) return null;
 
-  var allLogDates = [...new Set(STATE.logs.map(function(l){return l.date;}))].sort();
-  var lastSettled = null;
-  var sessionStart = allLogDates[0];
-  var maxIter = 20;
-
-  while (sessionStart && maxIter-- > 0) {
-    // Who closed their tab after sessionStart?
-    var sessionClosers = [...new Set((STATE.tabCloses||[])
-      .filter(function(c){ return c.closed_at >= sessionStart; })
-      .map(function(c){ return c.person; })
-    )];
-    if (!sessionClosers.length) break;
-
-    // Latest close date among closers
-    var lastCloseDate = (STATE.tabCloses||[])
-      .filter(function(c){ return c.closed_at >= sessionStart; })
-      .reduce(function(max,c){ return c.closed_at > max ? c.closed_at : max; }, sessionStart);
-
-    // Only CLOSERS' priced drinks count toward the bill
-    var closerBill = STATE.logs
+  // Return the earliest "last drink date" among settled people
+  // (i.e. the oldest settled session end date — used as fund cutoff)
+  var dates = settled.map(function(p){
+    var closeTs = getPersonCloseTs(p);
+    var lastDrink = STATE.logs
       .filter(function(l){
-        return l.date >= sessionStart && l.date <= lastCloseDate
-          && sessionClosers.indexOf(l.person) !== -1
-          && (parseFloat(l.unit_price)||0) > 0;
+        if (l.person !== p) return false;
+        var logTs = l.logged_at || (l.date+'T00:00:00Z');
+        return logTs <= closeTs;
       })
-      .reduce(function(s,l){ return s+(parseFloat(l.total_price)||0); }, 0);
+      .reduce(function(max,l){ return l.date > max ? l.date : max; }, '');
+    return lastDrink;
+  }).filter(Boolean);
 
-    // All payments in the session window
-    var sessionPaid = STATE.payments
-      .filter(function(p){ return p.date >= sessionStart && p.date <= lastCloseDate; })
-      .reduce(function(s,p){ return s+(parseFloat(p.amount)||0); }, 0);
-
-    var moneyOk = closerBill <= 0.005 || sessionPaid >= closerBill - 0.01;
-    if (!moneyOk) break;
-
-    // Settlement date = last log date of ANY closer in this session
-    var closerLogDates = STATE.logs
-      .filter(function(l){ return l.date >= sessionStart && sessionClosers.indexOf(l.person) !== -1; })
-      .map(function(l){ return l.date; });
-    var lastLogDate = closerLogDates.length
-      ? closerLogDates.reduce(function(max,d){ return d > max ? d : max; }, sessionStart)
-      : sessionStart;
-
-    lastSettled = lastLogDate;
-
-    var nextDates = allLogDates.filter(function(d){ return d > lastLogDate; });
-    sessionStart = nextDates.length ? nextDates[0] : null;
-  }
-
-  return lastSettled;
+  return dates.length ? dates.sort().pop() : null;
 }
 
-// Returns logs for the current unsettled session.
-// Includes: all logs after lastSettled date (new session)
-// Also includes: logs from people who never closed their tab (their debt carries forward)
+// Returns current open tab logs for ALL people.
+// Per-person: each person's session = their logs after their last close.
 function getSessionLogs(){
-  var lastSettled = getLastSettlementDate();
-  if (!lastSettled) return STATE.logs;
-
-  // People who have closed their tab (at any point after lastSettled)
-  var closersAfter = [...new Set((STATE.tabCloses||[])
-    .filter(function(c){ return c.closed_at > lastSettled; })
-    .map(function(c){ return c.person; })
-  )];
-
-  return STATE.logs.filter(function(l){
-    // Always include logs after lastSettled (current session)
-    if (l.date > lastSettled) return true;
-    // Also include logs from people who NEVER closed (their old debt still shows)
-    // i.e. they drank in the settled window but never explicitly closed
-    var personClosed = (STATE.tabCloses||[]).some(function(c){ return c.person === l.person; });
-    if (!personClosed) return true; // never closed at all — always show in running tab
-    return false;
+  var people = [...new Set(STATE.logs.map(function(l){ return l.person; }))];
+  var result = [];
+  people.forEach(function(person){
+    result = result.concat(getPersonSessionLogs(person));
   });
+  return result;
 }
 
 // ── DRINK COUNT CELEBRATION POPUP ───────────────────────────
@@ -3067,6 +2927,47 @@ async function closeMyTab(person){
       '✅ '+(IS_ADMIN && person!==CURRENT_NAME ? (isDE?'Tab für '+esc(person)+' schließen':'Close Tab for '+esc(person)) : (isDE?'Ja, Tab schließen':'Yes, Close My Tab'))+'</button>'+
     '<button class="modal-close" onclick="closeModal()" style="width:100%">'+esc(t('cancel'))+'</button>'
   );
+}
+
+async function adminReopenTab(person, closeId){
+  if (!IS_ADMIN) return;
+  var isDE = LANG === 'de';
+  window._pendingReopenPerson = person;
+  window._pendingReopenId = closeId;
+  showModal(
+    '<div style="text-align:center;padding:4px">'+
+      '<div style="font-size:40px;margin-bottom:8px">↩</div>'+
+      '<h3 style="margin-bottom:8px">'+(isDE?'Tab wieder öffnen?':'Reopen tab?')+'</h3>'+
+      '<p style="font-size:13px;color:#5a3a28;margin-bottom:16px">'+esc(person)+'<br>'+
+        '<span style="font-size:12px;color:#7a5200">'+(isDE?'Tab-Schließung wird gelöscht. Getränke bleiben erhalten.':'This removes the tab close. Drinks remain in the log.')+'</span>'+
+      '</p>'+
+      '<div style="display:flex;gap:10px">'+
+        '<button onclick="closeModal()" style="flex:1;background:#f5ede4;border:1.5px solid #e8dccc;border-radius:10px;padding:12px;font-size:15px;font-weight:700;color:#5a3a28;cursor:pointer">'+(isDE?'Abbrechen':'Cancel')+'</button>'+
+        '<button id="confirm-reopen" style="flex:1;background:#c4392b;border:none;border-radius:10px;padding:12px;font-size:15px;font-weight:800;color:#fff;cursor:pointer">↩ '+(isDE?'Öffnen':'Reopen')+'</button>'+
+      '</div>'+
+    '</div>'
+  );
+  setTimeout(function(){
+    var btn = document.getElementById('confirm-reopen');
+    if (btn) btn.onclick = async function(){
+      closeModal();
+      var id = window._pendingReopenId;
+      var person2 = window._pendingReopenPerson;
+      if (id) {
+        var {error} = await SB.from('tab_closes').delete().eq('id', id);
+        if (error) { notify('Error: '+error.message, true); return; }
+      } else {
+        // No ID — delete most recent close for this person
+        var lc = getPersonLastClose(person2);
+        if (lc && lc.id) {
+          var {error} = await SB.from('tab_closes').delete().eq('id', lc.id);
+          if (error) { notify('Error: '+error.message, true); return; }
+        }
+      }
+      notify(esc(person2)+' tab reopened ✓');
+      await loadAll();
+    };
+  }, 50);
 }
 
 async function adminCloseAllTabs(){
@@ -4930,22 +4831,25 @@ function renderReplace(){
     if (!c.drink) return;
     freeFundContrib[c.drink] = (freeFundContrib[c.drink]||0) + (c.crates||0)*CRATE_SIZE_FREE + (c.extra_bottles||0);
   });
-  // Fund available = total contributed minus PREVIOUS sessions' consumption only.
-  // Current session drinks are what we're trying to cover — excluding them here
-  // means fundAvail correctly reflects how many bottles are left to cover this session.
-  var lastSettledDate = getLastSettlementDate();
-  var prevLogs = lastSettledDate
-    ? STATE.logs.filter(function(l){ return l.date <= lastSettledDate; })
-    : [];
+  // Fund consumed = drinks from SETTLED tabs only (per-person)
+  // Current open tab drinks are what we're trying to cover — don't subtract them
+  var settledLogs = STATE.logs.filter(function(l){
+    // A log is "settled" if the person is settled AND this log is before their close
+    var closeTs = getPersonCloseTs(l.person);
+    if (!closeTs) return false; // never closed = not settled
+    var logTs = l.logged_at || (l.date+'T00:00:00Z');
+    return logTs <= closeTs;
+  });
   var freeFundConsumed = {};
-  prevLogs.forEach(function(l){
+  settledLogs.forEach(function(l){
     if ((parseFloat(l.unit_price)||0) === 0)
       freeFundConsumed[l.drink] = (freeFundConsumed[l.drink]||0) + (l.quantity||0);
   });
-  // Past replacements restore fund capacity
+  // Replacements for settled sessions restore fund capacity
   STATE.replacements.forEach(function(r){
     if (r.drink && (r.quantity||0) > 0 && r.drink !== '_SESSION_CLOSED_'){
-      if (!lastSettledDate || r.for_date <= lastSettledDate)
+      // Only count replacements for settled dates
+      if (!openTabDates.has(r.for_date))
         freeFundConsumed[r.drink] = Math.max(0, (freeFundConsumed[r.drink]||0) - (r.quantity||0));
     }
   });
