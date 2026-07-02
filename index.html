@@ -1226,6 +1226,41 @@ function renderLog(){
     '<span style="margin-left:auto;font-size:18px">⬆️</span>'+
   '</button>';
 
+  // ── DEBUG: Settlement trace ──
+  (function(){
+    var allDates = [...new Set(STATE.logs.map(function(l){return l.date;}))].sort();
+    var lastSettled = null;
+    var dbg = '<div class="card" style="background:#e8f0ff;border:2px solid blue;font-size:10px;word-break:break-all;margin-bottom:8px"><b>Settlement Trace</b><br>';
+    for (var i=0; i<allDates.length; i++){
+      var d = allDates[i];
+      var prevSettled = lastSettled;
+      var sessionDrinkers = [...new Set(STATE.logs
+        .filter(function(l){ return l.date <= d && (!prevSettled || l.date > prevSettled); })
+        .map(function(l){ return l.person; })
+      )];
+      var closers = (STATE.tabCloses||[])
+        .filter(function(c){ return c.closed_at <= d && (!prevSettled || c.closed_at > prevSettled); })
+        .map(function(c){ return c.person; });
+      var allClosed = sessionDrinkers.length > 0 && sessionDrinkers.every(function(p){ return closers.indexOf(p)!==-1; });
+      var bill = STATE.logs.reduce(function(s,l){
+        return (l.date<=d&&(!prevSettled||l.date>prevSettled)&&(parseFloat(l.unit_price)||0)>0) ? s+(parseFloat(l.total_price)||0):s;
+      },0);
+      var paid = STATE.payments.reduce(function(s,p){
+        return (p.date<=d&&(!prevSettled||p.date>prevSettled)) ? s+(parseFloat(p.amount)||0):s;
+      },0);
+      var moneyOk = bill<=0.005 || paid>=bill-0.01;
+      var settles = allClosed && moneyOk;
+      if (settles) lastSettled = d;
+      var missing = sessionDrinkers.filter(function(p){ return closers.indexOf(p)===-1; });
+      dbg += '<b>'+d+'</b> allClosed:'+allClosed+' bill:€'+bill.toFixed(2)+' paid:€'+paid.toFixed(2)+' moneyOk:'+moneyOk+' → SETTLES:'+settles;
+      if (missing.length) dbg += ' <span style="color:red">MISSING:'+missing.join(',')+'</span>';
+      dbg += '<br>';
+    }
+    dbg += 'tabCloses this session: '+JSON.stringify((STATE.tabCloses||[]).filter(function(c){return !lastSettled||c.closed_at>lastSettled;}).map(function(c){return c.person+'@'+c.closed_at;}))+'<br>';
+    dbg += '<b>Final lastSettled: '+(lastSettled||'null')+'</b></div>';
+    html += dbg;
+  })();
+
   // ── SECTION 6: Historical consolidated running tabs ──
   html += renderConsolidatedToday();
 
