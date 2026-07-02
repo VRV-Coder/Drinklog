@@ -2359,14 +2359,19 @@ function renderConsolidatedToday(){
     });
 
     var settledId = 'settled-body-main';
+    // Always show settled section — even when empty
+    var finalSettledHtml = settledHtml ||
+      '<div style="text-align:center;padding:20px;color:#7a5200;font-size:13px">📭 ' +
+      (isDE ? 'Noch keine abgeschlossenen Sitzungen.' :
+        'No settled sessions yet.<br><span style="font-size:11px">Close your tab after drinking to record a session.</span>') +
+      '</div>';
+
     html += '<div class="card">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="(function(){var b=document.getElementById(\''+settledId+'\');var a=document.getElementById(\''+settledId+'-arrow\');if(b.style.display===\'none\'){b.style.display=\'\';a.textContent=\'▲\';}else{b.style.display=\'none\';a.textContent=\'▼\';}})()">' +
         '<div class="card-title" style="margin-bottom:0">' + t('settledUpTitle') + '</div>' +
         '<span id="'+settledId+'-arrow" style="font-size:12px;color:#8a7568;margin-left:8px">▲</span>' +
       '</div>' +
-      '<div id="'+settledId+'" style="margin-top:10px">' +
-        (settledHtml || '<div style="text-align:center;padding:20px;color:#7a5200;font-size:13px">📭 '+(isDE?'Noch keine abgeschlossenen Sitzungen.':'No settled sessions yet. Close your tab after drinking to record a session.')+'</div>') +
-      '</div>' +
+      '<div id="'+settledId+'" style="margin-top:10px">' + finalSettledHtml + '</div>' +
     '</div>';
   }
 
@@ -3469,34 +3474,105 @@ function renderDashboard(){
     return card(title, svg);
   }
 
-  // ── THREE CHARTS (hidden for 'today') ─────────────────────
   if (period !== 'today'){
-    html += barChart(drinks,  '#b5481f', '',  '🍺 '+(isDE?'Biere gesamt':'Total Beers'));
-    html += barChart(money,   '#1f8a4f', '€', '💶 '+(isDE?'Ausgaben (€)':'Money Spent (€)'));
-    html += barChart(bottles, '#0e6b8c', '',  '🍾 '+(isDE?'Freie Biere (geloggt)':'Free Beers Logged'));
+    // ── Beers over time chart ─────────────────────────────
+    html += barChart(drinks, '#b5481f', '', '🍺 '+(isDE?'Biere pro Zeitraum':'Beers per period'));
+
+    // ── Session avg per person ─────────────────────────────
+    if (buckets.length) {
+      var avgData = buckets.map(function(b){
+        var people = Object.keys(b.beerPersons||{}).length || 1;
+        return Math.round((b.totalBeers||0) / people * 10) / 10;
+      });
+      html += barChart(avgData, '#7a3a8f', '', '📊 '+(isDE?'Ø Biere pro Person':'Avg beers per person'));
+    }
+
+    // ── Money spent over time ─────────────────────────────
+    if (money.some(function(v){ return v > 0; }))
+      html += barChart(money, '#1f8a4f', '€', '💶 '+(isDE?'Ausgaben':'Money spent'));
   }
 
-  // ── DRINK TYPE BREAKDOWN (all time) ─────────────────────
+  // ── Drink mix — donut-style horizontal bars ────────────
   var drinkTotals = {};
   STATE.logs.forEach(function(l){ drinkTotals[l.drink]=(drinkTotals[l.drink]||0)+(l.quantity||0); });
   var sortedDrinks = Object.entries(drinkTotals).sort(function(a,b){return b[1]-a[1];});
   var totalAll = sortedDrinks.reduce(function(s,e){return s+e[1];},0)||1;
+  var drinkColors = ['#b5481f','#1f8a4f','#0e6b8c','#7a3a8f','#c4392b','#d4a017','#5a3a28'];
   if (sortedDrinks.length) {
-    html += card(isDE?'🥤 Getränke-Mix (gesamt)':'🥤 Drink Mix (all time)',
-      sortedDrinks.map(function(e){
+    // Stacked bar across the top showing proportions
+    var stackBar = '<div style="display:flex;height:18px;border-radius:9px;overflow:hidden;margin-bottom:14px">';
+    sortedDrinks.forEach(function(e, i){
+      stackBar += '<div title="'+esc(e[0].replace(/^.+? /,''))+': '+e[1]+'" '+
+        'style="flex:'+e[1]+';background:'+drinkColors[i%drinkColors.length]+'"></div>';
+    });
+    stackBar += '</div>';
+
+    html += card(isDE?'🥤 Getränke-Mix':'🥤 Drink Mix',
+      stackBar +
+      sortedDrinks.map(function(e, i){
         var pct = Math.round(e[1]/totalAll*100);
-        return '<div style="margin-bottom:9px">'+
-          '<div style="display:flex;justify-content:space-between;margin-bottom:3px">'+
-            '<span style="font-size:13px;font-weight:600;color:#1a0e08">'+emoji(e[0])+' '+esc(e[0].replace(/^.+? /,''))+'</span>'+
-            '<span style="font-size:13px;font-weight:800;color:#b5481f">'+e[1]+' <span style="font-size:11px;color:#7a5200">('+pct+'%)</span></span>'+
-          '</div>'+
-          '<div style="height:8px;background:#f5ede4;border-radius:4px;overflow:hidden">'+
-            '<div style="height:8px;background:linear-gradient(to right,#b5481f,#f8d878);border-radius:4px;width:'+pct+'%;transition:width .4s ease"></div>'+
-          '</div>'+
+        var col = drinkColors[i%drinkColors.length];
+        return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'+
+          '<div style="width:10px;height:10px;border-radius:50%;background:'+col+';flex-shrink:0"></div>'+
+          '<div style="flex:1;font-size:13px;font-weight:600;color:#1a0e08">'+emoji(e[0])+' '+esc(e[0].replace(/^.+? /,''))+'</div>'+
+          '<div style="font-size:13px;font-weight:800;color:'+col+'">'+e[1]+'</div>'+
+          '<div style="font-size:11px;color:#7a5200;min-width:32px;text-align:right">'+pct+'%</div>'+
         '</div>';
       }).join('')
     );
   }
+
+  // ── Peak drinking day of week ──────────────────────────
+  var dayTotals = [0,0,0,0,0,0,0];
+  var dayNames = isDE
+    ? ['Mo','Di','Mi','Do','Fr','Sa','So']
+    : ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  STATE.logs.forEach(function(l){
+    var d = new Date(l.date+'T00:00:00');
+    var dow = (d.getDay()+6)%7; // 0=Mon
+    dayTotals[dow] += (l.quantity||0);
+  });
+  var maxDay = Math.max.apply(null, dayTotals)||1;
+  html += card(isDE?'📅 Wochentag-Analyse':'📅 Peak day of week',
+    '<div style="display:flex;gap:4px;align-items:flex-end;height:70px;margin-bottom:6px">'+
+    dayTotals.map(function(v,i){
+      var h = Math.max(4, Math.round(v/maxDay*60));
+      var isTop = v === maxDay;
+      return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">'+
+        '<div style="font-size:9px;font-weight:700;color:#b5481f">'+(isTop?v:'')+'</div>'+
+        '<div style="width:100%;height:'+h+'px;background:'+(isTop?'#b5481f':'#e8dccc')+';border-radius:4px 4px 0 0"></div>'+
+        '<div style="font-size:10px;font-weight:'+(isTop?'800':'600')+';color:'+(isTop?'#b5481f':'#7a5200')+'">'+dayNames[i]+'</div>'+
+      '</div>';
+    }).join('')+
+    '</div>'+
+    '<div style="font-size:11px;color:#7a5200;text-align:center">'+
+      (isDE?'Aktivster Tag: ':'Most active: ')+
+      '<strong>'+dayNames[dayTotals.indexOf(maxDay)]+'</strong> · '+maxDay+' drinks'+
+    '</div>'
+  );
+
+  // ── Free vs Paid split ─────────────────────────────────
+  var totalFree = STATE.logs.reduce(function(s,l){ return (parseFloat(l.unit_price)||0)===0?s+(l.quantity||0):s; },0);
+  var totalPaid2 = STATE.logs.reduce(function(s,l){ return (parseFloat(l.unit_price)||0)>0?s+(l.quantity||0):s; },0);
+  var totalAll2 = totalFree + totalPaid2 || 1;
+  html += card(isDE?'🆓 Kostenlos vs. Bezahlt':'🆓 Free vs Paid',
+    '<div style="display:flex;height:14px;border-radius:7px;overflow:hidden;margin-bottom:10px">'+
+      '<div style="flex:'+totalFree+';background:#1f8a4f"></div>'+
+      '<div style="flex:'+totalPaid2+';background:#b5481f"></div>'+
+    '</div>'+
+    '<div style="display:flex;gap:16px;justify-content:center">'+
+      '<div style="text-align:center">'+
+        '<div style="font-size:20px;font-weight:900;color:#1f8a4f">'+totalFree+'</div>'+
+        '<div style="font-size:11px;color:#7a5200">🍾 '+(isDE?'Kostenlos':'Free')+'</div>'+
+        '<div style="font-size:11px;color:#1f8a4f;font-weight:700">'+Math.round(totalFree/totalAll2*100)+'%</div>'+
+      '</div>'+
+      '<div style="text-align:center">'+
+        '<div style="font-size:20px;font-weight:900;color:#b5481f">'+totalPaid2+'</div>'+
+        '<div style="font-size:11px;color:#7a5200">💶 '+(isDE?'Bezahlt':'Paid')+'</div>'+
+        '<div style="font-size:11px;color:#b5481f;font-weight:700">'+Math.round(totalPaid2/totalAll2*100)+'%</div>'+
+      '</div>'+
+    '</div>'
+  );
 
   el.innerHTML = html;
 }
@@ -4846,10 +4922,12 @@ function renderReplace(){
       freeFundConsumed[l.drink] = (freeFundConsumed[l.drink]||0) + (l.quantity||0);
   });
   // Replacements for settled sessions restore fund capacity
+  var sessionLogsForFund = getSessionLogs();
+  var openTabDatesSet = new Set(sessionLogsForFund.map(function(l){ return l.date; }));
   STATE.replacements.forEach(function(r){
     if (r.drink && (r.quantity||0) > 0 && r.drink !== '_SESSION_CLOSED_'){
-      // Only count replacements for settled dates
-      if (!openTabDates.has(r.for_date))
+      // Only count replacements for settled dates (not in current open tab)
+      if (!openTabDatesSet.has(r.for_date))
         freeFundConsumed[r.drink] = Math.max(0, (freeFundConsumed[r.drink]||0) - (r.quantity||0));
     }
   });
@@ -5020,6 +5098,12 @@ function renderReplace(){
   html += '<div class="card">';
   html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">';
   html += '<div style="font-size:13px;font-weight:800;color:#5a3a28">'+(isDE?'Alle Getränke — Gesamt':'All Drinks — Running Total')+'</div>';
+  // Consolidated replace button — replaces ALL outstanding drinks for everyone in one go
+  if (!allDone && tot_rem > 0) {
+    html += '<button onclick="replaceAllForEveryone()" '+
+      'style="background:#1f8a4f;border:none;border-radius:10px;color:#fff;font-size:12px;font-weight:800;padding:7px 14px;cursor:pointer">'+
+      '🍺 '+(isDE?'Alle '+tot_rem+' ersetzen':'Replace all '+tot_rem+' for everyone')+'</button>';
+  }
   if (allDone){
     html += '<span style="background:#d4f5e2;color:#1f8a4f;border-radius:8px;padding:4px 12px;font-size:12px;font-weight:800">✅ '+(isDE?'Alle ersetzt!':'All replaced!')+'</span>';
   } else {
@@ -5502,6 +5586,95 @@ async function replBottle(date,drink,delta){
     notify('Replacement removed');
   }
   await loadAll();
+}
+
+async function replaceAllForEveryone(){
+  var isDE = LANG === 'de';
+  var sessionLogs = getSessionLogs();
+
+  // Group outstanding free drinks by person and drink type
+  var byPerson = {};
+  sessionLogs.forEach(function(l){
+    if ((parseFloat(l.unit_price)||0) > 0) return;
+    if (!byPerson[l.person]) byPerson[l.person] = {};
+    byPerson[l.person][l.drink] = (byPerson[l.person][l.drink]||0) + (l.quantity||0);
+  });
+
+  // Subtract already-replaced amounts (communal pool)
+  STATE.replacements.forEach(function(r){
+    if (!r.quantity || r.drink === '_SESSION_CLOSED_') return;
+    // Deduct proportionally across all people (simplified: deduct from first person found)
+    Object.keys(byPerson).forEach(function(person){
+      if (byPerson[person][r.drink] && byPerson[person][r.drink] > 0) {
+        var deduct = Math.min(r.quantity, byPerson[person][r.drink]);
+        byPerson[person][r.drink] -= deduct;
+        r = Object.assign({}, r, {quantity: r.quantity - deduct}); // reduce remaining
+      }
+    });
+  });
+
+  // Build summary of what will be replaced
+  var lines = [];
+  Object.keys(byPerson).forEach(function(person){
+    Object.keys(byPerson[person]).forEach(function(drink){
+      var qty = byPerson[person][drink];
+      if (qty > 0) lines.push({person:person, drink:drink, qty:qty});
+    });
+  });
+
+  if (!lines.length) { notify('Nothing to replace ✓'); return; }
+
+  var total = lines.reduce(function(s,l){ return s+l.qty; },0);
+  var summary = lines.map(function(l){ return emoji(l.drink)+' ×'+l.qty+' for '+esc(l.person); }).join('<br>');
+  window._pendingReplaceAll = lines;
+
+  showModal(
+    '<div style="text-align:center;padding:4px">'+
+      '<div style="font-size:40px;margin-bottom:8px">🍺</div>'+
+      '<h3 style="margin-bottom:8px">'+(isDE?'Alle ersetzen?':'Replace all?')+'</h3>'+
+      '<p style="font-size:12px;color:#5a3a28;margin-bottom:6px">'+
+        (isDE?'Als '+esc(CURRENT_NAME)+' ersetzen für:':'Replacing as '+esc(CURRENT_NAME)+' for:')+
+      '</p>'+
+      '<div style="font-size:13px;text-align:left;background:#f5ede4;border-radius:8px;padding:10px;margin-bottom:14px;line-height:1.8">'+
+        summary+'<br><strong>Total: '+total+'</strong>'+
+      '</div>'+
+      '<div style="display:flex;gap:10px">'+
+        '<button onclick="closeModal()" style="flex:1;background:#f5ede4;border:1.5px solid #e8dccc;border-radius:10px;padding:12px;font-size:15px;font-weight:700;color:#5a3a28;cursor:pointer">'+(isDE?'Abbrechen':'Cancel')+'</button>'+
+        '<button id="confirm-repl-all" style="flex:2;background:#1f8a4f;border:none;border-radius:10px;padding:12px;font-size:15px;font-weight:800;color:#fff;cursor:pointer">🍺 '+(isDE?'Alle ersetzen':'Replace all')+'</button>'+
+      '</div>'+
+    '</div>'
+  );
+  setTimeout(function(){
+    var btn = document.getElementById('confirm-repl-all');
+    if (btn) btn.onclick = async function(){
+      closeModal();
+      var lines2 = window._pendingReplaceAll || [];
+      var today = td();
+      var errors = [];
+      for (var i=0; i<lines2.length; i++){
+        var line = lines2[i];
+        var insertObj = {
+          for_date: today,
+          drink: line.drink,
+          quantity: line.qty,
+          replaced_by: CURRENT_NAME,
+          note: 'Replaced for '+line.person,
+          added_by: CURRENT_NAME,
+          for_person: line.person
+        };
+        if (IS_ADMIN && CURRENT_USER) insertObj.user_id = CURRENT_USER.id;
+        if (IS_GUEST) insertObj.guest_token = GUEST_TOKEN;
+        var {error} = await SB.from('replacements').insert(insertObj);
+        if (error) errors.push(line.person+': '+error.message);
+        else await audit('MARK_REPLACEMENT','replacements',null,{
+          drink:line.drink, qty:line.qty, replaced_by:CURRENT_NAME, for:line.person
+        });
+      }
+      if (errors.length) notify('Errors: '+errors.join('; '), true);
+      else notify('🍺 '+total+' drinks replaced for '+Object.keys(byPerson).join(', ')+' ✓');
+      await loadAll();
+    };
+  }, 50);
 }
 
 async function undoReplace(){
