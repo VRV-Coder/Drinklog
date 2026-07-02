@@ -922,10 +922,10 @@ async function fetchDailyJoke(lang){
 }
 
 function formatJokeContent(text){
-  var clean = text.replace(/<[^>]*>/g, '');
-  return esc(clean)
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+  // Render markdown bold/italic, convert newlines to breaks
+  return esc(text)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/\n\n/g, '</p><p style="margin:8px 0">')
     .replace(/\n/g, '<br>');
 }
@@ -1225,6 +1225,15 @@ function renderLog(){
     '<span style="font-size:12px;font-weight:600;opacity:.7;margin-left:6px">'+(isDE?'Datum · Menge · Notiz':'Date · Qty · Note')+'</span>'+
     '<span style="margin-left:auto;font-size:18px">⬆️</span>'+
   '</button>';
+
+  // ── DEBUG: Settlement state ──
+  html += '<div id="debug-settle" class="card" style="background:#e8f0ff;border:2px solid blue;font-size:11px;word-break:break-all">'+
+    '<b>DEBUG Settlement</b><br>'+
+    'lastSettledDate: '+getLastSettlementDate()+'<br>'+
+    'tabCloses: '+JSON.stringify((STATE.tabCloses||[]).map(function(c){return c.person+' on '+c.closed_at+(c.created_at?' @'+c.created_at:'');}))+'<br>'+
+    'all drinkers: '+JSON.stringify([...new Set(STATE.logs.map(function(l){return l.person;}))].sort())+'<br>'+
+    'sessionLogs count: '+getSessionLogs().length+' of '+STATE.logs.length+' total'+
+  '</div>';
 
   // ── SECTION 6: Historical consolidated running tabs ──
   html += renderConsolidatedToday();
@@ -1882,14 +1891,16 @@ async function saveRunningAmountEdit(person, date){
 
 // Consolidate all of today's (and recent days') drinks per person
 function renderConsolidatedToday(){
+  if (!STATE.logs.length) return '';
+
   // Use only the current unsettled session logs — everything since the last full settlement.
   // This prevents old settled drinks from reappearing in the "not yet settled" section.
   var sessionLogs = getSessionLogs();
   var sessionCutoffDate = getLastSettlementDate(); // null = no settlement yet
 
-  if (!STATE.logs.length && !sessionCutoffDate) return '';
+  if (!sessionLogs.length) return '';
 
-  var personNames = sessionLogs.length ? [...new Set(sessionLogs.map(function(l){ return l.person; }))].sort() : [];
+  var personNames = [...new Set(sessionLogs.map(function(l){ return l.person; }))].sort();
 
   var blocks = personNames.map(function(person){
     var pLogs = sessionLogs.filter(function(l){ return l.person === person; });
@@ -2733,9 +2744,13 @@ function getLastSettlementDate(){
       .map(function(l){ return l.person; })
     )];
 
-    // Use isTabTrulyClosed — respects new drinks logged after a close
+    // All people who closed their tab on or before this date
+    var closers = (STATE.tabCloses||[])
+      .filter(function(c){ return c.closed_at <= d; })
+      .map(function(c){ return c.person; });
+
     var allClosed = drinkers.length > 0 && drinkers.every(function(p){
-      return isTabTrulyClosed(p, d);
+      return closers.indexOf(p) !== -1;
     });
 
     if (!allClosed) continue;
@@ -4740,26 +4755,48 @@ function renderReplace(){
   document.querySelectorAll('[id^="repl-note-"]').forEach(function(inp){
     if (inp.value) savedNotes[inp.id] = inp.value;
   });
-  var closedSessions = JSON.parse(localStorage.getItem('boc_closed_replace_sessions')||'[]');
-  var lastSession = closedSessions.length ? closedSessions[closedSessions.length-1] : null;
+  var cbd={},pbd={};
+  STATE.logs.forEach(function(l){cbd[l.date]=(cbd[l.date]||0)+(parseFloat(l.total_price)||0);});
+  STATE.payments.forEach(function(p){pbd[p.date]=(pbd[p.date]||0)+(parseFloat(p.amount)||0);});
   var cdd={},rdd={};
 
-  // Use getSessionLogs() — same session boundary as the rest of the app
-  // This ensures fund-covered drinks don't show as "to replace" across sessions
-  var sessionLogs = getSessionLogs();
+  // ── Session cutoff: only show logs AFTER the last closed session ──
+  var closedSessions = JSON.parse(localStorage.getItem('boc_closed_replace_sessions')||'[]');
+  var lastSession = closedSessions.length ? closedSessions[closedSessions.length-1] : null;
 
-  sessionLogs.forEach(function(l){
+  // Cutoff timestamp: if we have a precise close timestamp, use it.
+  // If only a date (old sessions), use end of the PREVIOUS day — meaning
+  // all logs on the close date itself are always visible in the new session.
+  var sessionCutoffTs = null;
+  if (lastSession) {
+    if (lastSession.closedTimestamp) {
+      sessionCutoffTs = lastSession.closedTimestamp;
+    } else {
+      // Old session stored only a date — treat cutoff as midnight before that date
+      // so everything on closedAt date is visible (conservative, user-friendly)
+      var d = new Date(lastSession.closedAt + 'T00:00:00.000Z');
+      d.setDate(d.getDate() - 1);
+      sessionCutoffTs = d.toISOString().replace('T00:00:00.000Z','T23:59:59.999Z');
+    }
+  }
+
+  STATE.logs.forEach(function(l){
     var unitPrice = parseFloat(l.unit_price)||0;
-    if (unitPrice > 0) return; // only free drinks
+    if (unitPrice > 0) return;
+    // Compare using logged_at timestamp if available, otherwise date only
+    if (sessionCutoffTs){
+      var logTs = l.logged_at || (l.date + 'T00:00:00.000Z');
+      if (logTs <= sessionCutoffTs) return;
+    }
     if(!cdd[l.date])cdd[l.date]={};
     cdd[l.date][l.drink]=(cdd[l.date][l.drink]||0)+(l.quantity||0);
   });
-
-  // Replacements: also session-scoped
-  var lastSettledDate = getLastSettlementDate();
   STATE.replacements.forEach(function(r){
     if(!r.quantity || r.drink === '_SESSION_CLOSED_') return;
-    if(lastSettledDate && r.for_date <= lastSettledDate) return;
+    if (sessionCutoffTs){
+      var repTs = r.logged_at || (r.for_date + 'T00:00:00.000Z');
+      if (repTs <= sessionCutoffTs) return;
+    }
     if(!rdd[r.for_date])rdd[r.for_date]={};
     rdd[r.for_date][r.drink]=(rdd[r.for_date][r.drink]||0)+(r.quantity||0);
   });
@@ -4773,21 +4810,25 @@ function renderReplace(){
     if (!c.drink) return;
     freeFundContrib[c.drink] = (freeFundContrib[c.drink]||0) + (c.crates||0)*CRATE_SIZE_FREE + (c.extra_bottles||0);
   });
-  // Free fund consumed = current SESSION zero-price logs only
-  // Old sessions already closed shouldn't eat into the fund for the current session
+  // Fund available = total contributed minus PREVIOUS sessions' consumption only.
+  // Current session drinks are what we're trying to cover — excluding them here
+  // means fundAvail correctly reflects how many bottles are left to cover this session.
+  var lastSettledDate = getLastSettlementDate();
+  var prevLogs = lastSettledDate
+    ? STATE.logs.filter(function(l){ return l.date <= lastSettledDate; })
+    : [];
   var freeFundConsumed = {};
-  sessionLogs.forEach(function(l){
+  prevLogs.forEach(function(l){
     if ((parseFloat(l.unit_price)||0) === 0)
       freeFundConsumed[l.drink] = (freeFundConsumed[l.drink]||0) + (l.quantity||0);
   });
-  // Session replacements reduce consumption
+  // Past replacements restore fund capacity
   STATE.replacements.forEach(function(r){
     if (r.drink && (r.quantity||0) > 0 && r.drink !== '_SESSION_CLOSED_'){
-      if(lastSettledDate && r.for_date <= lastSettledDate) return;
-      freeFundConsumed[r.drink] = Math.max(0, (freeFundConsumed[r.drink]||0) - (r.quantity||0));
+      if (!lastSettledDate || r.for_date <= lastSettledDate)
+        freeFundConsumed[r.drink] = Math.max(0, (freeFundConsumed[r.drink]||0) - (r.quantity||0));
     }
   });
-  // Available free fund per drink (total contributed minus all-time consumption)
   var freeFundAvail = {};
   Object.keys(freeFundContrib).forEach(function(d){
     freeFundAvail[d] = Math.max(0, (freeFundContrib[d]||0) - (freeFundConsumed[d]||0));
@@ -4817,18 +4858,6 @@ function renderReplace(){
       ob[drink].fundCovers = fundCovers;
     }
   });
-
-  // DEBUG — show fund calculation
-  var debugHtml = '<div class="card" style="background:#fff0e0;border:2px solid orange;font-size:11px;margin-bottom:10px;word-break:break-all">'+
-    '<b>DEBUG Fund</b><br>'+
-    'freeFundContrib: '+JSON.stringify(freeFundContrib)+'<br>'+
-    'freeFundConsumed: '+JSON.stringify(freeFundConsumed)+'<br>'+
-    'freeFundAvail: '+JSON.stringify(freeFundAvail)+'<br>'+
-    'cdd keys (session free drinks): '+JSON.stringify(Object.keys(cdd))+'<br>'+
-    'ob (before fund): '+JSON.stringify(Object.keys(ob).map(function(d){return d+':'+ob[d].remaining;}))+'<br>'+
-    'lastSettledDate: '+getLastSettlementDate()+'<br>'+
-    'sessionLogs free count: '+sessionLogs.filter(function(l){return (parseFloat(l.unit_price)||0)===0;}).length+
-  '</div>';
 
   // Filter to drinks that still need replacing (remaining > 0 after fund covers them)
   // Drinks fully covered by the free fund should NOT appear in the replace tab at all
@@ -4874,7 +4903,7 @@ function renderReplace(){
         }).join(''));
       }
     }
-    el.innerHTML = debugHtml + emptyHtml;
+    el.innerHTML = emptyHtml;
     return;
   }
 
@@ -5086,7 +5115,7 @@ function renderReplace(){
     html += '</div>';
   }
 
-  el.innerHTML = debugHtml + html;
+  el.innerHTML=html;
 
   // Restore any note inputs being typed when re-render fired
   Object.keys(savedNotes).forEach(function(id){
@@ -5513,7 +5542,7 @@ function renderFeedback(){
         '<div style="background:'+(adm?'#1f8a4f':'#f5ede4')+';border-radius:10px;padding:7px 11px;max-width:78%;position:relative">'+
           '<div style="font-size:10px;font-weight:700;color:'+(adm?'rgba(255,255,255,.7)':'#7a5200')+';margin-bottom:2px;display:flex;align-items:center;gap:4px">'+
             (adm?'Admin':'You')+' \xb7 '+rts+
-            (IS_ADMIN ? '<button onclick="event.stopPropagation();deleteFeedbackReply(\''+rep.id+'\')" style="background:none;border:none;color:'+(adm?'rgba(255,255,255,.5)':'#c4392b')+';cursor:pointer;font-size:11px;padding:0 0 0 4px" title="Delete reply">&#x1F5D1;</button>' : '')+
+            (IS_ADMIN ? '<button data-delete-reply="'+rep.id+'" style="background:none;border:none;color:'+(adm?'rgba(255,255,255,.5)':'#c4392b')+';cursor:pointer;font-size:11px;padding:0 0 0 4px" title="Delete">&#x1F5D1;</button>' : '')+
           '</div>'+
           '<div style="font-size:13px;color:'+(adm?'#fff':'#1a0e08')+'">'+esc(rep.message)+'</div>'+
         '</div>'+
@@ -5524,17 +5553,13 @@ function renderFeedback(){
     var replyInputId = 'reply_'+safeRid;
     var replyBtnId = 'replybtn_'+safeRid;
 
-    // Store thread id in global lookup so onclick can reference it safely
-    var tidx = Object.keys(roots).indexOf(rid);
-    window._fbRids = window._fbRids || {};
-    window._fbRids['t'+tidx] = rid;
-
+    // Admin controls in thread header
     var adminControls = IS_ADMIN
       ? '<div style="display:flex;gap:6px;flex-shrink:0">'+
           (!isClosed
-            ? '<button onclick="event.stopPropagation();closeFeedbackThread(window._fbRids[\'t'+tidx+'\'])" style="background:#f5ede4;border:1.5px solid #b5481f;border-radius:7px;color:#b5481f;font-size:11px;font-weight:700;padding:4px 8px;cursor:pointer">&#x1F512; Close</button>'
-            : '<span style="font-size:11px;color:#7a5200;font-weight:700">&#x1F512; Closed</span>')+
-          '<button onclick="event.stopPropagation();deleteFeedbackThread(window._fbRids[\'t'+tidx+'\'])" style="background:#fff0f0;border:1.5px solid #c4392b;border-radius:7px;color:#c4392b;font-size:11px;font-weight:700;padding:4px 8px;cursor:pointer">&#x1F5D1; Delete</button>'+
+            ? '<button data-close-thread="'+rid+'" style="background:#f5ede4;border:1.5px solid #b5481f;border-radius:7px;color:#b5481f;font-size:11px;font-weight:700;padding:4px 8px;cursor:pointer" title="Close this conversation">\uD83D\uDD12 Close</button>'
+            : '<span style="font-size:11px;color:#7a5200;font-weight:700">\uD83D\uDD12 Closed</span>')+
+          '<button data-delete-thread="'+rid+'" style="background:#fff0f0;border:1.5px solid #c4392b;border-radius:7px;color:#c4392b;font-size:11px;font-weight:700;padding:4px 8px;cursor:pointer" title="Delete entire conversation">\uD83D\uDDD1 All</button>'+
         '</div>'
       : '';
 
@@ -5545,7 +5570,7 @@ function renderFeedback(){
             'style="flex:1;border:1.5px solid #e8dccc;border-radius:9px;padding:7px 11px;font-size:13px;color:#1a0e08;'+(isClosed&&!IS_ADMIN?'opacity:.5':'')+'"/>'+
           '<button id="'+replyBtnId+'" style="background:#b5481f;border:none;border-radius:9px;padding:7px 12px;color:#fff;font-size:13px;font-weight:800;cursor:pointer;'+(isClosed&&!IS_ADMIN?'opacity:.4;pointer-events:none':'')+'">\u21a9</button>'+
         '</div>'
-      : '<div style="padding-left:44px;margin-top:8px;font-size:12px;color:#7a5200;font-style:italic">&#x1F512; This conversation has been closed.</div>';
+      : '<div style="padding-left:44px;margin-top:8px;font-size:12px;color:#7a5200;font-style:italic">\uD83D\uDD12 This conversation has been closed.</div>';
 
     return '<div id="thread_'+safeRid+'" class="card" style="margin-bottom:10px'+(isClosed?';opacity:.85':'')+'">'+
       '<div style="display:flex;align-items:flex-start;gap:10px">'+
@@ -5595,7 +5620,18 @@ function renderFeedback(){
     }
   });
 
-  // Admin buttons use inline onclick with window._fbRids lookup
+  // Admin: delete reply buttons
+  if (IS_ADMIN) {
+    el.querySelectorAll('[data-delete-reply]').forEach(function(btn){
+      btn.onclick = function(){ deleteFeedbackReply(this.getAttribute('data-delete-reply')); };
+    });
+    el.querySelectorAll('[data-delete-thread]').forEach(function(btn){
+      btn.onclick = function(){ deleteFeedbackThread(this.getAttribute('data-delete-thread')); };
+    });
+    el.querySelectorAll('[data-close-thread]').forEach(function(btn){
+      btn.onclick = function(){ closeFeedbackThread(this.getAttribute('data-close-thread')); };
+    });
+  }
 }
 
 async function submitNewFeedback(textareaId){
@@ -5627,43 +5663,18 @@ async function submitFeedbackReply(parentId, inputId){
   await loadAll(); renderFeedback();
 }
 
-function deleteFeedbackReply(replyId){
+async function deleteFeedbackReply(replyId){
   if (!IS_ADMIN) return;
-  var isDE = LANG === 'de';
-  window._pendingDeleteReply = replyId;
-  showModal('<div style="text-align:center;padding:4px">'+
-    '<div style="font-size:36px;margin-bottom:8px">&#x1F5D1;</div>'+
-    '<h3 style="margin-bottom:12px">'+(isDE?'Antwort löschen?':'Delete this reply?')+'</h3>'+
-    '<div style="display:flex;gap:10px">'+
-      '<button onclick="closeModal()" style="flex:1;background:#f5ede4;border:1.5px solid #e8dccc;border-radius:10px;padding:12px;font-size:15px;font-weight:700;color:#5a3a28;cursor:pointer">'+(isDE?'Abbrechen':'Cancel')+'</button>'+
-      '<button id="cdelr" style="flex:1;background:#c4392b;border:none;border-radius:10px;padding:12px;font-size:15px;font-weight:800;color:#fff;cursor:pointer">'+(isDE?'Löschen':'Delete')+'</button>'+
-    '</div></div>');
-  setTimeout(function(){ var b=document.getElementById('cdelr'); if(b) b.onclick=async function(){
-    closeModal();
-    var {error}=await SB.from('feedback').delete().eq('id',window._pendingDeleteReply);
-    if(error){notify('Error: '+error.message,true);return;}
-    notify('Reply deleted ✓'); await loadAll(); renderFeedback();
-  };},50);
+  if (!confirm('Delete this reply?')) return;
+  var {error} = await SB.from('feedback').delete().eq('id', replyId);
+  if (error){ notify('Error: '+error.message, true); return; }
+  notify('Reply deleted \u2713');
+  await loadAll(); renderFeedback();
 }
-function deleteFeedbackThread(rootId){
+
+async function deleteFeedbackThread(rootId){
   if (!IS_ADMIN) return;
-  var isDE = LANG === 'de';
-  var root = (STATE.feedback||[]).find(function(f){ return f.id === rootId; });
-  var repCount = (STATE.feedback||[]).filter(function(f){ return f.parent_id === rootId; }).length;
-  window._pendingDeleteThread = rootId;
-  showModal('<div style="text-align:center;padding:4px">'+
-    '<div style="font-size:40px;margin-bottom:8px">&#x1F5D1;</div>'+
-    '<h3 style="margin-bottom:8px">'+(isDE?'Gespräch löschen?':'Delete conversation?')+'</h3>'+
-    '<p style="font-size:13px;color:#5a3a28;margin-bottom:6px">'+(root?'<em>'+esc(root.message.substring(0,80))+(root.message.length>80?'…':'')+'</em>':'')+'</p>'+
-    '<p style="font-size:12px;color:#7a5200;margin-bottom:16px">'+(repCount?repCount+' repl'+(repCount===1?'y':'ies')+' will also be deleted':'No replies')+'</p>'+
-    '<div style="display:flex;gap:10px">'+
-      '<button onclick="closeModal()" style="flex:1;background:#f5ede4;border:1.5px solid #e8dccc;border-radius:10px;padding:12px;font-size:15px;font-weight:700;color:#5a3a28;cursor:pointer">'+(isDE?'Abbrechen':'Cancel')+'</button>'+
-      '<button id="cdelt" style="flex:1;background:#c4392b;border:none;border-radius:10px;padding:12px;font-size:15px;font-weight:800;color:#fff;cursor:pointer">'+(isDE?'Löschen':'Delete')+'</button>'+
-    '</div></div>');
-  setTimeout(function(){ var b=document.getElementById('cdelt'); if(b) b.onclick=function(){ closeModal(); doDeleteFeedbackThread(window._pendingDeleteThread); }; },50);
-}
-async function doDeleteFeedbackThread(rootId){
-  if (!IS_ADMIN) return;
+  if (!confirm('Delete this entire conversation and all replies?')) return;
   // Delete all replies first, then root
   var repIds = (STATE.feedback||[]).filter(function(f){ return f.parent_id === rootId; }).map(function(f){ return f.id; });
   for (var i=0; i<repIds.length; i++){
