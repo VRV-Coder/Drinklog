@@ -2195,14 +2195,30 @@ function renderConsolidatedToday(){
             priceEditHtml+
           '</div>'+
       '</div>'+
-      '<span style="font-size:16px;color:#6a3020;flex-shrink:0;align-self:flex-start;padding-top:2px">👁</span>'+
+      '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">'+
+        '<span style="font-size:16px;color:#6a3020">👁</span>'+
+        (IS_ADMIN && !b.isSettled
+          ? '<button onclick="event.stopPropagation();closeMyTab(\''+esc(b.person)+'\')" '+
+              'style="background:#1f8a4f;border:none;border-radius:8px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:800;color:#fff;white-space:nowrap">'+
+              '✅ Close</button>'
+          : '')+
+      '</div>'+
     '</div>';
   };
 
   var html = '';
 
   if (unsettled.length) {
-    html += card(t('runningTabsTitle'), unsettled.map(rowHtml).join(''));
+    var unsettledHtml = unsettled.map(rowHtml).join('');
+    // Admin: close all unsettled button
+    if (IS_ADMIN && unsettled.length > 0) {
+      unsettledHtml += '<div style="margin-top:8px">'+
+        '<button onclick="adminCloseAllTabs()" '+
+          'style="width:100%;background:#1f8a4f;border:none;border-radius:10px;padding:10px;color:#fff;font-size:13px;font-weight:800;cursor:pointer">'+
+          '✅ '+(isDE?'Alle Tabs schließen':'Close all open tabs')+' ('+unsettled.length+')</button>'+
+        '</div>';
+    }
+    html += card(t('runningTabsTitle'), unsettledHtml);
   }
 
   // ── SETTLED UP ──
