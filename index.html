@@ -2340,7 +2340,7 @@ function renderConsolidatedToday(){
               '<div style="font-size:13px;font-weight:700;color:#1a0e08">'+esc(person)+'</div>'+
               '<div style="font-size:11px;color:#7a5200;margin-top:2px">'+
                 '✅ '+sortedDates.length+' day'+(sortedDates.length!==1?'s':'')+
-                (totalBill>0?' · €'+totalBill.toFixed(2):'')+(totalFree>0?' · ?de BE×'+totalFree:'')+
+                (totalBill>0?' · €'+totalBill.toFixed(2):'')+(totalFree>0?' · 🍾×'+totalFree:'')+
               '</div>'+
               '<div style="margin-top:4px">'+drinkTagsHtml+'</div>'+
             '</div>'+
@@ -4992,18 +4992,6 @@ function renderReplace(){
       '</div>';
     }
     emptyHtml += '</div>';
-    // Still show closed sessions and replacement log even when running total is empty
-    if (closedSessions.length){
-      emptyHtml += '<div class="card"><div style="font-size:13px;font-weight:800;color:#5a3a28;margin-bottom:10px">🗄 '+(LANG==='de'?'Abgeschlossene Sitzungen':'Closed Sessions')+'</div>';
-      closedSessions.slice().reverse().forEach(function(sess,i){
-        emptyHtml += '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0e8dc">'+
-          '<span style="font-size:11px;color:#7a5200;flex:1">'+fmtDate(sess.closedAt)+(sess.note?' · '+esc(sess.note):'')+(sess.closedBy?' · by '+esc(sess.closedBy):'')+'</span>'+
-          '<span style="font-size:11px;background:#d4f5e2;color:#1f8a4f;border-radius:6px;padding:1px 7px;font-weight:700">✅</span>'+
-          '<button onclick="reopenReplaceSession('+i+')" style="background:none;border:none;color:#b5481f;cursor:pointer;font-size:12px;font-weight:700">↩</button>'+
-        '</div>';
-      });
-      emptyHtml += '</div>';
-    }
     if(STATE.replacements.length){
       var visReps = STATE.replacements.filter(function(r){ return r.drink !== '_SESSION_CLOSED_' && (r.quantity||0) > 0; });
       if(visReps.length){
