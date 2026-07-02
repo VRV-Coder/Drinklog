@@ -4818,6 +4818,18 @@ function renderReplace(){
     }
   });
 
+  // DEBUG — show fund calculation
+  var debugHtml = '<div class="card" style="background:#fff0e0;border:2px solid orange;font-size:11px;margin-bottom:10px;word-break:break-all">'+
+    '<b>DEBUG Fund</b><br>'+
+    'freeFundContrib: '+JSON.stringify(freeFundContrib)+'<br>'+
+    'freeFundConsumed: '+JSON.stringify(freeFundConsumed)+'<br>'+
+    'freeFundAvail: '+JSON.stringify(freeFundAvail)+'<br>'+
+    'cdd keys (session free drinks): '+JSON.stringify(Object.keys(cdd))+'<br>'+
+    'ob (before fund): '+JSON.stringify(Object.keys(ob).map(function(d){return d+':'+ob[d].remaining;}))+'<br>'+
+    'lastSettledDate: '+getLastSettlementDate()+'<br>'+
+    'sessionLogs free count: '+sessionLogs.filter(function(l){return (parseFloat(l.unit_price)||0)===0;}).length+
+  '</div>';
+
   // Filter to drinks that still need replacing (remaining > 0 after fund covers them)
   // Drinks fully covered by the free fund should NOT appear in the replace tab at all
   var allDrinks = Object.keys(ob).filter(function(d){ return ob[d].remaining > 0; });
@@ -4825,6 +4837,8 @@ function renderReplace(){
   var tot_o = allDrinks.reduce(function(s,d){return s+ob[d].owed;},0);
   var tot_r = allDrinks.reduce(function(s,d){return s+ob[d].replaced;},0);
   var tot_rem = allDrinks.reduce(function(s,d){return s+ob[d].remaining;},0);
+
+  el.innerHTML = debugHtml; // temp debug
 
   if(!allDrinks.length){
     var emptyHtml = '<div style="text-align:center;padding:24px 16px">';
