@@ -674,12 +674,16 @@ function enterApp(){
   try { updateHeaderLabels(); } catch(e2) { console.warn('updateHeaderLabels:', e2); }
   registerSelfAsPerson();
   loadAll().then(function(){
-    showLoginJokePopup();
+    // Only show popup once per browser session (not on every reload)
+    var popupKey = 'boc_popup_shown_' + (CURRENT_NAME||'guest');
+    if (!sessionStorage.getItem(popupKey)) {
+      sessionStorage.setItem(popupKey, '1');
+      showLoginJokePopup();
+    }
     startRealtime();
   }).catch(function(e){
     console.error('[BeerOClock] loadAll error:', e);
     notify('Load error: ' + e.message, true);
-    showLoginJokePopup();
     startRealtime();
   });
   } catch(e) {
@@ -922,7 +926,11 @@ async function fetchDailyJoke(lang){
 }
 
 function formatJokeContent(text){
-  // Render markdown bold/italic, convert newlines to breaks
+  // If AI returned HTML tags already, render them directly
+  if (/<[a-zA-Z]/.test(text)) {
+    return text.replace(/\n/g, '<br>');
+  }
+  // Plain text: escape then apply markdown
   return esc(text)
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
@@ -984,6 +992,8 @@ async function signOut(){
   try {
     var k = 'boc_intro_played_' + (CURRENT_NAME||'guest');
     sessionStorage.removeItem(k);
+    var pk = 'boc_popup_shown_' + (CURRENT_NAME||'guest');
+    sessionStorage.removeItem(pk);
   } catch(e){}
   if (IS_ADMIN && SB && SB.auth) { await SB.auth.signOut(); }
   if (IS_GUEST) {
@@ -1225,41 +1235,6 @@ function renderLog(){
     '<span style="font-size:12px;font-weight:600;opacity:.7;margin-left:6px">'+(isDE?'Datum · Menge · Notiz':'Date · Qty · Note')+'</span>'+
     '<span style="margin-left:auto;font-size:18px">⬆️</span>'+
   '</button>';
-
-  // ── DEBUG: Settlement trace ──
-  (function(){
-    var allDates = [...new Set(STATE.logs.map(function(l){return l.date;}))].sort();
-    var lastSettled = null;
-    var dbg = '<div class="card" style="background:#e8f0ff;border:2px solid blue;font-size:10px;word-break:break-all;margin-bottom:8px"><b>Settlement Trace</b><br>';
-    for (var i=0; i<allDates.length; i++){
-      var d = allDates[i];
-      var prevSettled = lastSettled;
-      var sessionDrinkers = [...new Set(STATE.logs
-        .filter(function(l){ return l.date <= d && (!prevSettled || l.date > prevSettled); })
-        .map(function(l){ return l.person; })
-      )];
-      var closers = (STATE.tabCloses||[])
-        .filter(function(c){ return c.closed_at <= d && (!prevSettled || c.closed_at > prevSettled); })
-        .map(function(c){ return c.person; });
-      var allClosed = sessionDrinkers.length > 0 && sessionDrinkers.every(function(p){ return closers.indexOf(p)!==-1; });
-      var bill = STATE.logs.reduce(function(s,l){
-        return (l.date<=d&&(!prevSettled||l.date>prevSettled)&&(parseFloat(l.unit_price)||0)>0) ? s+(parseFloat(l.total_price)||0):s;
-      },0);
-      var paid = STATE.payments.reduce(function(s,p){
-        return (p.date<=d&&(!prevSettled||p.date>prevSettled)) ? s+(parseFloat(p.amount)||0):s;
-      },0);
-      var moneyOk = bill<=0.005 || paid>=bill-0.01;
-      var settles = allClosed && moneyOk;
-      if (settles) lastSettled = d;
-      var missing = sessionDrinkers.filter(function(p){ return closers.indexOf(p)===-1; });
-      dbg += '<b>'+d+'</b> allClosed:'+allClosed+' bill:€'+bill.toFixed(2)+' paid:€'+paid.toFixed(2)+' moneyOk:'+moneyOk+' → SETTLES:'+settles;
-      if (missing.length) dbg += ' <span style="color:red">MISSING:'+missing.join(',')+'</span>';
-      dbg += '<br>';
-    }
-    dbg += 'tabCloses this session: '+JSON.stringify((STATE.tabCloses||[]).filter(function(c){return !lastSettled||c.closed_at>lastSettled;}).map(function(c){return c.person+'@'+c.closed_at;}))+'<br>';
-    dbg += '<b>Final lastSettled: '+(lastSettled||'null')+'</b></div>';
-    html += dbg;
-  })();
 
   // ── SECTION 6: Historical consolidated running tabs ──
   html += renderConsolidatedToday();
@@ -2273,43 +2248,53 @@ function renderConsolidatedToday(){
       for (var di = 0; di < allLogDates.length; di++) {
         var checkDate = allLogDates[di];
 
-        // Everyone who drank up to this date
-        var drinkersUpTo = [...new Set(STATE.logs
-          .filter(function(l){ return l.date <= checkDate; })
+        // All drinkers from this session (since sessionStart) across ALL dates so far
+        // This ensures Aug 3 drink is counted when checking July 1 boundary
+        var allSessionDrinkers = [...new Set(STATE.logs
+          .filter(function(l){ return l.date >= sessionStart; })
           .map(function(l){ return l.person; })
         )];
 
-        // Everyone who closed their tab on or before this date
+        // Closers: anyone who closed after sessionStart
         var closersUpTo = (STATE.tabCloses||[])
-          .filter(function(c){ return c.closed_at <= checkDate; })
+          .filter(function(c){ return c.closed_at >= sessionStart; })
           .map(function(c){ return c.person; });
 
-        // EVERY drinker must have closed their tab
-        var allTabsClosed = drinkersUpTo.length > 0 && drinkersUpTo.every(function(p){
+        // Every person who EVER drank in this session must have closed
+        var allTabsClosed = allSessionDrinkers.length > 0 && allSessionDrinkers.every(function(p){
           return closersUpTo.indexOf(p) !== -1;
         });
 
-        if (!allTabsClosed) continue; // not a boundary — someone hasn't closed yet
+        if (!allTabsClosed) continue;
 
-        // For money sessions: bill must also be fully paid
+        // Use the LAST log date of the session (not checkDate) as the session end
+        // e.g. if drinks on July 1 AND Aug 3, session ends Aug 3 (last drink date)
+        var lastLogDate = STATE.logs
+          .filter(function(l){ return l.date >= sessionStart; })
+          .reduce(function(max, l){ return l.date > max ? l.date : max; }, sessionStart);
+
+        // Money: ALL session drinks must be paid
         var cumBill = STATE.logs.reduce(function(s,l){
-          return l.date <= checkDate && (parseFloat(l.unit_price)||0) > 0 ? s+(parseFloat(l.total_price)||0) : s;
+          return (l.date >= sessionStart && (parseFloat(l.unit_price)||0) > 0)
+            ? s+(parseFloat(l.total_price)||0) : s;
         }, 0);
         var cumPaid = STATE.payments.reduce(function(s,p){
-          return p.date <= checkDate ? s+(parseFloat(p.amount)||0) : s;
+          return p.date >= sessionStart ? s+(parseFloat(p.amount)||0) : s;
         }, 0);
         var moneyOk = cumBill <= 0.005 || cumPaid >= cumBill - 0.01;
 
         if (moneyOk && sessionStart) {
-          var closesOnDate = (STATE.tabCloses||[]).filter(function(c){ return c.closed_at === checkDate; });
           sessions.push({
             from: sessionStart,
-            to: checkDate,
+            to: lastLogDate,
             moneySettled: cumBill > 0.005,
-            tabCloses: closesOnDate
+            tabCloses: closersUpTo
           });
-          var nextIdx = di + 1;
-          sessionStart = nextIdx < allLogDates.length ? allLogDates[nextIdx] : null;
+          // Move sessionStart to day after the last log date
+          var nextDates = allLogDates.filter(function(d){ return d > lastLogDate; });
+          sessionStart = nextDates.length ? nextDates[0] : null;
+          // Skip ahead in the loop past all dates in this session
+          while (di + 1 < allLogDates.length && allLogDates[di+1] <= lastLogDate) di++;
         }
       }
     }
@@ -2800,30 +2785,38 @@ function getLastSettlementDate(){
       .map(function(l){ return l.person; })
     )];
 
-    // All people who closed their tab on or before this date
-    // (and after the previous settlement)
+    // All session drinkers (ALL logs since prevSettled, not just up to d)
+    // Handles case: drinks July 1 + Aug 3, close Aug 4 — all count as one session
+    var allSessionDrinkers2 = [...new Set(STATE.logs
+      .filter(function(l){ return !prevSettled || l.date > prevSettled; })
+      .map(function(l){ return l.person; })
+    )];
     var closers = (STATE.tabCloses||[])
-      .filter(function(c){ return c.closed_at <= d && (!prevSettled || c.closed_at > prevSettled); })
+      .filter(function(c){ return !prevSettled || c.closed_at > prevSettled; })
       .map(function(c){ return c.person; });
-
-    var allClosed = sessionDrinkers.length > 0 && sessionDrinkers.every(function(p){
+    var allClosed = allSessionDrinkers2.length > 0 && allSessionDrinkers2.every(function(p){
       return closers.indexOf(p) !== -1;
     });
 
     if (!allClosed) continue;
 
-    // Money check — only for this session (since prevSettled date)
+    // Money: all session drinks paid
     var bill = STATE.logs.reduce(function(s,l){
-      var inSession = l.date <= d && (!prevSettled || l.date > prevSettled);
-      return inSession && (parseFloat(l.unit_price)||0) > 0 ? s+(parseFloat(l.total_price)||0) : s;
+      if (prevSettled && l.date <= prevSettled) return s;
+      return (parseFloat(l.unit_price)||0) > 0 ? s+(parseFloat(l.total_price)||0) : s;
     }, 0);
     var paid = STATE.payments.reduce(function(s,p){
-      var inSession = p.date <= d && (!prevSettled || p.date > prevSettled);
-      return inSession ? s+(parseFloat(p.amount)||0) : s;
+      if (prevSettled && p.date <= prevSettled) return s;
+      return s+(parseFloat(p.amount)||0);
     }, 0);
     var moneyOk = bill <= 0.005 || paid >= bill - 0.01;
 
-    if (moneyOk) lastSettled = d;
+    // Use the LAST log date as the settlement date (not the loop variable d)
+    var lastLogDate2 = STATE.logs
+      .filter(function(l){ return !prevSettled || l.date > prevSettled; })
+      .reduce(function(max,l){ return l.date > max ? l.date : max; }, d);
+
+    if (moneyOk) lastSettled = lastLogDate2;
   }
   return lastSettled;
 }
