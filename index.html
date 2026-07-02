@@ -2268,94 +2268,101 @@ function renderConsolidatedToday(){
       return tb > ta ? 1 : -1;
     });
     allClosedPeople.forEach(function(person, si) {
-      var lc = getPersonLastClose(person);
-      if (!lc) return;
-      var closeTs = getPersonCloseTs(person);
-      // Logs in their last closed tab (before the close)
-      var sessLogs = STATE.logs.filter(function(l){
+      // Get ALL closes for this person — show full history
+      var personCloses = (STATE.tabCloses||[])
+        .filter(function(c){ return c.person === person; })
+        .sort(function(a,b){
+          var ta = a.created_at||(a.closed_at+'T23:59:59Z');
+          var tb = b.created_at||(b.closed_at+'T23:59:59Z');
+          return tb > ta ? 1 : -1;
+        });
+      if (!personCloses.length) return;
+
+      var lastCloseTs = personCloses[0].created_at||(personCloses[0].closed_at+'T23:59:59Z');
+      var allSettledLogs = STATE.logs.filter(function(l){
         if (l.person !== person) return false;
-        // Get all closes for this person sorted newest first
-        var allCloses = (STATE.tabCloses||[]).filter(function(c){ return c.person===person; })
-          .sort(function(a,b){ return (b.created_at||b.closed_at)>(a.created_at||a.closed_at)?1:-1; });
-        // Previous close = the one before the current last close
-        var prevClose = allCloses[1];
-        var prevCloseTs = prevClose ? (prevClose.created_at||(prevClose.closed_at+'T23:59:59Z')) : null;
         var logTs = l.logged_at||(l.date+'T00:00:00Z');
-        // Log must be after previous close and before current close
-        var afterPrev = !prevCloseTs || logTs > prevCloseTs;
-        var beforeCurrent = logTs <= closeTs;
-        return afterPrev && beforeCurrent;
+        return logTs <= lastCloseTs;
       });
+
       var sessId = 'settled-person-'+si;
-      var closeDateLabel = lc.closed_at ? fmtDate(lc.closed_at) : '';
-      var sessQty = sessLogs.reduce(function(s,l){ return s+(l.quantity||0); },0);
-      var sessCost = sessLogs.reduce(function(s,l){ return s+(parseFloat(l.total_price)||0); },0);
-      var drinkCounts = {};
-      sessLogs.forEach(function(l){ drinkCounts[l.drink]=(drinkCounts[l.drink]||0)+(l.quantity||0); });
-      var drinkTags = Object.entries(drinkCounts).map(function(e){
-        return '<span class="drink-tag">'+emoji(e[0])+' ×'+e[1]+'</span>';
-      }).join('');
-      // Per-person settled card
-      var sessTotalBill = sessLogs.reduce(function(s,l){ return s+(parseFloat(l.total_price)||0); },0);
-      var sessTotalFree = sessLogs.filter(function(l){return (parseFloat(l.unit_price)||0)===0;}).reduce(function(s,l){return s+(l.quantity||0);},0);
-      var closeDateLabel = lc.closed_at ? fmtDate(lc.closed_at) : '';
+      var totalBill = allSettledLogs.reduce(function(s,l){ return s+(parseFloat(l.total_price)||0); },0);
+      var totalFree = allSettledLogs.filter(function(l){return (parseFloat(l.unit_price)||0)===0;}).reduce(function(s,l){return s+(l.quantity||0);},0);
 
-      // Drink tags
-      var drinkCounts2 = {};
-      sessLogs.forEach(function(l){ drinkCounts2[l.drink]=(drinkCounts2[l.drink]||0)+(l.quantity||0); });
-      var drinkTagsHtml = Object.entries(drinkCounts2).map(function(e){
-        return '<span class="drink-tag">'+emoji(e[0])+' ×'+e[1]+'</span>';
-      }).join('');
+      var byDate = {};
+      allSettledLogs.forEach(function(l){ (byDate[l.date]=byDate[l.date]||[]).push(l); });
+      var sortedDates = Object.keys(byDate).sort().reverse();
 
-      // Admin controls for this person's tab close
+      var drinkSummary = {};
+      allSettledLogs.forEach(function(l){ drinkSummary[l.drink]=(drinkSummary[l.drink]||0)+(l.quantity||0); });
+      var drinkTagsHtml = Object.entries(drinkSummary)
+        .sort(function(a,b){ return b[1]-a[1]; })
+        .map(function(e){ return '<span class="drink-tag">'+emoji(e[0])+' ×'+e[1]+'</span>'; })
+        .join('');
+
+      var lc = personCloses[0];
+      // Store reopen params in window to avoid quote nesting issues
+      window._settledPersons = window._settledPersons || {};
+      window._settledPersons['sp'+si] = { person: person, closeId: lc.id||'' };
       var adminCloseControls = IS_ADMIN
-        ? '<div style="display:flex;gap:6px;margin-top:8px">'+
-            '<button onclick="event.stopPropagation();adminReopenTab(\''+esc(person)+'\',\''+esc(lc.id||'')+'\')" '+
+        ? '<div style="display:flex;gap:6px;margin-top:10px;padding-top:8px;border-top:1px solid #e8dccc">'+
+            '<button onclick="event.stopPropagation();(function(){var p=window._settledPersons[\"sp'+si+'\"];adminReopenTab(p.person,p.closeId);})()" '+
               'style="background:#fce8e6;border:1.5px solid #c4392b;border-radius:7px;color:#c4392b;font-size:11px;font-weight:700;padding:4px 8px;cursor:pointer">'+
-              '↩ Reopen tab</button>'+
-            '<button onclick="event.stopPropagation();closeMyTab(\''+esc(person)+'\')" '+
+              '↩ Reopen</button>'+
+            '<button onclick="event.stopPropagation();(function(){var p=window._settledPersons[\"sp'+si+'\"];closeMyTab(p.person);})()" '+
               'style="background:#f5ede4;border:1.5px solid #b5481f;border-radius:7px;color:#b5481f;font-size:11px;font-weight:700;padding:4px 8px;cursor:pointer">'+
               '✅ Re-close</button>'+
           '</div>'
         : '';
 
+      var dateRowsHtml = sortedDates.map(function(d){
+        var dayLogs = byDate[d];
+        var dayQty = dayLogs.reduce(function(s,l){ return s+(l.quantity||0); },0);
+        var dayBill = dayLogs.reduce(function(s,l){ return s+(parseFloat(l.total_price)||0); },0);
+        var dayDrinks = {};
+        dayLogs.forEach(function(l){ dayDrinks[l.drink]=(dayDrinks[l.drink]||0)+(l.quantity||0); });
+        var dayTags = Object.entries(dayDrinks).map(function(e){
+          return '<span style="font-size:11px;background:#fce4d0;border-radius:5px;padding:2px 6px;font-weight:600;color:#b5481f">'+emoji(e[0])+'×'+e[1]+'</span>';
+        }).join(' ');
+        return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f5ede4">'+
+          '<span style="font-size:11px;font-weight:700;color:#5a3a28;min-width:80px;flex-shrink:0">'+fmtDate(d)+'</span>'+
+          '<span style="flex:1;display:flex;flex-wrap:wrap;gap:3px">'+dayTags+'</span>'+
+          '<span style="font-size:11px;font-weight:700;color:#7a5200;flex-shrink:0;white-space:nowrap">'+dayQty+(dayBill>0?' · €'+dayBill.toFixed(2):'')+'</span>'+
+        '</div>';
+      }).join('');
+
       settledHtml +=
         '<div style="border:1.5px solid #e8dccc;border-radius:12px;overflow:hidden;margin-bottom:8px">'+
           '<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:#f5ede4;cursor:pointer" '+
-            'onclick="(function(el){el.style.display=el.style.display===\'none\'?\'\':\'none\';})(document.getElementById(\''+sessId+'\'))">'+
+            'onclick="toggleSettled(\''+sessId+'\')">'+
             '<div style="width:32px;height:32px;border-radius:50%;background:'+colorFor(person)+';display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;flex-shrink:0">'+person[0].toUpperCase()+'</div>'+
             '<div style="flex:1;min-width:0">'+
               '<div style="font-size:13px;font-weight:700;color:#1a0e08">'+esc(person)+'</div>'+
               '<div style="font-size:11px;color:#7a5200;margin-top:2px">'+
-                '✅ '+closeDateLabel+
-                (sessTotalBill>0?' · €'+sessTotalBill.toFixed(2):'')+(sessTotalFree>0?' · 🍾×'+sessTotalFree:'')+
+                '✅ '+sortedDates.length+' day'+(sortedDates.length!==1?'s':'')+
+                (totalBill>0?' · €'+totalBill.toFixed(2):'')+(totalFree>0?' · ?de BE×'+totalFree:'')+
               '</div>'+
               '<div style="margin-top:4px">'+drinkTagsHtml+'</div>'+
             '</div>'+
+            '<span id="'+sessId+'-arr" style="font-size:11px;color:#7a5200">▼</span>'+
           '</div>'+
           '<div id="'+sessId+'" style="display:none;padding:10px 14px">'+
-            // Date-by-date detail
-            (function(){
-              var byDate2 = {};
-              sessLogs.forEach(function(l){ (byDate2[l.date]=byDate2[l.date]||[]).push(l); });
-              return '<div style="font-size:11px;color:#7a5200;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Drink history</div>'+
-                Object.keys(byDate2).sort().map(function(d2){
-                  var dayDrinks = {};
-                  byDate2[d2].forEach(function(l){ dayDrinks[l.drink]=(dayDrinks[l.drink]||0)+(l.quantity||0); });
-                  return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #f5ede4">'+
-                    '<span style="font-size:11px;color:#7a5200;min-width:72px">'+fmtDate(d2)+'</span>'+
-                    '<span style="display:flex;flex-wrap:wrap;gap:3px;flex:1">'+
-                      Object.entries(dayDrinks).map(function(e){
-                        return '<span style="font-size:11px;background:#fce4d0;border-radius:5px;padding:1px 5px;font-weight:600;color:#b5481f">'+emoji(e[0])+'×'+e[1]+'</span>';
-                      }).join('')+
-                    '</span>'+
-                  '</div>';
-                }).join('');
-            })()+
+            (sortedDates.length ? dateRowsHtml : '<div style="font-size:12px;color:#7a5200;text-align:center;padding:12px">No drink history</div>')+
             adminCloseControls+
           '</div>'+
         '</div>';
     });
+
+    // Helper for toggling settled cards (avoids quote nesting)
+    if (!window.toggleSettled) {
+      window.toggleSettled = function(id){
+        var b = document.getElementById(id);
+        var a = document.getElementById(id+'-arr');
+        if (!b) return;
+        b.style.display = b.style.display === 'none' ? '' : 'none';
+        if (a) a.textContent = b.style.display === 'none' ? '\u25bc' : '\u25b2';
+      };
+    }
 
     var settledId = 'settled-body-main';
     // Always show settled section — even when empty
@@ -3448,34 +3455,63 @@ function renderDashboard(){
   ]);
 
   // ── BAR CHART helper ─────────────────────────────────────
-  function barChart(values, color, unit, title){
+  function barChart(values, color, unit, title, xLabel, yLabel){
     if (!values.length) return '';
     var max = Math.max.apply(null, values) || 1;
-    var W = 300, H = 120, pad = 30, barW = Math.max(4, Math.floor((W - pad) / values.length) - 3);
-    var svg = '<svg viewBox="0 0 '+W+' '+(H+40)+'" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto">';
+    var W = 320, H = 130, padL = 38, padB = 52, padT = 20, padR = 10;
+    var chartW = W - padL - padR;
+    var chartH = H;
+    var barW = Math.max(6, Math.floor(chartW / values.length) - 4);
+    var svg = '<svg viewBox="0 0 '+W+' '+(H+padT+padB)+'" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;overflow:visible">';
+
+    // Y-axis grid lines + labels
     [0,0.25,0.5,0.75,1].forEach(function(t){
-      var y = pad + (H - H*t);
-      svg += '<line x1="'+pad+'" y1="'+y+'" x2="'+W+'" y2="'+y+'" stroke="#ece0d4" stroke-width="1"/>';
-      if(t>0) svg += '<text x="'+(pad-4)+'" y="'+(y+4)+'" text-anchor="end" font-size="8" fill="#a8978a">'+(unit==='€'?'€':'')+(max*t).toFixed(unit==='€'?0:0)+(unit!=='€'?unit:'')+'</text>';
+      var y = padT + chartH - chartH*t;
+      var val = max*t;
+      var valStr = unit==='€' ? '€'+val.toFixed(0) : val.toFixed(0);
+      svg += '<line x1="'+padL+'" y1="'+y+'" x2="'+(padL+chartW)+'" y2="'+y+'" stroke="#e8dccc" stroke-width="'+(t===0?'1.5':'0.8')+'"/>';
+      svg += '<text x="'+(padL-5)+'" y="'+(y+3.5)+'" text-anchor="end" font-size="9" fill="#7a5200">'+valStr+'</text>';
     });
+
+    // Bars + value labels + x labels
     values.forEach(function(v,i){
-      var bh = Math.max(2, (v/max)*H);
-      var x = pad + i * ((W-pad)/values.length) + 2;
-      var y = pad + H - bh;
-      svg += '<rect x="'+x+'" y="'+y+'" width="'+barW+'" height="'+bh+'" rx="3" fill="'+color+'" opacity="0.85"/>';
-      if (v > 0) svg += '<text x="'+(x+barW/2)+'" y="'+(y-3)+'" text-anchor="middle" font-size="8" fill="'+color+'" font-weight="700">'+(unit==='€'?'€'+v.toFixed(0):v)+'</text>';
-      var nth = values.length > 12 ? 3 : values.length > 6 ? 2 : 1;
-      if (i % nth === 0) {
-        svg += '<text x="'+(x+barW/2)+'" y="'+(pad+H+14)+'" text-anchor="middle" font-size="7.5" fill="#7a5200" transform="rotate(-35,'+(x+barW/2)+','+(pad+H+14)+')">'+(labels[i]||'')+'</text>';
+      var bh = Math.max(2, (v/max)*chartH);
+      var x = padL + i * (chartW/values.length) + (chartW/values.length - barW)/2;
+      var y = padT + chartH - bh;
+
+      // Bar
+      svg += '<rect x="'+x+'" y="'+y+'" width="'+barW+'" height="'+bh+'" rx="3" fill="'+color+'" opacity="0.88"/>';
+
+      // Value on top of bar
+      if (v > 0) {
+        var valLabel = unit==='€' ? '€'+v.toFixed(0) : ''+v;
+        svg += '<text x="'+(x+barW/2)+'" y="'+(y-4)+'" text-anchor="middle" font-size="9" fill="'+color+'" font-weight="700">'+valLabel+'</text>';
+      }
+
+      // X-axis label — show every nth
+      var nth = values.length > 10 ? 3 : values.length > 5 ? 2 : 1;
+      if (i % nth === 0 && labels[i]) {
+        var lx = x + barW/2;
+        var ly = padT + chartH + 14;
+        svg += '<text x="'+lx+'" y="'+ly+'" text-anchor="end" font-size="9" fill="#5a3a28" transform="rotate(-40 '+lx+' '+ly+')">'+esc(labels[i])+'</text>';
       }
     });
+
+    // Y-axis line
+    svg += '<line x1="'+padL+'" y1="'+padT+'" x2="'+padL+'" y2="'+(padT+chartH)+'" stroke="#b5481f" stroke-width="1.5"/>';
+
+    // Axis labels
+    if (yLabel) svg += '<text x="12" y="'+(padT+chartH/2)+'" text-anchor="middle" font-size="9" fill="#5a3a28" font-weight="600" transform="rotate(-90 12 '+(padT+chartH/2)+')">'+esc(yLabel)+'</text>';
+    if (xLabel) svg += '<text x="'+(padL+chartW/2)+'" y="'+(padT+chartH+padB-4)+'" text-anchor="middle" font-size="9" fill="#5a3a28" font-weight="600">'+esc(xLabel)+'</text>';
+
     svg += '</svg>';
     return card(title, svg);
   }
 
   if (period !== 'today'){
     // ── Beers over time chart ─────────────────────────────
-    html += barChart(drinks, '#b5481f', '', '🍺 '+(isDE?'Biere pro Zeitraum':'Beers per period'));
+    var xAxisLabel = period==='weekly'?(isDE?'Woche':'Week'):period==='monthly'?(isDE?'Monat':'Month'):(isDE?'Jahr':'Year');
+    html += barChart(drinks, '#b5481f', '', '🍺 '+(isDE?'Biere':'Beers')+' per '+xAxisLabel.toLowerCase(), xAxisLabel, isDE?'Anzahl Biere':'Beer count');
 
     // ── Session avg per person ─────────────────────────────
     if (buckets.length) {
@@ -3483,12 +3519,12 @@ function renderDashboard(){
         var people = Object.keys(b.beerPersons||{}).length || 1;
         return Math.round((b.totalBeers||0) / people * 10) / 10;
       });
-      html += barChart(avgData, '#7a3a8f', '', '📊 '+(isDE?'Ø Biere pro Person':'Avg beers per person'));
+      html += barChart(avgData, '#7a3a8f', '', '📊 '+(isDE?'Ø Biere pro Person':'Avg beers per person'), xAxisLabel, isDE?'Ø Biere':'Avg');
     }
 
     // ── Money spent over time ─────────────────────────────
     if (money.some(function(v){ return v > 0; }))
-      html += barChart(money, '#1f8a4f', '€', '💶 '+(isDE?'Ausgaben':'Money spent'));
+      html += barChart(money, '#1f8a4f', '€', '💶 '+(isDE?'Ausgaben':'Money spent'), xAxisLabel, '€');
   }
 
   // ── Drink mix — donut-style horizontal bars ────────────
@@ -3688,7 +3724,9 @@ function buildDashBuckets(period){
       var jan4 = new Date(d.getFullYear(), 0, 4);
       var wk = Math.ceil((((d - jan4) / 86400000) + jan4.getDay() + 1) / 7);
       key = d.getFullYear()+'-W'+String(wk).padStart(2,'0');
-      label = 'W'+wk;
+      // Show week start date for clarity e.g. "W26 Jun"
+      var months2 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      label = 'W'+wk+' '+months2[d.getMonth()];
     } else if (period === 'monthly'){
       key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
       var months = LANG==='de'
@@ -4947,10 +4985,10 @@ function renderReplace(){
     emptyHtml += '<div style="font-size:48px;margin-bottom:12px">✅</div>';
     emptyHtml += '<div style="font-size:16px;font-weight:800;color:#1f8a4f;margin-bottom:6px">'+esc(t('allSettledUp'))+'</div>';
     emptyHtml += '<div style="font-size:13px;color:#5a3a28;margin-bottom:16px">'+esc(t('noUnsettledDays'))+'</div>';
-    if (lastSession){
+    var lastSD = getLastSettlementDate();
+    if (lastSD){
       emptyHtml += '<div style="font-size:12px;background:#d4f5e2;border-radius:8px;padding:8px 14px;color:#1a4a2a;margin-bottom:14px">'+
-        '🗄 '+(LANG==='de'?'Letzte Sitzung abgeschlossen am':'Last session closed on')+' <strong>'+fmtDate(lastSession.closedAt)+'</strong>'+
-        (lastSession.note?' · '+esc(lastSession.note):'')+
+        '✅ '+(LANG==='de'?'Letzte Abrechnung: ':'Last settled: ')+'<strong>'+fmtDate(lastSD)+'</strong>'+
       '</div>';
     }
     emptyHtml += '</div>';
