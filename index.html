@@ -1226,15 +1226,6 @@ function renderLog(){
     '<span style="margin-left:auto;font-size:18px">⬆️</span>'+
   '</button>';
 
-  // ── DEBUG: Settlement state ──
-  html += '<div id="debug-settle" class="card" style="background:#e8f0ff;border:2px solid blue;font-size:11px;word-break:break-all">'+
-    '<b>DEBUG Settlement</b><br>'+
-    'lastSettledDate: '+getLastSettlementDate()+'<br>'+
-    'tabCloses: '+JSON.stringify((STATE.tabCloses||[]).map(function(c){return c.person+' on '+c.closed_at+(c.created_at?' @'+c.created_at:'');}))+'<br>'+
-    'all drinkers: '+JSON.stringify([...new Set(STATE.logs.map(function(l){return l.person;}))].sort())+'<br>'+
-    'sessionLogs count: '+getSessionLogs().length+' of '+STATE.logs.length+' total'+
-  '</div>';
-
   // ── SECTION 6: Historical consolidated running tabs ──
   html += renderConsolidatedToday();
 
@@ -2738,18 +2729,21 @@ function getLastSettlementDate(){
   for (var i = 0; i < allDates.length; i++){
     var d = allDates[i];
 
-    // All people who ever drank up to this date
-    var drinkers = [...new Set(STATE.logs
-      .filter(function(l){ return l.date <= d; })
+    // Only people who drank SINCE the previous settlement (i.e. in this session)
+    // Stefan never closing his tab shouldn't block Tommy+Vinod+Ben's July 1 session
+    var prevSettled = lastSettled; // last confirmed settlement before this date
+    var sessionDrinkers = [...new Set(STATE.logs
+      .filter(function(l){ return l.date <= d && (!prevSettled || l.date > prevSettled); })
       .map(function(l){ return l.person; })
     )];
 
     // All people who closed their tab on or before this date
+    // (and after the previous settlement)
     var closers = (STATE.tabCloses||[])
-      .filter(function(c){ return c.closed_at <= d; })
+      .filter(function(c){ return c.closed_at <= d && (!prevSettled || c.closed_at > prevSettled); })
       .map(function(c){ return c.person; });
 
-    var allClosed = drinkers.length > 0 && drinkers.every(function(p){
+    var allClosed = sessionDrinkers.length > 0 && sessionDrinkers.every(function(p){
       return closers.indexOf(p) !== -1;
     });
 
