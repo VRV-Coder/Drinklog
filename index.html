@@ -1074,6 +1074,9 @@ async function audit(action, table, id, details){
 function isMine(row){
   if (IS_ADMIN) return true;
   if (IS_GUEST) return row.guest_token === GUEST_TOKEN;
+  // Logged-in non-admin: check if they logged this entry (by user_id or by name)
+  if (CURRENT_USER && row.user_id && row.user_id === CURRENT_USER.id) return true;
+  if (CURRENT_NAME && (row.added_by === CURRENT_NAME || row.logged_by === CURRENT_NAME)) return true;
   return false;
 }
 
@@ -1411,7 +1414,8 @@ function buildRunningRow(person, pd, today, isDE){
 
     var drinkItems = Object.entries(drinkTotals).map(function(e){
       var d=e[0], info=e[1];
-      var canEdit = info.entries.some(function(l){ return isMine(l); }) || IS_ADMIN;
+      // Can edit if they logged any entry in this row, or are admin
+      var canEdit = IS_ADMIN || info.entries.some(function(l){ return isMine(l); });
 
       // Settlement badge for this drink
       var badge = '';
@@ -1516,10 +1520,10 @@ function buildRunningRow(person, pd, today, isDE){
                 '€'+pd.total.toFixed(2)+' ✏️</button>'
               : '<div class="rtab-total">€'+pd.total.toFixed(2)+'</div>')
           : '')+
-        (!tabClosedToday && (isMe || IS_ADMIN)
+        (!tabClosedToday && (isMe || IS_ADMIN || info.entries.some(function(l){ return isMine(l); }))
           ? '<button onclick="event.stopPropagation();closeMyTab(\''+esc(person)+'\')" '+
               'style="background:#1f8a4f;border:none;border-radius:9px;padding:5px 10px;cursor:pointer;font-size:12px;font-weight:800;color:#fff;white-space:nowrap;margin-top:2px">'+
-              '✅ '+(isDE?'Tab zu':'Close tab')+(IS_ADMIN&&person!==CURRENT_NAME?' ('+esc(person)+')':'')+'</button>'
+              '✅ '+(isDE?'Tab zu':'Close tab')+(person!==CURRENT_NAME?' ('+esc(person)+')':'')+'</button>'
           : (tabClosedToday
               ? '<div style="font-size:11px;color:#1f8a4f;font-weight:700;margin-top:2px">✅ '+(isDE?'Tab zu':'Tab closed')+'</div>'
               : ''))+
@@ -3060,7 +3064,7 @@ function showPersonDayDetail(person, date){
 
   var totalQty = entries.reduce(function(s,l){ return s+(l.quantity||0); }, 0);
   var totalCost = entries.reduce(function(s,l){ return s+(parseFloat(l.total_price)||0); }, 0);
-  var canEditAny = entries.some(function(l){ return isMine(l); }) || IS_ADMIN;
+  var canEditAny = IS_ADMIN || entries.some(function(l){ return isMine(l); });
 
   // ── Group by drink type for bulk-price section ──
   var byDrink = {};
@@ -3114,6 +3118,7 @@ function showPersonDayDetail(person, date){
     var byLine = (loggedBy && loggedBy !== person)
       ? ' · '+t('loggedBy')+' '+esc(loggedBy)
       : '';
+    // Can edit if they logged it (isMine) or are admin
     var canEdit = isMine(l) || IS_ADMIN;
 
     var qtyControl = canEdit
